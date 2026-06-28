@@ -412,6 +412,11 @@ function classifyNotam(q,e){
   let cats=categoriesFromQcode(q), source = cats.size?"qcode":"none";
   const tc=categoriesFromText(e);
   if(tc.size){ tc.forEach(x=>cats.add(x)); source = source==="qcode"?"qcode+text":"text"; }
+  // Flight = catégorie résiduelle : si le NOTAM relève déjà de Departure,
+  // Arrival ou Ground, on le retire de Flight pour éviter les doublons.
+  if(cats.has("vol") && (cats.has("depart")||cats.has("approche")||cats.has("sol"))){
+    cats.delete("vol");
+  }
   if(!cats.size){ cats=new Set(["non_classe"]); source="unclassified"; }
   return {categories:[...cats], severity:severity(q,e), source};
 }
