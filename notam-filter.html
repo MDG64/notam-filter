@@ -1,0 +1,904 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>NOTAM Filter — EUR / AFI</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="manifest" href="manifest.json">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="NOTAM Filter">
+<meta name="theme-color" content="#0d1117">
+<style>
+:root{
+  --bg:#0a121b; --bg2:#0c1622; --panel:#10202d; --panel2:#142735;
+  --line:#1d3445; --line2:#284559;
+  --text:#d8e6f0; --muted:#7892a6; --muted2:#5a7387;
+  --cyan:#34c6ea; --cyan-dim:#1d6b80;
+  --red:#ff5d6c; --amber:#f6b23e; --green:#34d39a; --gold:#f6c945;
+  --red-bg:#2a141a; --amber-bg:#2a2113; --green-bg:#12271f; --grey-bg:#162430;
+  --radius:10px;
+  --mono:'IBM Plex Mono',ui-monospace,Menlo,Consolas,monospace;
+  --sans:'IBM Plex Sans',system-ui,-apple-system,sans-serif;
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{
+  background:
+    radial-gradient(1200px 600px at 80% -10%, #102234 0%, transparent 60%),
+    radial-gradient(900px 500px at -10% 10%, #0d1b29 0%, transparent 55%),
+    var(--bg);
+  color:var(--text); font-family:var(--sans);
+  -webkit-font-smoothing:antialiased; line-height:1.45; min-height:100vh;
+}
+.wrap{max-width:1080px;margin:0 auto;padding:0 20px 64px}
+
+/* ---------- header ---------- */
+header{
+  position:sticky;top:0;z-index:20;
+  background:linear-gradient(180deg, rgba(10,18,27,.96), rgba(10,18,27,.86));
+  backdrop-filter:blur(8px);
+  border-bottom:1px solid var(--line);
+}
+.bar{max-width:1080px;margin:0 auto;padding:14px 20px;display:flex;align-items:center;gap:18px;flex-wrap:wrap}
+.brand{display:flex;align-items:center;gap:11px;margin-right:auto}
+.beacon{width:11px;height:11px;border-radius:50%;background:var(--cyan);
+  box-shadow:0 0 0 3px rgba(52,198,234,.15),0 0 14px var(--cyan)}
+.brand h1{font-size:15px;letter-spacing:.16em;font-weight:600;margin:0;text-transform:uppercase}
+.brand .sub{font:500 10px/1 var(--mono);color:var(--muted);letter-spacing:.22em;margin-top:3px}
+.region{font:500 10px/1 var(--mono);color:var(--cyan);border:1px solid var(--cyan-dim);
+  border-radius:5px;padding:5px 8px;letter-spacing:.18em}
+
+/* ---------- scratchpad ---------- */
+.entry{display:flex;align-items:stretch;gap:8px}
+.scratch{
+  display:flex;align-items:center;background:#06101a;border:1px solid var(--line2);
+  border-radius:8px;overflow:hidden;box-shadow:inset 0 1px 0 rgba(255,255,255,.03)
+}
+.scratch label{font:500 9px/1 var(--mono);color:var(--muted);letter-spacing:.18em;padding:0 0 0 12px}
+.scratch input{
+  width:108px;background:transparent;border:0;outline:none;color:var(--cyan);
+  font:600 19px/1 var(--mono);letter-spacing:.18em;padding:11px 12px 11px 8px;text-transform:uppercase
+}
+.scratch input::placeholder{color:#33536a;letter-spacing:.12em}
+.btn{
+  border:1px solid var(--cyan-dim);background:#0c2630;color:var(--cyan);
+  font:600 12px/1 var(--sans);letter-spacing:.06em;padding:0 16px;border-radius:8px;cursor:pointer;
+  transition:background .15s,border-color .15s
+}
+.btn:hover{background:#0f3340;border-color:var(--cyan)}
+.btn:focus-visible,.scratch:focus-within{outline:2px solid var(--cyan);outline-offset:2px}
+
+/* ---------- quick airports ---------- */
+.quick{display:flex;gap:7px;flex-wrap:wrap;margin-top:14px}
+.quick .lbl{font:500 10px/2.4 var(--mono);color:var(--muted);letter-spacing:.16em;margin-right:2px}
+.chip-ad{
+  font:500 12px/1 var(--mono);letter-spacing:.1em;color:var(--text);
+  background:var(--panel);border:1px solid var(--line);border-radius:6px;
+  padding:7px 10px;cursor:pointer;transition:border-color .15s,background .15s
+}
+.chip-ad:hover{border-color:var(--line2);background:var(--panel2)}
+.chip-ad.on{border-color:var(--cyan);color:var(--cyan);background:#0c2630}
+.chip-ad small{color:var(--muted);margin-left:6px;font-family:var(--sans);letter-spacing:0}
+
+/* ---------- tabs/favorites/station/suggest ---------- */
+.tabs{display:flex;gap:6px;margin-top:16px}
+.tab{font:600 11px/1 var(--sans);letter-spacing:.07em;color:var(--muted);
+  background:transparent;border:1px solid var(--line);border-bottom:none;
+  border-radius:8px 8px 0 0;padding:9px 15px;cursor:pointer}
+.tab.on{color:var(--text);background:var(--panel);border-color:var(--line2)}
+.tab .star{color:var(--gold)}
+.chips{display:flex;gap:7px;flex-wrap:wrap;padding:12px;background:var(--panel);
+  border:1px solid var(--line);border-radius:0 8px 8px 8px;min-height:20px}
+.chips .hint{font:500 12px/1.6 var(--sans);color:var(--muted)}
+.station{display:flex;align-items:center;gap:12px;margin:18px 0 0}
+.stationcode{font:600 22px/1 var(--mono);letter-spacing:.14em;color:var(--text)}
+.starbtn{font-size:23px;line-height:1;background:none;border:none;cursor:pointer;
+  color:var(--muted);padding:2px 4px;border-radius:6px;transition:transform .12s,color .12s,text-shadow .12s}
+.starbtn:hover{transform:scale(1.12);color:var(--gold)}
+.starbtn.on{color:var(--gold);text-shadow:0 0 12px rgba(246,201,69,.55)}
+.starbtn:focus-visible{outline:2px solid var(--cyan);outline-offset:2px}
+.stationname{font:500 13px/1 var(--sans);color:var(--muted)}
+.suggest{position:absolute;top:calc(100% + 6px);left:0;min-width:268px;z-index:40;
+  background:#0b1722;border:1px solid var(--line2);border-radius:10px;overflow:hidden;
+  box-shadow:0 14px 40px rgba(0,0,0,.5)}
+.sg-row{display:flex;align-items:center;gap:10px;width:100%;text-align:left;cursor:pointer;
+  background:transparent;border:0;border-bottom:1px solid var(--line);padding:10px 13px;color:var(--text)}
+.sg-row:last-child{border-bottom:0}
+.sg-row:hover{background:var(--panel2)}
+.sg-code{font:600 13px/1 var(--mono);letter-spacing:.1em;color:var(--cyan);min-width:46px}
+.sg-city{font:500 12px/1.3 var(--sans);color:var(--muted)}
+.sg-star{color:var(--gold);margin-left:auto;font-size:13px}
+.sg-nodata{margin-left:auto;font:500 9px/1 var(--mono);letter-spacing:.06em;color:var(--muted2);
+  border:1px solid var(--line);border-radius:4px;padding:3px 5px}
+
+/* ---------- disclaimer ---------- */
+.disclaim{
+  margin:18px 0 4px;font:500 11px/1.5 var(--sans);color:var(--muted);
+  border-left:2px solid var(--amber);padding:8px 12px;background:rgba(246,178,62,.04);border-radius:0 6px 6px 0
+}
+.disclaim b{color:var(--amber);font-weight:600}
+
+/* ---------- summary ---------- */
+.summary{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin:18px 0}
+.stat{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:14px 16px}
+.stat .n{font:600 26px/1 var(--mono);letter-spacing:.02em}
+.stat .k{font:500 10px/1 var(--mono);color:var(--muted);letter-spacing:.18em;text-transform:uppercase;margin-top:7px}
+.stat.tot .n{color:var(--text)}
+.stat.crit .n{color:var(--red)} .stat.caut .n{color:var(--amber)} .stat.info .n{color:var(--green)}
+.stat .row{display:flex;align-items:baseline;gap:8px}
+.stat .led{width:8px;height:8px;border-radius:50%;align-self:center}
+.crit .led{background:var(--red);box-shadow:0 0 8px var(--red)}
+.caut .led{background:var(--amber);box-shadow:0 0 8px var(--amber)}
+.info .led{background:var(--green);box-shadow:0 0 8px var(--green)}
+
+/* ---------- filters ---------- */
+.filters{display:flex;align-items:center;gap:10px;flex-wrap:wrap;
+  padding:14px 0 4px;border-top:1px solid var(--line);margin-top:8px}
+.filters .title{font:500 10px/1 var(--mono);color:var(--muted);letter-spacing:.18em;text-transform:uppercase}
+.seg{display:flex;gap:8px;flex-wrap:wrap}
+.cat{
+  display:flex;align-items:center;gap:9px;cursor:pointer;user-select:none;
+  background:var(--panel);border:1px solid var(--line);border-radius:8px;
+  padding:9px 14px;font:600 12px/1 var(--sans);letter-spacing:.04em;color:#fff;
+  transition:all .15s
+}
+.cat .dot{width:9px;height:9px;border-radius:2px;background:#2a4255;transition:all .15s}
+.cat[data-cat=vol] .dot{} .cat:hover{border-color:var(--line2);color:#fff}
+.cat.on{color:var(--bg);background:var(--cyan);border-color:var(--cyan)}
+.cat.on .dot{background:var(--bg)}
+.cat .cnt{font:600 11px/1 var(--mono);opacity:.7}
+.allpill{
+  margin-left:auto;font:500 11px/1 var(--mono);letter-spacing:.12em;color:var(--cyan);
+  border:1px solid var(--cyan-dim);background:#0c2630;border-radius:7px;padding:8px 12px;cursor:pointer
+}
+.allpill.muted{color:var(--muted);background:transparent;border-color:var(--line)}
+.cat:focus-visible,.chip-ad:focus-visible,.allpill:focus-visible{outline:2px solid var(--cyan);outline-offset:2px}
+
+/* ---------- time bar ---------- */
+.timebar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;
+  background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);
+  padding:12px 14px;margin:6px 0 2px}
+.timebar .title{font:500 10px/1 var(--mono);color:var(--muted);letter-spacing:.18em;text-transform:uppercase}
+.scratch.time input[type=time]{width:106px;background:transparent;border:0;outline:none;
+  color:var(--cyan);font:600 17px/1 var(--mono);letter-spacing:.12em;padding:9px 12px 9px 8px}
+.scratch.time input[type=time]::-webkit-calendar-picker-indicator{
+  filter:invert(.65) sepia(1) saturate(4) hue-rotate(150deg);cursor:pointer;opacity:.8}
+.btn.ghost{background:transparent;border-color:var(--line2);color:var(--muted)}
+.btn.ghost:hover{color:var(--text);border-color:var(--cyan-dim)}
+.winreadout{font:500 11px/1.4 var(--mono);letter-spacing:.06em;color:var(--muted)}
+.winreadout.on{color:var(--cyan)}
+.winreadout.on b{color:var(--text);font-weight:600}
+.clearTime{margin-left:auto;font:500 11px/1 var(--mono);letter-spacing:.08em;color:var(--amber);
+  background:transparent;border:1px solid #4a3a1a;border-radius:7px;padding:8px 11px;cursor:pointer}
+.clearTime:hover{background:rgba(246,178,62,.08)}
+.clearTime:focus-visible,.scratch.time:focus-within{outline:2px solid var(--cyan);outline-offset:2px}
+
+/* ---------- legend ---------- */
+.legend{display:flex;gap:16px;flex-wrap:wrap;margin:10px 0 18px;font:500 10px/1 var(--mono);
+  color:var(--muted);letter-spacing:.1em}
+.legend span{display:inline-flex;align-items:center;gap:6px}
+.legend i{width:8px;height:8px;border-radius:50%;display:inline-block}
+
+/* ---------- strips ---------- */
+.list{display:flex;flex-direction:column;gap:11px}
+.strip{
+  display:grid;grid-template-columns:5px 1fr;background:var(--panel);
+  border:1px solid var(--line);border-radius:var(--radius);overflow:hidden;
+  animation:in .32s ease both
+}
+@keyframes in{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+.rail{width:5px}
+.strip.critical .rail{background:var(--red)} .strip.caution .rail{background:var(--amber)}
+.strip.info .rail{background:var(--green)} .strip.non_classe .rail{background:#3a5468}
+.body{padding:13px 16px 14px}
+.shead{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px}
+.sled{width:9px;height:9px;border-radius:50%}
+.critical .sled{background:var(--red);box-shadow:0 0 8px var(--red)}
+.caution .sled{background:var(--amber);box-shadow:0 0 8px var(--amber)}
+.info .sled{background:var(--green);box-shadow:0 0 8px var(--green)}
+.non_classe .sled{background:#3a5468}
+.nid{font:600 13px/1 var(--mono);letter-spacing:.08em;color:var(--text)}
+.qc{font:500 11px/1 var(--mono);color:var(--muted);letter-spacing:.06em;
+  border:1px solid var(--line);border-radius:4px;padding:4px 7px}
+.tags{display:flex;gap:6px;margin-left:auto;flex-wrap:wrap}
+.tag{font:600 10px/1 var(--mono);letter-spacing:.1em;text-transform:uppercase;
+  padding:5px 8px;border-radius:5px;border:1px solid;}
+.tag.vol{color:#7fdcff;border-color:#1d5266;background:rgba(52,198,234,.07)}
+.tag.depart{color:#cbbcff;border-color:#3a3370;background:rgba(150,130,255,.09)}
+.tag.approche{color:#9ad6ff;border-color:#27506e;background:rgba(80,150,220,.08)}
+.tag.sol{color:#9fe9c9;border-color:#1f5743;background:rgba(52,211,154,.07)}
+.tag.non_classe{color:var(--muted);border-color:var(--line2);background:transparent}
+.etext{font:500 13px/1.55 var(--mono);color:var(--text);letter-spacing:.02em;
+  white-space:pre-wrap;word-break:break-word;margin:2px 0 11px;
+  border-left:2px solid var(--line);padding-left:12px}
+.meta{display:flex;gap:18px;flex-wrap:wrap;font:500 10px/1.4 var(--mono);color:var(--muted);letter-spacing:.08em}
+.meta b{color:var(--muted2);font-weight:500}
+.meta .v{color:var(--text)}
+.src{margin-left:auto;color:var(--cyan-dim)}
+.src.text{color:var(--amber)}
+
+/* ---------- empty ---------- */
+.empty{border:1px dashed var(--line2);border-radius:var(--radius);padding:34px 24px;text-align:center;color:var(--muted)}
+.empty h3{color:var(--text);font-weight:600;margin:0 0 6px;font-size:15px}
+.empty p{margin:0 0 14px;font-size:13px}
+.empty.loading{display:flex;align-items:center;justify-content:center;gap:12px;color:var(--muted)}
+.spinner{width:16px;height:16px;border:2px solid var(--line2);border-top-color:var(--cyan);
+  border-radius:50%;animation:spin .8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.empty.error h3{color:var(--amber)}
+.empty .btn{margin-top:4px}
+
+/* ---------- footer ---------- */
+footer{margin-top:30px;border-top:1px solid var(--line);padding-top:16px;
+  font:500 11px/1.6 var(--mono);color:var(--muted);letter-spacing:.04em}
+footer code{color:var(--cyan);background:#0c1c28;padding:2px 6px;border-radius:4px}
+
+@media (max-width:560px){
+  .brand h1{font-size:13px}.region{display:none}
+  .scratch input{width:88px;font-size:17px}
+  .meta .src{margin-left:0}
+}
+@media (prefers-reduced-motion:reduce){*{animation:none!important}}
+</style>
+</head>
+<body>
+<header>
+  <div class="bar">
+    <div class="brand">
+      <span class="beacon" aria-hidden="true"></span>
+      <div>
+        <h1>NOTAM Filter</h1>
+        <div class="sub">PRO BRIEFING · RELEVANCE FILTERING</div>
+      </div>
+    </div>
+    <div class="entry">
+      <div class="scratch">
+        <label for="icao">ICAO</label>
+        <input id="icao" maxlength="4" placeholder="LFBO" autocomplete="off" spellcheck="false" aria-label="Aerodrome ICAO code">
+      </div>
+      <div class="suggest" id="suggest" hidden></div>
+    </div>
+    <span class="region">EUR · AFI</span>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="tabs">
+    <button class="tab on" id="tabDemo" aria-pressed="true">Demo</button>
+    <button class="tab" id="tabFav" aria-pressed="false"><span class="star">★</span> Favorites <span id="favCount">(0)</span></button>
+  </div>
+  <div class="chips" id="chips"></div>
+
+  <div class="station" id="station" hidden>
+    <span class="stationcode" id="stationCode">—</span>
+    <button class="starbtn" id="star" aria-pressed="false" aria-label="Add to favorites" title="Add / remove from favorites">☆</button>
+    <span class="stationname" id="stationName"></span>
+  </div>
+
+  <p class="disclaim" id="disclaim"><b>Decision support</b> — simulated NOTAM data for demonstration.
+  This tool does not replace the official briefing (authoritative source: Eurocontrol EAD).</p>
+
+  <div class="summary" id="summary"></div>
+
+  <div class="timebar">
+    <span class="title">Flight time</span>
+    <div class="scratch time">
+      <label for="htime">Z·UTC</label>
+      <input id="htime" type="time" aria-label="Flight time (UTC) for the time filter">
+    </div>
+    <button class="btn ghost" id="now">Now</button>
+    <span class="winreadout" id="winreadout">Time filter off — showing all of today's NOTAMs</span>
+    <button class="clearTime" id="clearTime" hidden>× Clear</button>
+  </div>
+
+  <div class="filters">
+    <span class="title">Filter</span>
+    <div class="seg" id="seg"></div>
+    <button class="allpill" id="all">All NOTAMs</button>
+  </div>
+
+  <div class="legend">
+    <span><i style="background:var(--red)"></i>Critical — closed / unserviceable</span>
+    <span><i style="background:var(--amber)"></i>Caution — limited / works</span>
+    <span><i style="background:var(--green)"></i>Info — operational / restored</span>
+    <span><i style="background:#3a5468"></i>Unclassified — always shown</span>
+  </div>
+
+  <div class="list" id="list"></div>
+
+  <footer>
+    Classification engine: ICAO Q-code (subject, letters&nbsp;2-3) + free-text safety net.
+    For production, plug your data source into <code>fetchNotams(icao)</code> in place of the demo set.
+  </footer>
+</div>
+
+<script>
+/* ============================================================
+   1) MOTEUR DE CLASSIFICATION  (port du module Python)
+   ============================================================ */
+const SUBJECT_CATEGORIES = {
+  AA:["vol"],AC:["vol"],AD:["vol"],AE:["vol"],AF:["vol"],AH:["vol"],AL:["vol"],
+  AN:["vol"],AO:["vol"],AP:["vol"],AR:["vol"],AT:["vol"],AU:["vol"],AV:["vol"],
+  AX:["vol"],AZ:["vol"],
+  CA:["vol"],CB:["vol"],CC:["vol"],CD:["vol"],CE:["vol"],CG:["approche"],CL:["vol"],
+  CM:["sol"],CP:["approche"],CR:["approche"],CS:["vol"],CT:["approche"],
+  FA:["vol"],FB:["sol"],FC:["approche"],FD:["sol"],FE:["vol"],FF:["vol"],FG:["sol"],
+  FH:["sol"],FI:["sol"],FJ:["sol"],FL:["approche"],FM:["vol"],FO:["approche"],
+  FP:["vol"],FS:["sol"],FT:["approche"],FU:["vol"],FW:["approche"],FZ:["vol"],
+  GA:["approche"],GW:["vol","approche"],
+  IC:["approche"],ID:["approche"],IG:["approche"],II:["approche"],IL:["approche"],
+  IM:["approche"],IN:["approche"],IO:["approche"],IS:["approche"],IT:["approche"],
+  IU:["approche"],IW:["approche"],IX:["approche"],IY:["approche"],
+  LA:["approche"],LB:["approche"],LC:["approche"],LD:["approche"],LE:["approche"],
+  LF:["approche"],LG:["approche"],LH:["approche"],LI:["approche"],LJ:["approche"],
+  LK:["approche"],LL:["approche"],LM:["approche"],LP:["approche"],LR:["approche"],
+  LS:["sol"],LT:["approche"],LU:["approche"],LV:["approche"],LW:["approche"],
+  LX:["sol"],LY:["sol"],LZ:["approche"],
+  MA:["sol"],MB:["sol","vol"],MC:["vol"],MD:["vol"],MG:["sol"],MH:["vol"],MK:["sol"],
+  MM:["sol"],MN:["sol"],MO:["sol"],MP:["sol"],MR:["vol","sol"],MS:["vol","sol"],
+  MT:["approche","vol"],MU:["sol"],MW:["sol"],MX:["sol"],MY:["sol"],
+  NA:["approche","vol"],NB:["approche"],NC:["vol"],ND:["approche"],NF:["approche"],
+  NL:["approche"],NM:["approche"],NN:["approche"],NO:["vol"],NT:["approche"],
+  NV:["approche"],NX:["approche"],
+  OA:["vol"],OB:["approche","vol"],OC:["vol"],OE:["vol"],OL:["approche"],OR:["vol"],
+  PA:["approche"],PB:["approche"],PC:["vol"],PD:["depart"],PE:["depart"],
+  PF:["vol"],PH:["approche"],PI:["approche"],PK:["approche"],PL:["vol"],
+  PM:["approche"],PN:["vol"],PO:["approche"],PR:["vol"],PT:["vol"],PU:["approche"],
+  PX:["approche"],PZ:["vol"],
+  RA:["vol"],RD:["vol"],RM:["vol"],RO:["vol"],RP:["vol"],RR:["vol"],RT:["vol"],
+  SA:["approche"],SB:["vol"],SC:["vol"],SE:["vol"],SF:["vol"],SL:["vol"],SO:["vol"],
+  SP:["approche","vol"],SS:["vol"],ST:["vol"],SU:["vol"],SV:["vol"],SY:["vol"],
+  WA:["vol"],WB:["vol"],WC:["vol"],WD:["vol"],WE:["vol"],WF:["vol"],WG:["vol"],
+  WH:["vol"],WJ:["vol"],WL:["vol"],WM:["vol"],WP:["vol"],WR:["vol"],WS:["vol"],
+  WT:["vol"],WU:["vol"],WV:["vol"],WW:["vol"],WZ:["vol"],
+};
+const FAMILY_DEFAULT = {A:["vol"],C:["vol"],F:["vol"],G:["approche"],I:["approche"],
+  L:["approche"],M:["sol"],N:["approche"],O:["vol"],P:["approche"],R:["vol"],
+  S:["vol"],W:["vol"]};
+const CONDITION_SEVERITY = {
+  LC:"critical",AS:"critical",AU:"critical",LD:"critical",AW:"critical",CD:"critical",LP:"critical",
+  CA:"caution",HW:"caution",CR:"caution",CM:"caution",CP:"caution",AH:"caution",AL:"caution",
+  LT:"caution",LL:"caution",LI:"caution",LV:"caution",LN:"caution",CT:"caution",CS:"caution",
+  CF:"caution",CH:"caution",CG:"caution",
+  AO:"info",AK:"info",CC:"info",AP:"info",AR:"info",AX:"info"};
+const FREETEXT_KEYWORDS = {
+  vol:["AERODROME CLSD","AD CLSD","ARP CLSD","AIRPORT CLOSED","AIRSPACE","PROHIBITED",
+       "RESTRICTED AREA","DANGER AREA","ZRT","TRA ACT"," ACT ","FUEL","AVGAS","JET A1",
+       "RFF","RESCUE","FIRE FIGHTING","CAT DOWNGRADED","TWR","TOWER"," ATC ","AFIS",
+       "CUSTOMS","IMMIGRATION","OPR HR","AD HR","GPS","GNSS","RAIM"],
+  approche:["ILS","LLZ","LOC","LOCALIZER","LOCALISER","GLIDE"," GP ","DME","VOR","NDB",
+       "TACAN","VORTAC","MARKER","RNAV","RNP","GLS","LPV","LNAV","VNAV","IAP","APCH",
+       "APPROACH","STAR","MISSED","MINIMA","MINIMUM","RVR","PAPI","VASI",
+       "APCH LGT","RWY LGT","RUNWAY LIGHT","RCLL","REDL","HOLDING","TRANSITION",
+       "OBST","OBSTACLE","CRANE"],
+  depart:["SID","DEPARTURE","CLB GRADIENT","CLIMB GRADIENT","INITIAL CLIMB","NADP"],
+  sol:["TWY","TAXIWAY","APRON","STAND","PARKING","RAMP","STOPWAY","SWY","SHOULDER",
+       "MOVEMENT AREA","STOP BAR","STOPBAR","WIP","WORK IN PROGRESS","CONSTRUCTION",
+       "MAINT","GRASS CUTTING","DE-ICING","DEICING","PUSHBACK","DOCKING",
+       "BRAKING ACTION","FRICTION","CONTAMINATED","SNOW","SLUSH","FOD"],
+};
+const CRITICAL_TEXT = ["CLSD","CLOSED","U/S","UNSERVICEABLE","UNSERV","NOT AVBL",
+  "NOT AVAILABLE","UNSAFE","WITHDRAWN"];
+
+function qcodeParts(q){
+  if(!q) return [null,null];
+  q=q.trim().toUpperCase();
+  if(q.length!==5 || q[0]!=="Q") return [null,null];
+  return [q.slice(1,3), q.slice(3,5)];
+}
+function categoriesFromQcode(q){
+  const [s] = qcodeParts(q);
+  if(!s || s==="XX") return new Set();
+  if(SUBJECT_CATEGORIES[s]) return new Set(SUBJECT_CATEGORIES[s]);
+  return new Set(FAMILY_DEFAULT[s[0]] || []);
+}
+function categoriesFromText(e){
+  if(!e) return new Set();
+  const t=" "+e.toUpperCase()+" ", found=new Set();
+  for(const c in FREETEXT_KEYWORDS)
+    if(FREETEXT_KEYWORDS[c].some(k=>t.includes(k))) found.add(c);
+  return found;
+}
+function severity(q,e){
+  const [,cond]=qcodeParts(q), t=(e||"").toUpperCase();
+  if(CRITICAL_TEXT.some(k=>t.includes(k))) return "critical";
+  return CONDITION_SEVERITY[cond] || "caution";
+}
+function classifyNotam(q,e){
+  let cats=categoriesFromQcode(q), source = cats.size?"qcode":"none";
+  const tc=categoriesFromText(e);
+  if(tc.size){ tc.forEach(x=>cats.add(x)); source = source==="qcode"?"qcode+text":"text"; }
+  if(!cats.size){ cats=new Set(["non_classe"]); source="unclassified"; }
+  return {categories:[...cats], severity:severity(q,e), source};
+}
+
+/* ============================================================
+   2) PARSEUR DE NOTAM BRUT  (ligne Q) + items A/B/C/E)
+   ============================================================ */
+function field(text,letter){
+  const re=new RegExp(letter+"\\)\\s*([\\s\\S]*?)(?=\\s[A-GQ]\\)|$)");
+  const m=text.match(re);
+  return m ? m[1].trim().replace(/\s+/g," ") : "";
+}
+function parseNotam(raw){
+  const text=raw.trim();
+  const id=(text.match(/^([A-Z]\d{4}\/\d{2})/)||[])[1] || "(sans id)";
+  const qm=text.match(/Q\)\s*([^\n]+)/);
+  let qcode="",scope="";
+  if(qm){ const p=qm[1].split("/").map(s=>s.trim()); qcode=p[1]||""; scope=p[4]||""; }
+  return {id, raw:text, qcode, scope,
+          a:field(text,"A"), b:field(text,"B"), c:field(text,"C"), d:field(text,"D"), e:field(text,"E")};
+}
+
+/* -- Item D) : horaire récurrent -> créneaux exploitables ---------------- */
+const DOW={SUN:0,MON:1,TUE:2,WED:3,THU:4,FRI:5,SAT:6};
+const DOW_ORDER=["SUN","MON","TUE","WED","THU","FRI","SAT"];
+function hhmmToMin(s){ s=String(s).padStart(4,"0"); return (+s.slice(0,2))*60 + (+s.slice(2)); }
+function parseSchedule(d){
+  if(!d) return null;                       // pas de D) -> enveloppe B–C seule
+  const T=d.toUpperCase();
+  if(/H24/.test(T)) return {h24:true};
+  // créneaux horaires HHMM-HHMM (3-4 chiffres pour éviter les n° de jour de mois)
+  const ranges=[]; let m; const re=/(\d{3,4})\s*-\s*(\d{3,4})/g;
+  while((m=re.exec(T))) ranges.push([hhmmToMin(m[1]), hhmmToMin(m[2])]);
+  if(!ranges.length) return {unknown:true};  // ex: SR-SS, non calculable -> on garde visible
+  // jours de la semaine (sinon : tous les jours)
+  let days=null;
+  if(!/DAILY|DLY/.test(T)){
+    const set=new Set(); let used=false, r;
+    const rg=/\b(SUN|MON|TUE|WED|THU|FRI|SAT)\s*-\s*(SUN|MON|TUE|WED|THU|FRI|SAT)\b/g;
+    while((r=rg.exec(T))){ used=true;
+      let i=DOW_ORDER.indexOf(r[1]), j=DOW_ORDER.indexOf(r[2]);
+      for(let k=0;k<7;k++){ const idx=(i+k)%7; set.add(DOW[DOW_ORDER[idx]]); if(idx===j) break; }
+    }
+    const sg=/\b(SUN|MON|TUE|WED|THU|FRI|SAT)\b/g;
+    while((r=sg.exec(T))){ set.add(DOW[r[1]]); used=true; }
+    if(used && set.size) days=set;
+  }
+  return {days, ranges};
+}
+function scheduleActiveAt(s,t){
+  const d=new Date(t);
+  if(s.days && !s.days.has(d.getUTCDay())) return false;
+  const tod=d.getUTCHours()*60+d.getUTCMinutes();
+  return s.ranges.some(([a,b])=> a<=b ? (tod>=a && tod<=b) : (tod>=a || tod<=b));
+}
+function fmtDate(s){
+  if(!s) return "—";
+  if(/PERM/i.test(s)) return "PERMANENT";
+  const m=s.match(/(\d{2})(\d{2})(\d{2})(\d{2})(\d{2})/);
+  if(!m) return s;
+  const [,yy,mo,dd,hh,mi]=m;
+  const M=["JAN","FEB","MAR","APR","MAY","JUN","JUL","AUG","SEP","OCT","NOV","DEC"];
+  return `${dd} ${M[(+mo)-1]} 20${yy} ${hh}:${mi}Z${/EST/i.test(s)?" EST":""}`;
+}
+
+/* ============================================================
+   3) COUCHE DONNÉES  — remplacer par un appel à votre source (EAD)
+   ============================================================ */
+const AIRPORTS = {
+  // -- aerodromes with demo NOTAMs --
+  LFBO:{city:"Toulouse-Blagnac", cc:"France"},
+  LFPG:{city:"Paris-Charles de Gaulle", cc:"France"},
+  EGLL:{city:"London Heathrow", cc:"United Kingdom"},
+  LSGG:{city:"Geneva", cc:"Switzerland"},
+  GMMN:{city:"Casablanca Mohammed V", cc:"Morocco"},
+  FAOR:{city:"Johannesburg O.R. Tambo", cc:"South Africa"},
+  DNMM:{city:"Lagos Murtala Muhammed", cc:"Nigeria"},
+  HECA:{city:"Cairo", cc:"Egypt"},
+  // -- extended catalog (autocomplete, no demo data) --
+  LFPO:{city:"Paris-Orly", cc:"France"},
+  LFML:{city:"Marseille-Provence", cc:"France"},
+  LFLL:{city:"Lyon-Saint-Exupéry", cc:"France"},
+  LFMN:{city:"Nice-Côte d'Azur", cc:"France"},
+  LFBD:{city:"Bordeaux-Mérignac", cc:"France"},
+  EGKK:{city:"London Gatwick", cc:"United Kingdom"},
+  EGCC:{city:"Manchester", cc:"United Kingdom"},
+  EHAM:{city:"Amsterdam-Schiphol", cc:"Netherlands"},
+  EBBR:{city:"Brussels", cc:"Belgium"},
+  EDDF:{city:"Frankfurt", cc:"Germany"},
+  EDDM:{city:"Munich", cc:"Germany"},
+  LSZH:{city:"Zurich", cc:"Switzerland"},
+  LEMD:{city:"Madrid-Barajas", cc:"Spain"},
+  LEBL:{city:"Barcelone-El Prat", cc:"Spain"},
+  LIRF:{city:"Rome-Fiumicino", cc:"Italy"},
+  GMME:{city:"Rabat-Salé", cc:"Morocco"},
+  DAAG:{city:"Algiers-Houari Boumediene", cc:"Algeria"},
+  DTTA:{city:"Tunis-Carthage", cc:"Tunisia"},
+  HEGN:{city:"Hurghada", cc:"Egypt"},
+  FACT:{city:"Cape Town", cc:"South Africa"},
+  HKJK:{city:"Nairobi-Jomo Kenyatta", cc:"Kenya"},
+  DGAA:{city:"Accra-Kotoka", cc:"Ghana"},
+  GOOY:{city:"Dakar-Yoff (former)", cc:"Senegal"},
+};
+/* -- helpers démo : dates calées sur AUJOURD'HUI (UTC) ------------------- */
+const P=n=>String(n).padStart(2,"0");
+function dstr(dayOffset,hh,mm){            // -> "YYMMDDHHMM" a aujourd'hui+offset
+  const d=new Date(Date.now()+dayOffset*86400000);
+  return P(d.getUTCFullYear()%100)+P(d.getUTCMonth()+1)+P(d.getUTCDate())+P(hh)+P(mm);
+}
+function mk(o){
+  const {id,fir,qcode,traf="IV",purp="NBO",scope="A",low="000",up="999",coord,a,b,c,d,e}=o;
+  return `${id} NOTAMN
+Q) ${fir}/${qcode}/${traf}/${purp}/${scope}/${low}/${up}/${coord}
+A) ${a} B) ${b} C) ${c}${d?`
+D) ${d}`:``}
+E) ${e}`;
+}
+const DB = {
+LFBO:[
+  mk({id:"A1471/26",fir:"LFBB",qcode:"QMRLC",coord:"4338N00122E005",a:"LFBO",b:dstr(0,5,0),c:dstr(0,16,0),e:"RWY 14L/32R CLSD DUE TO RESURFACING WIP"}),
+  mk({id:"A1472/26",fir:"LFBB",qcode:"QICAS",traf:"I",coord:"4338N00122E005",a:"LFBO",b:dstr(-10,0,0),c:dstr(25,23,59)+" EST",e:"ILS RWY 14L LLZ AND GP U/S"}),
+  mk({id:"A1455/26",fir:"LFBB",qcode:"QMXLC",purp:"M",coord:"4338N00122E005",a:"LFBO",b:dstr(-19,0,0),c:dstr(40,23,59),e:"TWY D BTN TWY D3 AND TWY D6 CLSD"}),
+  mk({id:"A1460/26",fir:"LFBB",qcode:"QMNHW",purp:"M",coord:"4338N00122E005",a:"LFBO",b:dstr(0,6,0),c:dstr(0,20,0),e:"APRON ALPHA STANDS A21-A27 WORK IN PROGRESS, MARSHALLING REQUIRED"}),
+  mk({id:"A1466/26",fir:"LFBB",qcode:"QPICH",traf:"I",coord:"4338N00122E005",a:"LFBO",b:dstr(-8,0,0),c:dstr(80,23,59)+" EST",e:"RNP APCH RWY 32L LNAV/VNAV MINIMA REVISED, REFER AIP SUP 102/26"}),
+  mk({id:"A1468/26",fir:"LFBB",qcode:"QPDCH",traf:"I",coord:"4338N00122E005",a:"LFBO",b:dstr(-5,0,0),c:dstr(60,23,59)+" EST",e:"SID RWY 32L FISTO 3A AND AGN 3B AMENDED, MIN CLB GRADIENT 6 PCT"}),
+  mk({id:"A1402/26",fir:"LFBB",qcode:"QFAAH",coord:"4338N00122E005",a:"LFBO",b:dstr(-19,0,0),c:dstr(10,23,59),e:"AD HR OF OPS EXTENDED H24 DURING SUMMER SEASON"}),
+  mk({id:"A1488/26",fir:"LFBB",qcode:"QLPAS",coord:"4338N00122E005",a:"LFBO",b:dstr(0,0,0),c:dstr(6,23,59),e:"PAPI RWY 32R U/S"}),
+  mk({id:"A1490/26",fir:"LFBB",qcode:"QFULC",coord:"4338N00122E005",a:"LFBO",b:dstr(0,0,0),c:dstr(0,6,0),e:"JET A1 NOT AVBL DUE TO TECHNICAL ISSUE, AVGAS UNAFFECTED"}),
+  mk({id:"A1495/26",fir:"LFBB",qcode:"QMXLC",purp:"M",coord:"4338N00122E005",a:"LFBO",b:dstr(-2,0,0),c:dstr(12,23,59),d:"DAILY 2200-0400",e:"TWY E CLSD FOR NIGHT WORKS DLY 2200-0400"}),
+  mk({id:"A1496/26",fir:"LFBB",qcode:"QMNHW",purp:"M",coord:"4338N00122E005",a:"LFBO",b:dstr(-2,0,0),c:dstr(20,23,59),d:"MON-FRI 0600-2000",e:"APRON BRAVO WIP MON-FRI 0600-2000, MARSHALLING REQUIRED"}),
+],
+LFPG:[
+  mk({id:"B0921/26",fir:"LFFF",qcode:"QMRLC",coord:"4900N00233E005",a:"LFPG",b:dstr(1,2,0),c:dstr(1,4,30),e:"RWY 08R/26L CLSD FOR MAINT"}),
+  mk({id:"B0902/26",fir:"LFFF",qcode:"QNVAS",scope:"AE",coord:"4900N00233E025",a:"LFPG",b:dstr(-5,0,0),c:dstr(10,23,59),e:"CGN VOR/DME U/S"}),
+  mk({id:"B0930/26",fir:"LFFF",qcode:"QMKLC",purp:"M",coord:"4900N00233E005",a:"LFPG",b:dstr(0,0,0),c:dstr(11,23,59),e:"PARKING AREA ECHO CLSD, ACFT TO USE REMOTE STANDS"}),
+  mk({id:"B0915/26",fir:"LFFF",qcode:"QSPLT",coord:"4900N00233E005",a:"LFPG",b:dstr(0,0,0),c:dstr(10,6,0),e:"APP CTL SERVICE LIMITED, EXPECT DELAYS DURING PEAK HOURS"}),
+  mk({id:"B0888/26",fir:"LFFF",qcode:"QWULW",scope:"AW",up:"060",coord:"4858N00220E015",a:"LFPG",b:dstr(0,8,0),c:dstr(0,16,0),e:"UNMANNED ACFT OPS WILL TAKE PLACE WI 5NM N OF AD, SFC TO 2000FT AGL"}),
+],
+EGLL:[
+  mk({id:"H1234/26",fir:"EGTT",qcode:"QMRHW",coord:"5128N00027W005",a:"EGLL",b:dstr(0,5,0),c:dstr(0,6,0),e:"RWY 09R/27L SURFACE INSPECTION, SHORT NOTICE CLOSURES POSSIBLE"}),
+  mk({id:"H1240/26",fir:"EGTT",qcode:"QICAS",traf:"I",coord:"5128N00027W005",a:"EGLL",b:dstr(-3,0,0),c:dstr(4,23,59),e:"ILS RWY 27R DOWNGRADED TO CAT I DUE TO LOCALIZER MAINT"}),
+  mk({id:"H1248/26",fir:"EGTT",qcode:"QPDLT",traf:"I",coord:"5128N00027W005",a:"EGLL",b:dstr(-2,0,0),c:dstr(20,23,59),e:"SID RWY 27R BPK 6K NADP RESTRICTION, CLIMB GRADIENT AMENDED"}),
+  mk({id:"H1255/26",fir:"EGTT",qcode:"QMXLC",purp:"M",coord:"5128N00027W005",a:"EGLL",b:dstr(-19,0,0),c:dstr(10,23,59),e:"TWY B CLSD BTN TWY B7 AND TWY B9"}),
+  mk({id:"H1199/26",fir:"EGTT",qcode:"QOBCE",purp:"M",scope:"AE",up:"008",coord:"5130N00025W008",a:"EGLL",b:dstr(-30,0,0),c:dstr(150,23,59)+" EST",e:"CRANE OPS 690FT AMSL 1.8NM NE OF ARP, LGT"}),
+  mk({id:"H1260/26",fir:"EGTT",qcode:"QFFCG",coord:"5128N00027W005",a:"EGLL",b:dstr(0,1,0),c:dstr(0,5,0),e:"RFF CATEGORY DOWNGRADED TO CAT 8 BTN 0100-0500"}),
+],
+LSGG:[
+  mk({id:"A0455/26",fir:"LSAS",qcode:"QMRLC",coord:"4614N00609E005",a:"LSGG",b:dstr(1,4,0),c:dstr(1,5,0),e:"RWY 04/22 CLSD DUE TO RUNWAY CHECK"}),
+  mk({id:"A0448/26",fir:"LSAS",qcode:"QLEAS",coord:"4614N00609E005",a:"LSGG",b:dstr(-2,0,0),c:dstr(7,23,59),e:"RWY 22 EDGE LIGHTS U/S, RWY AVBL DAYTIME ONLY"}),
+  mk({id:"A0460/26",fir:"LSAS",qcode:"QMSHW",purp:"M",coord:"4614N00609E005",a:"LSGG",b:dstr(0,6,0),c:dstr(0,15,0),e:"TWY M MARKINGS REPAINTING WORK IN PROGRESS"}),
+  mk({id:"A0440/26",fir:"LSAS",qcode:"QPMXX",traf:"I",coord:"4614N00609E005",a:"LSGG",b:dstr(-19,0,0),c:dstr(40,23,59),e:"AD OPERATING MINIMA RWY 04 ILS REVISED, RVR 550M"}),
+],
+GMMN:[
+  mk({id:"A0512/26",fir:"GMMM",qcode:"QMRLC",coord:"3333N00733W005",a:"GMMN",b:dstr(-3,0,0),c:dstr(10,23,59),d:"DAILY 2200-0400",e:"RWY 17R/35L CLSD FOR MAINT DLY 2200-0400"}),
+  mk({id:"A0498/26",fir:"GMMM",qcode:"QICAS",traf:"I",coord:"3333N00733W005",a:"GMMN",b:dstr(-10,0,0),c:dstr(20,23,59)+" EST",e:"ILS RWY 35L U/S"}),
+  mk({id:"A0521/26",fir:"GMMM",qcode:"QXXXX",coord:"3333N00733W005",a:"GMMN",b:dstr(-19,0,0),c:dstr(10,23,59),e:"TWY F CLSD DUE TO CONSTRUCTION WORK IN PROGRESS"}),
+  mk({id:"A0505/26",fir:"GMMM",qcode:"QNMAS",scope:"AE",coord:"3333N00733W025",a:"GMMN",b:dstr(-5,0,0),c:dstr(9,23,59),e:"CAS VOR/DME U/S, EXPECT CONVENTIONAL APCH NOT AVBL"}),
+  mk({id:"A0530/26",fir:"GMMM",qcode:"QFAXX",coord:"3333N00733W005",a:"GMMN",b:dstr(0,9,0),c:dstr(0,12,0),e:"AD CLSD TO ALL TFC DUE TO STATE CEREMONY"}),
+],
+FAOR:[
+  mk({id:"C0301/26",fir:"FAJA",qcode:"QMRLC",coord:"2608S02814E005",a:"FAOR",b:dstr(1,0,0),c:dstr(1,3,0),e:"RWY 03L/21R CLSD FOR RUNWAY REHABILITATION"}),
+  mk({id:"C0288/26",fir:"FAJA",qcode:"QGAAS",traf:"I",coord:"2608S02814E005",a:"FAOR",b:dstr(-5,0,0),c:dstr(10,23,59),e:"GNSS RNP APCH RWY 21R NOT AVBL DUE TO GPS INTERFERENCE TESTING"}),
+  mk({id:"C0312/26",fir:"FAJA",qcode:"QMNHW",purp:"M",coord:"2608S02814E005",a:"FAOR",b:dstr(-19,0,0),c:dstr(40,23,59),e:"APRON B RECONSTRUCTION WORK IN PROGRESS, STANDS B1-B8 NOT AVBL"}),
+  mk({id:"C0275/26",fir:"FAJA",qcode:"QFUAU",coord:"2608S02814E005",a:"FAOR",b:dstr(0,0,0),c:dstr(6,0,0)+" EST",e:"JET A1 AVAILABILITY LIMITED, PPR FOR REFUEL"}),
+],
+DNMM:[
+  mk({id:"A0142/26",fir:"DNKK",qcode:"QMRLC",coord:"0635N00320E005",a:"DNMM",b:dstr(0,0,0),c:dstr(0,23,59),e:"RWY 18R/36L CLSD"}),
+  mk({id:"A0130/26",fir:"DNKK",qcode:"QOBCE",purp:"M",scope:"AW",up:"010",coord:"0635N00320E005",a:"DNMM",b:dstr(-10,0,0),c:dstr(90,23,59)+" EST",e:"CRANE ERECTED 1.5KM SW OF ARP, 295FT AGL, NOT LGT"}),
+  mk({id:"A0150/26",fir:"DNKK",qcode:"QXXXX",coord:"0635N00320E005",a:"DNMM",b:dstr(-19,0,0),c:dstr(10,23,59),e:"TWY C AND APRON LIGHTING UNSERVICEABLE, TWY EDGE LGT U/S"}),
+  mk({id:"A0118/26",fir:"DNKK",qcode:"QNBAS",scope:"AE",coord:"0635N00320E025",a:"DNMM",b:dstr(-8,0,0),c:dstr(20,23,59)+" EST",e:"LAG NDB U/S"}),
+],
+HECA:[
+  mk({id:"A0701/26",fir:"HECC",qcode:"QICAS",traf:"I",coord:"3007N03124E005",a:"HECA",b:dstr(-5,0,0),c:dstr(10,23,59),e:"ILS RWY 05L GP U/S, LLZ ONLY AVBL"}),
+  mk({id:"A0712/26",fir:"HECC",qcode:"QMXHW",purp:"M",coord:"3007N03124E005",a:"HECA",b:dstr(0,0,0),c:dstr(30,23,59),e:"TWY 7 AND TWY 8 WORK IN PROGRESS, REDUCED WIDTH"}),
+  mk({id:"A0695/26",fir:"HECC",qcode:"QRTCA",scope:"W",up:"660",coord:"3000N03130E030",a:"HECC",b:dstr(0,6,0),c:dstr(0,14,0),e:"TEMPO RESTRICTED AREA ACT WI 15NM E OF AD, SFC TO FL660"}),
+  mk({id:"A0720/26",fir:"HECC",qcode:"QFALC",coord:"3007N03124E005",a:"HECA",b:dstr(1,1,0),c:dstr(1,4,0),e:"AERODROME CLSD DUE TO RWY MAINT"}),
+],
+};
+// ============================================================
+//  CONFIG — pour passer en LIVE, renseignez l'URL de votre proxy.
+//  Laissez vide ("") pour utiliser le jeu de démonstration.
+// ============================================================
+const BACKEND_URL = "https://notam-proxy-production.up.railway.app";
+
+// Récupère les NOTAM bruts (tableau de chaînes ICAO) pour un code OACI.
+// - démo  : lit le jeu local (DB)
+// - live  : interroge votre proxy, qui renvoie { icao, notams: [ "texte brut", ... ] }
+async function fetchNotams(icao){
+  if(!BACKEND_URL){
+    return DB[icao] || null;                 // null = terrain hors démo
+  }
+  const r = await fetch(`${BACKEND_URL}/api/notams/${encodeURIComponent(icao)}`);
+  if(!r.ok) throw new Error(`HTTP ${r.status}`);
+  const data = await r.json();
+  return Array.isArray(data.notams) ? data.notams : null;
+}
+
+/* ============================================================
+   4) ÉTAT + RENDU
+   ============================================================ */
+const CAT_LABEL={vol:"Flight",depart:"Departure",approche:"Arrival",sol:"Ground",non_classe:"Unclassified"};
+const SEV_RANK={critical:0,caution:1,info:2};
+let activeCats=new Set();   // vide = "Tous"
+let current=[];             // NOTAM classés de l'aérodrome courant
+let timeWin=null;           // null = filtre horaire inactif ; sinon {start,end,h,m}
+let currentIcao="";         // code OACI chargé
+let tab="demo";             // onglet actif : "demo" | "fav"
+function loadFavs(){ try{ return JSON.parse(localStorage.getItem("notam_favs")||"[]"); }catch(e){ return []; } }
+function saveFavs(a){ try{ localStorage.setItem("notam_favs",JSON.stringify(a)); }catch(e){} }
+let favs=loadFavs();        // codes OACI favoris (persistés si possible)
+
+/* ---- fenêtre temporelle : aujourd'hui à H:M ± 1 h (UTC) ---- */
+function ts(s){             // "YYMMDDHHMM..." -> ms UTC, ou null
+  const m=(s||"").match(/(\d{2})(\d{2})(\d{2})(\d{2})(\d{2})/);
+  if(!m) return null;
+  const [,yy,mo,dd,hh,mi]=m.map(Number);
+  return Date.UTC(2000+yy,mo-1,dd,hh,mi);
+}
+function windowFor(h,m){
+  const now=new Date();
+  const center=Date.UTC(now.getUTCFullYear(),now.getUTCMonth(),now.getUTCDate(),h,m);
+  return {start:center-3600000, end:center+3600000, h, m};
+}
+function activeAt(n,win){   // le NOTAM est-il actif quelque part dans la fenêtre ?
+  const b=ts(n.b);
+  const c=/PERM/i.test(n.c) ? Infinity : ts(n.c);
+  const bb=(b==null)?-Infinity:b, cc=(c==null)?Infinity:c;
+  const s=n.schedule;
+  if(!s || s.h24 || s.unknown){           // pas d'horaire exploitable -> enveloppe B–C
+    return bb<=win.end && cc>=win.start;
+  }
+  // horaire récurrent : un instant de la fenêtre doit tomber dans l'enveloppe ET un créneau
+  for(let t=win.start; t<=win.end; t+=60000){
+    if(t>=bb && t<=cc && scheduleActiveAt(s,t)) return true;
+  }
+  return false;
+}
+const hm=ms=>{const d=new Date(ms);return P(d.getUTCHours())+":"+P(d.getUTCMinutes());};
+
+const $=s=>document.querySelector(s);
+const list=$("#list"), summary=$("#summary"), seg=$("#seg");
+
+/* ---- onglets + chips (Démo / Favoris) ---- */
+function setTab(t){
+  tab=t;
+  $("#tabDemo").classList.toggle("on",t==="demo");
+  $("#tabDemo").setAttribute("aria-pressed",t==="demo");
+  $("#tabFav").classList.toggle("on",t==="fav");
+  $("#tabFav").setAttribute("aria-pressed",t==="fav");
+  renderChips();
+}
+function renderChips(){
+  const wrap=$("#chips");
+  const codes = tab==="demo" ? Object.keys(DB) : favs;
+  if(tab==="fav" && !codes.length){
+    wrap.innerHTML=`<span class="hint">No favorites yet — load an aerodrome, then click the ☆ star next to its code.</span>`;
+    return;
+  }
+  wrap.innerHTML=codes.map(code=>{
+    const m=AIRPORTS[code]||{city:""};
+    const star = (tab==="demo" && favs.includes(code)) ? " ★" : "";
+    return `<button class="chip-ad ${code===currentIcao?"on":""}" data-code="${code}">${code}${star?`<span class="sg-star">${star}</span>`:""}<small>${m.city||""}</small></button>`;
+  }).join("");
+  wrap.querySelectorAll(".chip-ad").forEach(b=>b.onclick=()=>load(b.dataset.code));
+}
+function updateFavCount(){ $("#favCount").textContent="("+favs.length+")"; }
+
+/* ---- bannière station + étoile favori ---- */
+function showStation(icao){
+  const m=AIRPORTS[icao];
+  $("#station").hidden=false;
+  $("#stationCode").textContent=icao;
+  $("#stationName").textContent = m ? `${m.city} · ${m.cc}` : "aerodrome not in catalog";
+  updateStar();
+}
+function updateStar(){
+  const fav=favs.includes(currentIcao), s=$("#star");
+  s.textContent = fav ? "★" : "☆";
+  s.classList.toggle("on",fav);
+  s.setAttribute("aria-pressed",fav);
+  s.setAttribute("aria-label", fav?"Remove from favorites":"Add to favorites");
+}
+function toggleFav(){
+  if(!currentIcao) return;
+  favs = favs.includes(currentIcao) ? favs.filter(c=>c!==currentIcao) : [...favs,currentIcao];
+  saveFavs(favs); updateStar(); updateFavCount(); renderChips();
+}
+
+/* ---- autocomplétion (à partir de 2 lettres) ---- */
+function renderSuggest(q){
+  const box=$("#suggest");
+  q=(q||"").toUpperCase().trim();
+  if(q.length<2){ box.hidden=true; box.innerHTML=""; return; }
+  const matches=Object.keys(AIRPORTS).filter(c=>c.startsWith(q)).sort().slice(0,8);
+  if(!matches.length){ box.hidden=true; box.innerHTML=""; return; }
+  box.innerHTML=matches.map(c=>{
+    const m=AIRPORTS[c];
+    const star = favs.includes(c) ? `<span class="sg-star">★</span>` : "";
+    const nodata = DB[c] ? "" : `<span class="sg-nodata">no demo data</span>`;
+    return `<button class="sg-row" data-code="${c}">
+      <span class="sg-code">${c}</span><span class="sg-city">${m.city} · ${m.cc}</span>${star}${nodata}</button>`;
+  }).join("");
+  box.hidden=false;
+  box.querySelectorAll(".sg-row").forEach(r=>r.onmousedown=e=>{ e.preventDefault(); load(r.dataset.code); });
+}
+
+function buildSeg(){
+  ["vol","depart","approche","sol"].forEach(c=>{
+    const b=document.createElement("button");
+    b.className="cat"; b.dataset.cat=c; b.setAttribute("aria-pressed","false");
+    b.innerHTML=`<span class="dot"></span>${CAT_LABEL[c]}<span class="cnt" data-cnt="${c}">0</span>`;
+    b.onclick=()=>{ activeCats.has(c)?activeCats.delete(c):activeCats.add(c); render(); };
+    seg.appendChild(b);
+  });
+}
+
+let loadToken=0;            // garde anti-course entre requêtes async
+
+async function load(icao){
+  icao=(icao||"").toUpperCase().trim();
+  if(!icao) return;
+  currentIcao=icao;
+  $("#icao").value=icao;
+  $("#suggest").hidden=true;
+  showStation(icao);
+  renderChips();
+  const my=++loadToken;
+  renderLoading();
+  let raw;
+  try{
+    raw=await fetchNotams(icao);
+  }catch(e){
+    if(my===loadToken) renderError(icao,e);
+    return;
+  }
+  if(my!==loadToken) return;               // une requête plus récente a pris le relais
+  if(raw===null){ current=[]; renderEmpty(icao); return; }
+  current=(raw||[]).map(r=>{ const n=parseNotam(r); return {...n, ...classifyNotam(n.qcode,n.e), schedule:parseSchedule(n.d)}; });
+  activeCats.clear();
+  render();
+}
+
+function renderLoading(){
+  summary.innerHTML="";
+  document.querySelectorAll("[data-cnt]").forEach(el=>el.textContent="0");
+  list.innerHTML=`<div class="empty loading"><span class="spinner"></span>Loading NOTAMs for ${esc(currentIcao)}…</div>`;
+}
+function renderError(icao,e){
+  summary.innerHTML="";
+  document.querySelectorAll("[data-cnt]").forEach(el=>el.textContent="0");
+  list.innerHTML=`<div class="empty error">
+    <h3>Couldn't load NOTAMs for "${esc(icao)}"</h3>
+    <p>${esc(e.message||"Network error")} — check the data source or your connection.</p>
+    <button class="btn" id="retry">Retry</button></div>`;
+  const rb=document.getElementById("retry"); if(rb) rb.onclick=()=>load(icao);
+}
+
+function baseSet(){         // NOTAM retenus par le filtre horaire (avant catégories)
+  return timeWin ? current.filter(n=>activeAt(n,timeWin)) : current;
+}
+function counts(){
+  const c={vol:0,depart:0,approche:0,sol:0,critical:0,caution:0,info:0};
+  baseSet().forEach(n=>{ n.categories.forEach(k=>{ if(c[k]!==undefined)c[k]++; }); c[n.severity]++; });
+  return c;
+}
+function visible(){
+  let rows=baseSet();
+  if(activeCats.size) rows=rows.filter(n=>n.categories.some(c=>activeCats.has(c)));
+  return rows;
+}
+
+function render(){
+  const c=counts();
+  const base=baseSet();
+  summary.innerHTML=`
+    <div class="stat tot"><div class="n">${base.length}</div><div class="k">${timeWin?"NOTAMs at this time":"Active NOTAMs"}</div></div>
+    <div class="stat crit"><div class="row"><span class="led"></span><span class="n">${c.critical}</span></div><div class="k">Critical</div></div>
+    <div class="stat caut"><div class="row"><span class="led"></span><span class="n">${c.caution}</span></div><div class="k">Caution</div></div>
+    <div class="stat info"><div class="row"><span class="led"></span><span class="n">${c.info}</span></div><div class="k">Information</div></div>`;
+  document.querySelectorAll("[data-cnt]").forEach(el=>el.textContent=c[el.dataset.cnt]);
+  document.querySelectorAll(".cat").forEach(b=>{
+    const on=activeCats.has(b.dataset.cat);
+    b.classList.toggle("on",on); b.setAttribute("aria-pressed",on);
+  });
+  $("#all").classList.toggle("muted",activeCats.size!==0);
+
+  // bandeau horaire
+  const ro=$("#winreadout");
+  if(timeWin){
+    ro.classList.add("on");
+    ro.innerHTML=`Window <b>${hm(timeWin.start)}–${hm(timeWin.end)} Z</b> · today (± 1 h)`;
+    $("#clearTime").hidden=false;
+  }else{
+    ro.classList.remove("on");
+    ro.textContent="Time filter off — showing all of today's NOTAMs";
+    $("#clearTime").hidden=true;
+  }
+
+  const rows=visible().slice().sort((a,b)=>
+    (SEV_RANK[a.severity]-SEV_RANK[b.severity]) || a.id.localeCompare(b.id));
+  if(!rows.length){
+    const msg = !current.length
+      ? `<h3>No active NOTAMs for ${esc(currentIcao)}</h3>
+         <p>Nothing to show right now.</p>`
+      : timeWin
+      ? `<h3>No NOTAM in the window ${hm(timeWin.start)}–${hm(timeWin.end)} Z</h3>
+         <p>Widen the time, clear the time filter, or switch category.</p>`
+      : `<h3>No NOTAM in this selection</h3>
+         <p>Turn a filter off or go back to "All NOTAMs".</p>`;
+    list.innerHTML=`<div class="empty">${msg}</div>`; return; }
+
+  list.innerHTML=rows.map(n=>{
+    const tags=n.categories.map(c=>`<span class="tag ${c}">${CAT_LABEL[c]}</span>`).join("");
+    const srcTxt=n.source==="text"?"identified via text":
+                 n.source==="unclassified"?"uncoded":"";
+    return `<article class="strip ${n.severity}">
+      <div class="rail"></div>
+      <div class="body">
+        <div class="shead">
+          <span class="sled"></span>
+          <span class="nid">${n.id}</span>
+          <span class="qc">${n.qcode||"—"}</span>
+          <div class="tags">${tags}</div>
+        </div>
+        <div class="etext">${esc(n.e||n.raw)}</div>
+        <div class="meta">
+          <span><b>Start</b> <span class="v">${fmtDate(n.b)}</span></span>
+          <span><b>End</b> <span class="v">${fmtDate(n.c)}</span></span>
+          ${n.d?`<span><b>Schedule</b> <span class="v">${esc(n.d)}</span></span>`:""}
+          ${srcTxt?`<span class="src ${n.source==='text'?'text':''}">${srcTxt}</span>`:""}
+        </div>
+      </div>
+    </article>`;
+  }).join("");
+}
+
+function renderEmpty(icao){
+  summary.innerHTML=""; document.querySelectorAll("[data-cnt]").forEach(el=>el.textContent=0);
+  const codes=Object.keys(AIRPORTS).join(", ");
+  list.innerHTML=`<div class="empty">
+    <h3>No data for "${esc(icao||"—")}" in the demo</h3>
+    <p>The demo set covers: ${codes}.<br>In production, <code>fetchNotams()</code> would query your source for any ICAO code.</p>
+  </div>`;
+}
+function esc(s){return (s||"").replace(/[&<>]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;"}[c]));}
+
+/* ---- événements ---- */
+$("#icao").addEventListener("input",e=>{ e.target.value=e.target.value.toUpperCase(); renderSuggest(e.target.value); });
+$("#icao").addEventListener("focus",e=>renderSuggest(e.target.value));
+$("#icao").addEventListener("blur",()=>setTimeout(()=>{ $("#suggest").hidden=true; },150));
+$("#icao").addEventListener("keydown",e=>{
+  if(e.key==="Enter"){ $("#suggest").hidden=true; load($("#icao").value); }
+  else if(e.key==="Escape"){ $("#suggest").hidden=true; }
+});
+$("#star").onclick=toggleFav;
+$("#tabDemo").onclick=()=>setTab("demo");
+$("#tabFav").onclick=()=>setTab("fav");
+$("#all").onclick=()=>{ activeCats.clear(); render(); };
+
+/* ---- filtre horaire ---- */
+function applyTime(val){
+  const m=(val||"").match(/^(\d{1,2}):(\d{2})$/);
+  if(!m){ timeWin=null; render(); return; }
+  const h=Math.min(23,+m[1]), mi=Math.min(59,+m[2]);
+  timeWin=windowFor(h,mi);
+  render();
+}
+$("#htime").addEventListener("input",e=>applyTime(e.target.value));
+$("#now").onclick=()=>{
+  const d=new Date();
+  $("#htime").value=P(d.getUTCHours())+":"+P(d.getUTCMinutes());
+  applyTime($("#htime").value);
+};
+$("#clearTime").onclick=()=>{ $("#htime").value=""; timeWin=null; render(); };
+
+function updateDisclaimer(){
+  const live=!!BACKEND_URL;
+  $("#disclaim").innerHTML=`<b>Decision support</b> — ${live?"live NOTAM data via your configured source":"simulated NOTAM data for demonstration"}. `
+    +`This tool does not replace the official briefing (authoritative source: Eurocontrol EAD).`;
+}
+updateDisclaimer(); updateFavCount(); buildSeg(); setTab("fav"); load(favs.length ? favs[0] : "LFBO");
+</script>
+<script>
+if ("serviceWorker" in navigator) {
+  navigator.serviceWorker.register("./sw.js").catch(() => {});
+}
+</script>
+</body>
+</html>
