@@ -269,8 +269,7 @@ footer code{color:var(--cyan);background:#0c1c28;padding:2px 6px;border-radius:4
 
 <div class="wrap">
   <div class="tabs">
-    <button class="tab on" id="tabDemo" aria-pressed="true">Demo</button>
-    <button class="tab" id="tabFav" aria-pressed="false"><span class="star">★</span> Favorites <span id="favCount">(0)</span></button>
+    <button class="tab on" id="tabFav" aria-pressed="true"><span class="star">★</span> Favorites <span id="favCount">(0)</span></button>
   </div>
   <div class="chips" id="chips"></div>
 
@@ -482,39 +481,260 @@ function fmtDate(s){
    3) COUCHE DONNÉES  — remplacer par un appel à votre source (EAD)
    ============================================================ */
 const AIRPORTS = {
-  // -- aerodromes with demo NOTAMs --
-  LFBO:{city:"Toulouse-Blagnac", cc:"France"},
+  // ---- France ----
   LFPG:{city:"Paris-Charles de Gaulle", cc:"France"},
-  EGLL:{city:"London Heathrow", cc:"United Kingdom"},
-  LSGG:{city:"Geneva", cc:"Switzerland"},
-  GMMN:{city:"Casablanca Mohammed V", cc:"Morocco"},
-  FAOR:{city:"Johannesburg O.R. Tambo", cc:"South Africa"},
-  DNMM:{city:"Lagos Murtala Muhammed", cc:"Nigeria"},
-  HECA:{city:"Cairo", cc:"Egypt"},
-  // -- extended catalog (autocomplete, no demo data) --
   LFPO:{city:"Paris-Orly", cc:"France"},
+  LFPB:{city:"Paris-Le Bourget", cc:"France"},
+  LFOB:{city:"Beauvais-Tillé", cc:"France"},
   LFML:{city:"Marseille-Provence", cc:"France"},
   LFLL:{city:"Lyon-Saint-Exupéry", cc:"France"},
+  LFLY:{city:"Lyon-Bron", cc:"France"},
   LFMN:{city:"Nice-Côte d'Azur", cc:"France"},
   LFBD:{city:"Bordeaux-Mérignac", cc:"France"},
+  LFBO:{city:"Toulouse-Blagnac", cc:"France"},
+  LFBZ:{city:"Biarritz-Pays Basque", cc:"France"},
+  LFBT:{city:"Tarbes-Lourdes-Pyrénées", cc:"France"},
+  LFBP:{city:"Pau-Pyrénées", cc:"France"},
+  LFBE:{city:"Bergerac-Dordogne", cc:"France"},
+  LFBL:{city:"Limoges-Bellegarde", cc:"France"},
+  LFBI:{city:"Poitiers-Biard", cc:"France"},
+  LFBH:{city:"La Rochelle-Île de Ré", cc:"France"},
+  LFBG:{city:"Cognac-Châteaubernard", cc:"France"},
+  LFBN:{city:"Niort-Marais Poitevin", cc:"France"},
+  LFRS:{city:"Nantes-Atlantique", cc:"France"},
+  LFRB:{city:"Brest-Bretagne", cc:"France"},
+  LFRN:{city:"Rennes-Saint-Jacques", cc:"France"},
+  LFRD:{city:"Dinard-Pleurtuit", cc:"France"},
+  LFRH:{city:"Lorient-Bretagne Sud", cc:"France"},
+  LFRK:{city:"Caen-Carpiquet", cc:"France"},
+  LFRQ:{city:"Quimper-Cornouaille", cc:"France"},
+  LFRG:{city:"Deauville-Normandie", cc:"France"},
+  LFOH:{city:"Le Havre-Octeville", cc:"France"},
+  LFOP:{city:"Rouen-Vallée de Seine", cc:"France"},
+  LFOT:{city:"Tours-Val de Loire", cc:"France"},
+  LFOJ:{city:"Orléans-Bricy", cc:"France"},
+  LFQQ:{city:"Lille-Lesquin", cc:"France"},
+  LFAT:{city:"Le Touquet-Côte d'Opale", cc:"France"},
+  LFST:{city:"Strasbourg-Entzheim", cc:"France"},
+  LFSB:{city:"Bâle-Mulhouse (EuroAirport)", cc:"France"},
+  LFGA:{city:"Colmar-Houssen", cc:"France"},
+  LFJL:{city:"Metz-Nancy-Lorraine", cc:"France"},
+  LFSN:{city:"Nancy-Essey", cc:"France"},
+  LFSD:{city:"Dijon-Longvic", cc:"France"},
+  LFGJ:{city:"Dole-Jura", cc:"France"},
+  LFOK:{city:"Châlons-Vatry", cc:"France"},
+  LFLC:{city:"Clermont-Ferrand-Auvergne", cc:"France"},
+  LFLB:{city:"Chambéry-Savoie", cc:"France"},
+  LFLS:{city:"Grenoble-Alpes-Isère", cc:"France"},
+  LFLP:{city:"Annecy-Mont Blanc", cc:"France"},
+  LFLU:{city:"Valence-Chabeuil", cc:"France"},
+  LFMT:{city:"Montpellier-Méditerranée", cc:"France"},
+  LFMP:{city:"Perpignan-Rivesaltes", cc:"France"},
+  LFMK:{city:"Carcassonne-Salvaza", cc:"France"},
+  LFMU:{city:"Béziers-Cap d'Agde", cc:"France"},
+  LFTW:{city:"Nîmes-Garons", cc:"France"},
+  LFMV:{city:"Avignon-Provence", cc:"France"},
+  LFTH:{city:"Toulon-Hyères", cc:"France"},
+  LFCR:{city:"Rodez-Aveyron", cc:"France"},
+  LFCI:{city:"Albi-Le Séquestre", cc:"France"},
+  LFKJ:{city:"Ajaccio-Napoléon Bonaparte", cc:"France"},
+  LFKB:{city:"Bastia-Poretta", cc:"France"},
+  LFKF:{city:"Figari-Sud Corse", cc:"France"},
+  LFKC:{city:"Calvi-Sainte-Catherine", cc:"France"},
+  // ---- France outre-mer ----
+  FMEE:{city:"Saint-Denis-Roland Garros (Réunion)", cc:"France"},
+  FMCZ:{city:"Dzaoudzi-Pamandzi (Mayotte)", cc:"France"},
+  TFFF:{city:"Fort-de-France-Aimé Césaire (Martinique)", cc:"France"},
+  TFFR:{city:"Pointe-à-Pitre-Le Raizet (Guadeloupe)", cc:"France"},
+  SOCA:{city:"Cayenne-Félix Eboué (Guyane)", cc:"France"},
+  NTAA:{city:"Tahiti-Faa'a (Polynésie)", cc:"France"},
+  NWWW:{city:"Nouméa-La Tontouta (N. Calédonie)", cc:"France"},
+  // ---- United Kingdom & Ireland ----
+  EGLL:{city:"London Heathrow", cc:"United Kingdom"},
   EGKK:{city:"London Gatwick", cc:"United Kingdom"},
+  EGSS:{city:"London Stansted", cc:"United Kingdom"},
+  EGGW:{city:"London Luton", cc:"United Kingdom"},
   EGCC:{city:"Manchester", cc:"United Kingdom"},
+  EGGP:{city:"Liverpool", cc:"United Kingdom"},
+  EGBB:{city:"Birmingham", cc:"United Kingdom"},
+  EGNX:{city:"East Midlands", cc:"United Kingdom"},
+  EGPH:{city:"Edinburgh", cc:"United Kingdom"},
+  EGPF:{city:"Glasgow", cc:"United Kingdom"},
+  EGFF:{city:"Cardiff", cc:"United Kingdom"},
+  EGAA:{city:"Belfast International", cc:"United Kingdom"},
+  EIDW:{city:"Dublin", cc:"Ireland"},
+  EICK:{city:"Cork", cc:"Ireland"},
+  // ---- Benelux ----
   EHAM:{city:"Amsterdam-Schiphol", cc:"Netherlands"},
+  EHRD:{city:"Rotterdam-The Hague", cc:"Netherlands"},
+  EHEH:{city:"Eindhoven", cc:"Netherlands"},
   EBBR:{city:"Brussels", cc:"Belgium"},
+  EBCI:{city:"Brussels South-Charleroi", cc:"Belgium"},
+  EBLG:{city:"Liège", cc:"Belgium"},
+  EBAW:{city:"Antwerp", cc:"Belgium"},
+  ELLX:{city:"Luxembourg-Findel", cc:"Luxembourg"},
+  // ---- Germany ----
   EDDF:{city:"Frankfurt", cc:"Germany"},
   EDDM:{city:"Munich", cc:"Germany"},
+  EDDL:{city:"Düsseldorf", cc:"Germany"},
+  EDDK:{city:"Cologne-Bonn", cc:"Germany"},
+  EDDH:{city:"Hamburg", cc:"Germany"},
+  EDDB:{city:"Berlin Brandenburg", cc:"Germany"},
+  EDDS:{city:"Stuttgart", cc:"Germany"},
+  EDDN:{city:"Nuremberg", cc:"Germany"},
+  EDDV:{city:"Hannover", cc:"Germany"},
+  EDDP:{city:"Leipzig-Halle", cc:"Germany"},
+  // ---- Switzerland & Austria ----
   LSZH:{city:"Zurich", cc:"Switzerland"},
+  LSGG:{city:"Geneva", cc:"Switzerland"},
+  LSZB:{city:"Bern", cc:"Switzerland"},
+  LSZA:{city:"Lugano", cc:"Switzerland"},
+  LOWW:{city:"Vienna", cc:"Austria"},
+  LOWS:{city:"Salzburg", cc:"Austria"},
+  LOWI:{city:"Innsbruck", cc:"Austria"},
+  LOWG:{city:"Graz", cc:"Austria"},
+  // ---- Iberia ----
   LEMD:{city:"Madrid-Barajas", cc:"Spain"},
-  LEBL:{city:"Barcelone-El Prat", cc:"Spain"},
+  LEBL:{city:"Barcelona-El Prat", cc:"Spain"},
+  LEPA:{city:"Palma de Mallorca", cc:"Spain"},
+  LEMG:{city:"Málaga-Costa del Sol", cc:"Spain"},
+  LEAL:{city:"Alicante-Elche", cc:"Spain"},
+  LEVC:{city:"Valencia", cc:"Spain"},
+  LEZL:{city:"Seville", cc:"Spain"},
+  LEBB:{city:"Bilbao", cc:"Spain"},
+  LEST:{city:"Santiago de Compostela", cc:"Spain"},
+  LEIB:{city:"Ibiza", cc:"Spain"},
+  GCLP:{city:"Gran Canaria-Las Palmas", cc:"Spain"},
+  GCTS:{city:"Tenerife South", cc:"Spain"},
+  GCXO:{city:"Tenerife North", cc:"Spain"},
+  GCRR:{city:"Lanzarote", cc:"Spain"},
+  GCFV:{city:"Fuerteventura", cc:"Spain"},
+  LPPT:{city:"Lisbon", cc:"Portugal"},
+  LPPR:{city:"Porto", cc:"Portugal"},
+  LPFR:{city:"Faro", cc:"Portugal"},
+  LPMA:{city:"Madeira-Funchal", cc:"Portugal"},
+  LPPD:{city:"Ponta Delgada (Azores)", cc:"Portugal"},
+  // ---- Italy, Greece, Malta ----
   LIRF:{city:"Rome-Fiumicino", cc:"Italy"},
+  LIRA:{city:"Rome-Ciampino", cc:"Italy"},
+  LIMC:{city:"Milan-Malpensa", cc:"Italy"},
+  LIML:{city:"Milan-Linate", cc:"Italy"},
+  LIME:{city:"Bergamo-Orio al Serio", cc:"Italy"},
+  LIPZ:{city:"Venice-Marco Polo", cc:"Italy"},
+  LIPE:{city:"Bologna", cc:"Italy"},
+  LIRN:{city:"Naples", cc:"Italy"},
+  LIRP:{city:"Pisa", cc:"Italy"},
+  LIRQ:{city:"Florence", cc:"Italy"},
+  LICC:{city:"Catania-Fontanarossa", cc:"Italy"},
+  LICJ:{city:"Palermo", cc:"Italy"},
+  LIEE:{city:"Cagliari-Elmas", cc:"Italy"},
+  LIEO:{city:"Olbia-Costa Smeralda", cc:"Italy"},
+  LGAV:{city:"Athens", cc:"Greece"},
+  LGTS:{city:"Thessaloniki", cc:"Greece"},
+  LGIR:{city:"Heraklion", cc:"Greece"},
+  LGRP:{city:"Rhodes", cc:"Greece"},
+  LGKR:{city:"Corfu", cc:"Greece"},
+  LMML:{city:"Malta-Luqa", cc:"Malta"},
+  // ---- Nordics ----
+  EKCH:{city:"Copenhagen", cc:"Denmark"},
+  EKBI:{city:"Billund", cc:"Denmark"},
+  ESSA:{city:"Stockholm-Arlanda", cc:"Sweden"},
+  ESGG:{city:"Gothenburg-Landvetter", cc:"Sweden"},
+  ENGM:{city:"Oslo-Gardermoen", cc:"Norway"},
+  ENBR:{city:"Bergen-Flesland", cc:"Norway"},
+  ENZV:{city:"Stavanger-Sola", cc:"Norway"},
+  EFHK:{city:"Helsinki-Vantaa", cc:"Finland"},
+  BIKF:{city:"Reykjavík-Keflavík", cc:"Iceland"},
+  // ---- Central & Eastern Europe ----
+  EPWA:{city:"Warsaw-Chopin", cc:"Poland"},
+  EPKK:{city:"Kraków-Balice", cc:"Poland"},
+  EPGD:{city:"Gdańsk", cc:"Poland"},
+  LKPR:{city:"Prague-Václav Havel", cc:"Czechia"},
+  LZIB:{city:"Bratislava", cc:"Slovakia"},
+  LHBP:{city:"Budapest-Ferenc Liszt", cc:"Hungary"},
+  LROP:{city:"Bucharest-Otopeni", cc:"Romania"},
+  LBSF:{city:"Sofia", cc:"Bulgaria"},
+  LDZA:{city:"Zagreb", cc:"Croatia"},
+  LDSP:{city:"Split", cc:"Croatia"},
+  LDDU:{city:"Dubrovnik", cc:"Croatia"},
+  LJLJ:{city:"Ljubljana", cc:"Slovenia"},
+  LYBE:{city:"Belgrade-Nikola Tesla", cc:"Serbia"},
+  LATI:{city:"Tirana", cc:"Albania"},
+  // ---- Türkiye, Cyprus, Levant ----
+  LTFM:{city:"Istanbul Airport", cc:"Türkiye"},
+  LTFJ:{city:"Istanbul-Sabiha Gökçen", cc:"Türkiye"},
+  LTAC:{city:"Ankara-Esenboğa", cc:"Türkiye"},
+  LTAI:{city:"Antalya", cc:"Türkiye"},
+  LTBJ:{city:"Izmir-Adnan Menderes", cc:"Türkiye"},
+  LCLK:{city:"Larnaca", cc:"Cyprus"},
+  LCPH:{city:"Paphos", cc:"Cyprus"},
+  LLBG:{city:"Tel Aviv-Ben Gurion", cc:"Israel"},
+  OLBA:{city:"Beirut-Rafic Hariri", cc:"Lebanon"},
+  OJAI:{city:"Amman-Queen Alia", cc:"Jordan"},
+  // ---- Gulf & Middle East gateways ----
+  OERK:{city:"Riyadh-King Khalid", cc:"Saudi Arabia"},
+  OEJN:{city:"Jeddah-King Abdulaziz", cc:"Saudi Arabia"},
+  OMDB:{city:"Dubai International", cc:"UAE"},
+  OMAA:{city:"Abu Dhabi-Zayed", cc:"UAE"},
+  OTHH:{city:"Doha-Hamad", cc:"Qatar"},
+  OBBI:{city:"Bahrain", cc:"Bahrain"},
+  OKBK:{city:"Kuwait", cc:"Kuwait"},
+  OOMS:{city:"Muscat", cc:"Oman"},
+  // ---- North Africa (Maghreb & Egypt) ----
+  GMMN:{city:"Casablanca-Mohammed V", cc:"Morocco"},
   GMME:{city:"Rabat-Salé", cc:"Morocco"},
+  GMMX:{city:"Marrakech-Menara", cc:"Morocco"},
+  GMAD:{city:"Agadir-Al Massira", cc:"Morocco"},
+  GMFF:{city:"Fès-Saïs", cc:"Morocco"},
+  GMTT:{city:"Tangier-Ibn Battouta", cc:"Morocco"},
   DAAG:{city:"Algiers-Houari Boumediene", cc:"Algeria"},
+  DAOO:{city:"Oran-Es Sénia", cc:"Algeria"},
   DTTA:{city:"Tunis-Carthage", cc:"Tunisia"},
+  DTMB:{city:"Monastir-Habib Bourguiba", cc:"Tunisia"},
+  DTTJ:{city:"Djerba-Zarzis", cc:"Tunisia"},
+  HLLT:{city:"Tripoli-Mitiga", cc:"Libya"},
+  HECA:{city:"Cairo", cc:"Egypt"},
   HEGN:{city:"Hurghada", cc:"Egypt"},
-  FACT:{city:"Cape Town", cc:"South Africa"},
-  HKJK:{city:"Nairobi-Jomo Kenyatta", cc:"Kenya"},
+  HESH:{city:"Sharm el-Sheikh", cc:"Egypt"},
+  HELX:{city:"Luxor", cc:"Egypt"},
+  // ---- West & Central Africa ----
+  DNMM:{city:"Lagos-Murtala Muhammed", cc:"Nigeria"},
+  DNAA:{city:"Abuja-Nnamdi Azikiwe", cc:"Nigeria"},
+  DNKN:{city:"Kano-Mallam Aminu", cc:"Nigeria"},
   DGAA:{city:"Accra-Kotoka", cc:"Ghana"},
-  GOOY:{city:"Dakar-Yoff (former)", cc:"Senegal"},
+  DIAP:{city:"Abidjan-Félix-Houphouët-Boigny", cc:"Côte d'Ivoire"},
+  GOBD:{city:"Dakar-Blaise Diagne", cc:"Senegal"},
+  GABS:{city:"Bamako-Sénou", cc:"Mali"},
+  DFFD:{city:"Ouagadougou", cc:"Burkina Faso"},
+  DRRN:{city:"Niamey-Diori Hamani", cc:"Niger"},
+  FKYS:{city:"Yaoundé-Nsimalen", cc:"Cameroon"},
+  FKKD:{city:"Douala", cc:"Cameroon"},
+  FOOL:{city:"Libreville-Léon Mba", cc:"Gabon"},
+  FCBB:{city:"Brazzaville-Maya-Maya", cc:"Congo"},
+  FZAA:{city:"Kinshasa-N'djili", cc:"DR Congo"},
+  FNLU:{city:"Luanda-4 de Fevereiro", cc:"Angola"},
+  GVAC:{city:"Sal-Amílcar Cabral", cc:"Cabo Verde"},
+  // ---- East & Southern Africa ----
+  HSSS:{city:"Khartoum", cc:"Sudan"},
+  HAAB:{city:"Addis Ababa-Bole", cc:"Ethiopia"},
+  HKJK:{city:"Nairobi-Jomo Kenyatta", cc:"Kenya"},
+  HKMO:{city:"Mombasa-Moi", cc:"Kenya"},
+  HTDA:{city:"Dar es Salaam-Julius Nyerere", cc:"Tanzania"},
+  HTKJ:{city:"Kilimanjaro", cc:"Tanzania"},
+  HUEN:{city:"Entebbe", cc:"Uganda"},
+  HRYR:{city:"Kigali", cc:"Rwanda"},
+  FACT:{city:"Cape Town", cc:"South Africa"},
+  FAOR:{city:"Johannesburg-O.R. Tambo", cc:"South Africa"},
+  FALE:{city:"Durban-King Shaka", cc:"South Africa"},
+  FVHA:{city:"Harare", cc:"Zimbabwe"},
+  FQMA:{city:"Maputo", cc:"Mozambique"},
+  FLKK:{city:"Lusaka-Kenneth Kaunda", cc:"Zambia"},
+  FYWH:{city:"Windhoek-Hosea Kutako", cc:"Namibia"},
+  FBSK:{city:"Gaborone-Sir Seretse Khama", cc:"Botswana"},
+  // ---- Indian Ocean ----
+  FIMP:{city:"Mauritius-Sir S. Ramgoolam", cc:"Mauritius"},
+  FMMI:{city:"Antananarivo-Ivato", cc:"Madagascar"},
+  FSIA:{city:"Seychelles International", cc:"Seychelles"},
 };
 /* -- helpers démo : dates calées sur AUJOURD'HUI (UTC) ------------------- */
 const P=n=>String(n).padStart(2,"0");
@@ -619,7 +839,7 @@ let activeCats=new Set();   // vide = "Tous"
 let current=[];             // NOTAM classés de l'aérodrome courant
 let timeWin=null;           // null = filtre horaire inactif ; sinon {start,end,h,m}
 let currentIcao="";         // code OACI chargé
-let tab="demo";             // onglet actif : "demo" | "fav"
+let tab="fav";              // onglet actif : "fav"
 function loadFavs(){ try{ return JSON.parse(localStorage.getItem("notam_favs")||"[]"); }catch(e){ return []; } }
 function saveFavs(a){ try{ localStorage.setItem("notam_favs",JSON.stringify(a)); }catch(e){} }
 let favs=loadFavs();        // codes OACI favoris (persistés si possible)
@@ -658,23 +878,20 @@ const list=$("#list"), summary=$("#summary"), seg=$("#seg");
 /* ---- onglets + chips (Démo / Favoris) ---- */
 function setTab(t){
   tab=t;
-  $("#tabDemo").classList.toggle("on",t==="demo");
-  $("#tabDemo").setAttribute("aria-pressed",t==="demo");
   $("#tabFav").classList.toggle("on",t==="fav");
   $("#tabFav").setAttribute("aria-pressed",t==="fav");
   renderChips();
 }
 function renderChips(){
   const wrap=$("#chips");
-  const codes = tab==="demo" ? Object.keys(DB) : favs;
-  if(tab==="fav" && !codes.length){
-    wrap.innerHTML=`<span class="hint">No favorites yet — load an aerodrome, then click the ☆ star next to its code.</span>`;
+  const codes = favs;
+  if(!codes.length){
+    wrap.innerHTML=`<span class="hint">No favorites yet — load an aerodrome, then tap the ☆ star next to its code.</span>`;
     return;
   }
   wrap.innerHTML=codes.map(code=>{
     const m=AIRPORTS[code]||{city:""};
-    const star = (tab==="demo" && favs.includes(code)) ? " ★" : "";
-    return `<button class="chip-ad ${code===currentIcao?"on":""}" data-code="${code}">${code}${star?`<span class="sg-star">${star}</span>`:""}<small>${m.city||""}</small></button>`;
+    return `<button class="chip-ad ${code===currentIcao?"on":""}" data-code="${code}">${code}<small>${m.city||""}</small></button>`;
   }).join("");
   wrap.querySelectorAll(".chip-ad").forEach(b=>b.onclick=()=>load(b.dataset.code));
 }
@@ -685,7 +902,7 @@ function showStation(icao){
   const m=AIRPORTS[icao];
   $("#station").hidden=false;
   $("#stationCode").textContent=icao;
-  $("#stationName").textContent = m ? `${m.city} · ${m.cc}` : "aerodrome not in catalog";
+  $("#stationName").textContent = m ? `${m.city} · ${m.cc}` : "";
   updateStar();
 }
 function updateStar(){
@@ -711,9 +928,8 @@ function renderSuggest(q){
   box.innerHTML=matches.map(c=>{
     const m=AIRPORTS[c];
     const star = favs.includes(c) ? `<span class="sg-star">★</span>` : "";
-    const nodata = DB[c] ? "" : `<span class="sg-nodata">no demo data</span>`;
     return `<button class="sg-row" data-code="${c}">
-      <span class="sg-code">${c}</span><span class="sg-city">${m.city} · ${m.cc}</span>${star}${nodata}</button>`;
+      <span class="sg-code">${c}</span><span class="sg-city">${m.city} · ${m.cc}</span>${star}</button>`;
   }).join("");
   box.hidden=false;
   box.querySelectorAll(".sg-row").forEach(r=>r.onmousedown=e=>{ e.preventDefault(); load(r.dataset.code); });
@@ -851,10 +1067,9 @@ function render(){
 
 function renderEmpty(icao){
   summary.innerHTML=""; document.querySelectorAll("[data-cnt]").forEach(el=>el.textContent=0);
-  const codes=Object.keys(AIRPORTS).join(", ");
   list.innerHTML=`<div class="empty">
-    <h3>No data for "${esc(icao||"—")}" in the demo</h3>
-    <p>The demo set covers: ${codes}.<br>In production, <code>fetchNotams()</code> would query your source for any ICAO code.</p>
+    <h3>No NOTAMs returned for "${esc(icao||"—")}"</h3>
+    <p>The data source returned no active NOTAM for this aerodrome, or it isn't covered by the source.</p>
   </div>`;
 }
 function esc(s){return (s||"").replace(/[&<>]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;"}[c]));}
@@ -868,7 +1083,6 @@ $("#icao").addEventListener("keydown",e=>{
   else if(e.key==="Escape"){ $("#suggest").hidden=true; }
 });
 $("#star").onclick=toggleFav;
-$("#tabDemo").onclick=()=>setTab("demo");
 $("#tabFav").onclick=()=>setTab("fav");
 $("#all").onclick=()=>{ activeCats.clear(); render(); };
 
