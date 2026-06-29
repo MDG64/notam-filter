@@ -15,12 +15,12 @@
 <meta name="theme-color" content="#0d1117">
 <style>
 :root{
-  --bg:#0a121b; --bg2:#0c1622; --panel:#10202d; --panel2:#142735;
-  --line:#1d3445; --line2:#284559;
-  --text:#d8e6f0; --muted:#7892a6; --muted2:#5a7387;
-  --cyan:#34c6ea; --cyan-dim:#1d6b80;
+  --bg:#0e1114; --bg2:#12161b; --panel:#181d22; --panel2:#1e242b;
+  --line:#272d34; --line2:#353d46;
+  --text:#e8ebee; --muted:#828a91; --muted2:#5e656c;
+  --cyan:#9fc1d8; --cyan-dim:#46606f;
   --red:#ff5d6c; --amber:#f6b23e; --green:#34d39a; --gold:#f6c945;
-  --red-bg:#2a141a; --amber-bg:#2a2113; --green-bg:#12271f; --grey-bg:#162430;
+  --red-bg:#241619; --amber-bg:#241f17; --green-bg:#16241f; --grey-bg:#1b2128;
   --radius:10px;
   --mono:'IBM Plex Mono',ui-monospace,Menlo,Consolas,monospace;
   --sans:'IBM Plex Sans',system-ui,-apple-system,sans-serif;
@@ -68,7 +68,7 @@ header{
 }
 .scratch input::placeholder{color:#33536a;letter-spacing:.12em}
 .btn{
-  border:1px solid var(--cyan-dim);background:#0c2630;color:var(--cyan);
+  border:1px solid var(--cyan-dim);background:#1a242c;color:var(--cyan);
   font:600 12px/1 var(--sans);letter-spacing:.06em;padding:0 16px;border-radius:8px;cursor:pointer;
   transition:background .15s,border-color .15s
 }
@@ -84,7 +84,7 @@ header{
   padding:7px 10px;cursor:pointer;transition:border-color .15s,background .15s
 }
 .chip-ad:hover{border-color:var(--line2);background:var(--panel2)}
-.chip-ad.on{border-color:var(--cyan);color:var(--cyan);background:#0c2630}
+.chip-ad.on{border-color:var(--cyan);color:var(--cyan);background:#1a242c}
 .chip-ad small{color:var(--muted);margin-left:6px;font-family:var(--sans);letter-spacing:0}
 
 /* ---------- tabs/favorites/station/suggest ---------- */
@@ -167,7 +167,7 @@ header{
 .cat .cnt{font:600 11px/1 var(--mono);opacity:.75}
 .allpill{
   margin-left:auto;font:500 11px/1 var(--mono);letter-spacing:.12em;color:var(--cyan);
-  border:1px solid var(--cyan-dim);background:#0c2630;border-radius:7px;padding:8px 12px;cursor:pointer
+  border:1px solid var(--cyan-dim);background:#1a242c;border-radius:7px;padding:8px 12px;cursor:pointer
 }
 .allpill.muted{color:var(--muted);background:transparent;border-color:var(--line)}
 .cat:focus-visible,.chip-ad:focus-visible,.allpill:focus-visible{outline:2px solid var(--cyan);outline-offset:2px}
@@ -199,9 +199,9 @@ header{
 
 /* ---------- bouton aide + fenêtre modale ---------- */
 .help-btn{width:30px;height:30px;flex:none;border-radius:50%;border:1px solid var(--cyan-dim);
-  background:#0c2630;color:var(--cyan);font:700 15px/1 var(--sans);cursor:pointer;margin-left:10px;
+  background:#1a242c;color:var(--cyan);font:700 15px/1 var(--sans);cursor:pointer;margin-left:10px;
   display:inline-flex;align-items:center;justify-content:center}
-.help-btn:hover{border-color:var(--cyan);background:#0e2c38}
+.help-btn:hover{border-color:var(--cyan);background:#202a33}
 .modal-ov{position:fixed;inset:0;background:rgba(3,7,12,.72);backdrop-filter:blur(3px);
   display:flex;align-items:center;justify-content:center;padding:20px;z-index:50}
 .modal{position:relative;max-width:520px;width:100%;background:var(--panel);
@@ -242,7 +242,7 @@ header{
 .tags{display:flex;gap:6px;margin-left:auto;flex-wrap:wrap}
 .tag{font:600 10px/1 var(--mono);letter-spacing:.1em;text-transform:uppercase;
   padding:5px 8px;border-radius:5px;border:1px solid;}
-.tag.vol{color:#7fdcff;border-color:#1d5266;background:rgba(52,198,234,.07)}
+.tag.vol{color:#cbe0ee;border-color:#3a4d59;background:rgba(159,193,216,.08)}
 .tag.depart{color:#cbbcff;border-color:#3a3370;background:rgba(150,130,255,.09)}
 .tag.approche{color:#9ad6ff;border-color:#27506e;background:rgba(80,150,220,.08)}
 .tag.sol{color:#9fe9c9;border-color:#1f5743;background:rgba(52,211,154,.07)}
@@ -270,7 +270,7 @@ header{
 /* ---------- footer ---------- */
 footer{margin-top:30px;border-top:1px solid var(--line);padding-top:16px;
   font:500 11px/1.6 var(--mono);color:var(--muted);letter-spacing:.04em}
-footer code{color:var(--cyan);background:#0c1c28;padding:2px 6px;border-radius:4px}
+footer code{color:var(--cyan);background:#1a232a;padding:2px 6px;border-radius:4px}
 
 @media (max-width:560px){
   .brand h1{font-size:13px}.region{display:none}
