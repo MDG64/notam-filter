@@ -71,13 +71,13 @@ header{
   backdrop-filter:blur(8px);
   border-bottom:1px solid var(--line);
 }
-.bar{max-width:1080px;margin:0 auto;padding:14px 20px;display:flex;align-items:center;gap:18px;flex-wrap:wrap}
-.brand{display:flex;align-items:center;gap:11px;margin-right:auto}
-.beacon{width:11px;height:11px;border-radius:50%;background:var(--muted);transition:all .2s}
+.bar{max-width:1080px;margin:0 auto;padding:14px 20px;display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.beacon{width:13px;height:13px;flex:none;border-radius:50%;background:var(--muted);transition:all .2s}
 .beacon.online{background:var(--green);box-shadow:0 0 0 3px rgba(46,204,113,.16),0 0 14px var(--green)}
 .beacon.offline{background:var(--red);box-shadow:0 0 0 3px rgba(229,72,77,.18),0 0 14px var(--red)}
-.brand h1{font-size:15px;letter-spacing:.16em;font-weight:600;margin:0;text-transform:uppercase}
-.brand .sub{font:500 10px/1 var(--mono);color:var(--muted);letter-spacing:.22em;margin-top:3px}
+.hdr-actions{margin-left:auto;display:flex;align-items:center;gap:10px;flex:none}
+.brand-title{flex:1 1 100%;margin:8px 0 0;font-size:15px;letter-spacing:.16em;font-weight:600;
+  text-transform:uppercase;color:var(--text)}
 .region{font:500 10px/1 var(--mono);color:var(--cyan);border:1px solid var(--cyan-dim);
   border-radius:5px;padding:5px 8px;letter-spacing:.18em}
 
@@ -299,8 +299,8 @@ footer{margin-top:30px;border-top:1px solid var(--line);padding-top:16px;
 footer code{color:var(--cyan);background:#1a232a;padding:2px 6px;border-radius:4px}
 
 @media (max-width:560px){
-  .brand h1{font-size:13px}.region{display:none}
-  .scratch input{width:88px;font-size:17px}
+  .brand-title{font-size:13px;margin-top:6px}
+  .scratch input{width:100px;font-size:18px}
   .meta .src{margin-left:0}
 }
 @media (prefers-reduced-motion:reduce){*{animation:none!important}}
@@ -309,12 +309,7 @@ footer code{color:var(--cyan);background:#1a232a;padding:2px 6px;border-radius:4
 <body>
 <header>
   <div class="bar">
-    <div class="brand">
-      <span class="beacon" aria-hidden="true"></span>
-      <div>
-        <h1>NOTAM Filter</h1>
-      </div>
-    </div>
+    <span class="beacon" aria-hidden="true"></span>
     <div class="entry">
       <div class="scratch">
         <label for="icao">ICAO</label>
@@ -322,8 +317,11 @@ footer code{color:var(--cyan);background:#1a232a;padding:2px 6px;border-radius:4
       </div>
       <div class="suggest" id="suggest" hidden></div>
     </div>
-    <button class="help-btn" id="themeBtn" aria-label="Basculer le thème" title="Mode jour">☀</button>
-    <button class="help-btn" id="helpBtn" aria-label="Information" title="Information">?</button>
+    <div class="hdr-actions">
+      <button class="help-btn" id="themeBtn" aria-label="Basculer le thème" title="Mode jour">☀</button>
+      <button class="help-btn" id="helpBtn" aria-label="Information" title="Information">?</button>
+    </div>
+    <h1 class="brand-title">NOTAM Filter</h1>
   </div>
 </header>
 
