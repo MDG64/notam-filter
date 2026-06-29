@@ -135,7 +135,10 @@ header{
 
 /* ---------- summary ---------- */
 .summary{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin:18px 0}
-.stat{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:14px 16px}
+.stat{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:14px 16px;
+  cursor:pointer;transition:border-color .15s,box-shadow .15s}
+.stat:hover{border-color:var(--line2)}
+.stat.on{border-color:var(--green);box-shadow:0 0 0 1px var(--green)}
 .stat .n{font:600 26px/1 var(--mono);letter-spacing:.02em}
 .stat .k{font:500 10px/1 var(--mono);color:var(--muted);letter-spacing:.18em;text-transform:uppercase;margin-top:7px}
 .stat.tot .n{color:var(--text)}
@@ -147,21 +150,21 @@ header{
 .info .led{background:var(--green);box-shadow:0 0 8px var(--green)}
 
 /* ---------- filters ---------- */
-.filters{display:flex;align-items:center;gap:10px;flex-wrap:wrap;
+.filters{display:flex;flex-direction:column;gap:10px;
   padding:14px 0 4px;border-top:1px solid var(--line);margin-top:8px}
+.filters-head{display:flex;align-items:center;gap:10px}
 .filters .title{font:500 10px/1 var(--mono);color:var(--muted);letter-spacing:.18em;text-transform:uppercase}
-.seg{display:flex;gap:8px;flex-wrap:wrap}
+.seg{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;width:100%}
 .cat{
-  display:flex;align-items:center;gap:10px;cursor:pointer;user-select:none;
+  display:flex;align-items:center;justify-content:center;gap:5px;min-width:0;height:46px;
+  cursor:pointer;user-select:none;white-space:nowrap;
   background:var(--panel);border:1px solid var(--line);border-radius:10px;
-  padding:14px 22px;font:600 15px/1 var(--sans);letter-spacing:.04em;color:#fff;
+  padding:0 4px;font:600 12px/1 var(--sans);letter-spacing:0;color:#fff;
   transition:all .15s
 }
-.cat .dot{width:11px;height:11px;border-radius:3px;background:#2a4255;transition:all .15s}
-.cat[data-cat=vol] .dot{} .cat:hover{border-color:var(--line2);color:#fff}
+.cat:hover{border-color:var(--line2);color:#fff}
 .cat.on{color:var(--bg);background:var(--cyan);border-color:var(--cyan)}
-.cat.on .dot{background:var(--bg)}
-.cat .cnt{font:600 13px/1 var(--mono);opacity:.7}
+.cat .cnt{font:600 11px/1 var(--mono);opacity:.75}
 .allpill{
   margin-left:auto;font:500 11px/1 var(--mono);letter-spacing:.12em;color:var(--cyan);
   border:1px solid var(--cyan-dim);background:#0c2630;border-radius:7px;padding:8px 12px;cursor:pointer
@@ -326,9 +329,11 @@ footer code{color:var(--cyan);background:#0c1c28;padding:2px 6px;border-radius:4
   </div>
 
   <div class="filters">
-    <span class="title">Filter</span>
+    <div class="filters-head">
+      <span class="title">Filter</span>
+      <button class="allpill" id="all">All NOTAMs</button>
+    </div>
     <div class="seg" id="seg"></div>
-    <button class="allpill" id="all">All NOTAMs</button>
   </div>
 
   <div class="list" id="list"></div>
@@ -892,6 +897,7 @@ async function fetchNotams(icao){
 const CAT_LABEL={vol:"Flight",depart:"Departure",approche:"Arrival",sol:"Ground",non_classe:"Unclassified"};
 const SEV_RANK={critical:0,caution:1,info:2};
 let activeCats=new Set();   // vide = "Tous"
+let activeSev=null;         // null = toutes sévérités ; sinon "critical"|"caution"|"info"
 let current=[];             // NOTAM classés de l'aérodrome courant
 let timeWin=null;           // null = filtre horaire inactif ; sinon {start,end,h,m}
 let currentIcao="";         // code OACI chargé
@@ -1021,7 +1027,7 @@ function buildSeg(){
   ["vol","depart","approche","sol"].forEach(c=>{
     const b=document.createElement("button");
     b.className="cat"; b.dataset.cat=c; b.setAttribute("aria-pressed","false");
-    b.innerHTML=`<span class="dot"></span>${CAT_LABEL[c]}<span class="cnt" data-cnt="${c}">0</span>`;
+    b.innerHTML=`${CAT_LABEL[c]}<span class="cnt" data-cnt="${c}">0</span>`;
     b.onclick=()=>{ activeCats.has(c)?activeCats.delete(c):activeCats.add(c); render(); };
     seg.appendChild(b);
   });
@@ -1067,6 +1073,7 @@ async function load(icao){
 function renderFromRaw(raw){
   current=(raw||[]).map(r=>{ const n=parseNotam(r); return {...n, ...classifyNotam(n.qcode,n.e), schedule:parseSchedule(n.d)}; });
   activeCats.clear();
+  activeSev=null;
   render();
 }
 
@@ -1090,12 +1097,19 @@ function baseSet(){         // NOTAM retenus par le filtre horaire (avant catég
 }
 function counts(){
   const c={vol:0,depart:0,approche:0,sol:0,critical:0,caution:0,info:0};
-  baseSet().forEach(n=>{ n.categories.forEach(k=>{ if(c[k]!==undefined)c[k]++; }); c[n.severity]++; });
+  const bs=baseSet();
+  // catégories comptées dans la sévérité active (pour refléter le filtre croisé)
+  bs.filter(n=>!activeSev||n.severity===activeSev)
+    .forEach(n=>n.categories.forEach(k=>{ if(c[k]!==undefined)c[k]++; }));
+  // sévérités comptées dans les catégories actives
+  bs.filter(n=>!activeCats.size||n.categories.some(k=>activeCats.has(k)))
+    .forEach(n=>{ if(c[n.severity]!==undefined)c[n.severity]++; });
   return c;
 }
 function visible(){
   let rows=baseSet();
   if(activeCats.size) rows=rows.filter(n=>n.categories.some(c=>activeCats.has(c)));
+  if(activeSev) rows=rows.filter(n=>n.severity===activeSev);
   return rows;
 }
 
@@ -1103,10 +1117,15 @@ function render(){
   const c=counts();
   const base=baseSet();
   summary.innerHTML=`
-    <div class="stat tot"><div class="n">${base.length}</div><div class="k">${timeWin?"NOTAMs at this time":"Active NOTAMs"}</div></div>
-    <div class="stat crit"><div class="row"><span class="led"></span><span class="n">${c.critical}</span></div><div class="k">Critical</div></div>
-    <div class="stat caut"><div class="row"><span class="led"></span><span class="n">${c.caution}</span></div><div class="k">Caution</div></div>
-    <div class="stat info"><div class="row"><span class="led"></span><span class="n">${c.info}</span></div><div class="k">Information</div></div>`;
+    <div class="stat tot" data-sev="all"><div class="n">${base.length}</div><div class="k">${timeWin?"NOTAMs at this time":"Active NOTAMs"}</div></div>
+    <div class="stat crit${activeSev==="critical"?" on":""}" data-sev="critical"><div class="row"><span class="led"></span><span class="n">${c.critical}</span></div><div class="k">Critical</div></div>
+    <div class="stat caut${activeSev==="caution"?" on":""}" data-sev="caution"><div class="row"><span class="led"></span><span class="n">${c.caution}</span></div><div class="k">Caution</div></div>
+    <div class="stat info${activeSev==="info"?" on":""}" data-sev="info"><div class="row"><span class="led"></span><span class="n">${c.info}</span></div><div class="k">Information</div></div>`;
+  summary.querySelectorAll(".stat").forEach(el=>el.onclick=()=>{
+    const s=el.dataset.sev;
+    activeSev = (s==="all") ? null : (activeSev===s ? null : s);
+    render();
+  });
   document.querySelectorAll("[data-cnt]").forEach(el=>el.textContent=c[el.dataset.cnt]);
   document.querySelectorAll(".cat").forEach(b=>{
     const on=activeCats.has(b.dataset.cat);
@@ -1183,7 +1202,7 @@ $("#icao").addEventListener("keydown",e=>{
 });
 $("#star").onclick=toggleFav;
 $("#tabFav").onclick=()=>setTab("fav");
-$("#all").onclick=()=>{ activeCats.clear(); render(); };
+$("#all").onclick=()=>{ activeCats.clear(); activeSev=null; render(); };
 
 /* ---- filtre horaire ---- */
 function applyTime(val){
