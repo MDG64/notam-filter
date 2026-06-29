@@ -296,7 +296,6 @@ footer code{color:var(--cyan);background:#0c1c28;padding:2px 6px;border-radius:4
       </div>
       <div class="suggest" id="suggest" hidden></div>
     </div>
-    <span class="region">EUR · AFI</span>
     <button class="help-btn" id="helpBtn" aria-label="Information" title="Information">?</button>
   </div>
 </header>
@@ -331,7 +330,6 @@ footer code{color:var(--cyan);background:#0c1c28;padding:2px 6px;border-radius:4
   <div class="filters">
     <div class="filters-head">
       <span class="title">Filter</span>
-      <button class="allpill" id="all">All NOTAMs</button>
     </div>
     <div class="seg" id="seg"></div>
   </div>
@@ -456,7 +454,10 @@ function categoriesFromText(e){
   return found;
 }
 function severity(q,e){
-  const [,cond]=qcodeParts(q), t=(e||"").toUpperCase();
+  const [subj,cond]=qcodeParts(q), t=(e||"").toUpperCase();
+  // NOTAM relatifs aux postes de stationnement (stands) -> Information,
+  // même s'ils contiennent CLSD (faible priorité opérationnelle pour l'équipage).
+  if(subj==="MP" || /\bSTANDS?\b/.test(t)) return "info";
   if(CRITICAL_TEXT.some(k=>t.includes(k))) return "critical";
   return CONDITION_SEVERITY[cond] || "caution";
 }
@@ -1134,7 +1135,6 @@ function render(){
     const on=activeCats.has(b.dataset.cat);
     b.classList.toggle("on",on); b.setAttribute("aria-pressed",on);
   });
-  $("#all").classList.toggle("muted",activeCats.size!==0);
 
   // bandeau horaire
   const ro=$("#winreadout");
@@ -1158,7 +1158,7 @@ function render(){
       ? `<h3>No NOTAM in the window ${hm(timeWin.start)}–${hm(timeWin.end)} Z</h3>
          <p>Widen the time, clear the time filter, or switch category.</p>`
       : `<h3>No NOTAM in this selection</h3>
-         <p>Turn a filter off or go back to "All NOTAMs".</p>`;
+         <p>Tap an active filter again to turn it off.</p>`;
     list.innerHTML=`<div class="empty">${msg}</div>`; return; }
 
   list.innerHTML=rows.map(n=>{
@@ -1205,7 +1205,6 @@ $("#icao").addEventListener("keydown",e=>{
 });
 $("#star").onclick=toggleFav;
 $("#tabFav").onclick=()=>setTab("fav");
-$("#all").onclick=()=>{ activeCats.clear(); activeSev=null; render(); };
 
 /* ---- filtre horaire ---- */
 function applyTime(val){
