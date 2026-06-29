@@ -26,6 +26,7 @@
   --sans:'IBM Plex Sans',system-ui,-apple-system,sans-serif;
 }
 *{box-sizing:border-box}
+[hidden]{display:none!important}
 html,body{margin:0;padding:0}
 body{
   background:
@@ -46,8 +47,9 @@ header{
 }
 .bar{max-width:1080px;margin:0 auto;padding:14px 20px;display:flex;align-items:center;gap:18px;flex-wrap:wrap}
 .brand{display:flex;align-items:center;gap:11px;margin-right:auto}
-.beacon{width:11px;height:11px;border-radius:50%;background:var(--cyan);
-  box-shadow:0 0 0 3px rgba(52,198,234,.15),0 0 14px var(--cyan)}
+.beacon{width:11px;height:11px;border-radius:50%;background:var(--muted);transition:all .2s}
+.beacon.online{background:var(--green);box-shadow:0 0 0 3px rgba(46,204,113,.16),0 0 14px var(--green)}
+.beacon.offline{background:var(--red);box-shadow:0 0 0 3px rgba(229,72,77,.18),0 0 14px var(--red)}
 .brand h1{font-size:15px;letter-spacing:.16em;font-weight:600;margin:0;text-transform:uppercase}
 .brand .sub{font:500 10px/1 var(--mono);color:var(--muted);letter-spacing:.22em;margin-top:3px}
 .region{font:500 10px/1 var(--mono);color:var(--cyan);border:1px solid var(--cyan-dim);
@@ -150,16 +152,16 @@ header{
 .filters .title{font:500 10px/1 var(--mono);color:var(--muted);letter-spacing:.18em;text-transform:uppercase}
 .seg{display:flex;gap:8px;flex-wrap:wrap}
 .cat{
-  display:flex;align-items:center;gap:9px;cursor:pointer;user-select:none;
-  background:var(--panel);border:1px solid var(--line);border-radius:8px;
-  padding:9px 14px;font:600 12px/1 var(--sans);letter-spacing:.04em;color:#fff;
+  display:flex;align-items:center;gap:10px;cursor:pointer;user-select:none;
+  background:var(--panel);border:1px solid var(--line);border-radius:10px;
+  padding:14px 22px;font:600 15px/1 var(--sans);letter-spacing:.04em;color:#fff;
   transition:all .15s
 }
-.cat .dot{width:9px;height:9px;border-radius:2px;background:#2a4255;transition:all .15s}
+.cat .dot{width:11px;height:11px;border-radius:3px;background:#2a4255;transition:all .15s}
 .cat[data-cat=vol] .dot{} .cat:hover{border-color:var(--line2);color:#fff}
 .cat.on{color:var(--bg);background:var(--cyan);border-color:var(--cyan)}
 .cat.on .dot{background:var(--bg)}
-.cat .cnt{font:600 11px/1 var(--mono);opacity:.7}
+.cat .cnt{font:600 13px/1 var(--mono);opacity:.7}
 .allpill{
   margin-left:auto;font:500 11px/1 var(--mono);letter-spacing:.12em;color:var(--cyan);
   border:1px solid var(--cyan-dim);background:#0c2630;border-radius:7px;padding:8px 12px;cursor:pointer
@@ -191,6 +193,27 @@ header{
   color:var(--muted);letter-spacing:.1em}
 .legend span{display:inline-flex;align-items:center;gap:6px}
 .legend i{width:8px;height:8px;border-radius:50%;display:inline-block}
+
+/* ---------- bouton aide + fenêtre modale ---------- */
+.help-btn{width:30px;height:30px;flex:none;border-radius:50%;border:1px solid var(--cyan-dim);
+  background:#0c2630;color:var(--cyan);font:700 15px/1 var(--sans);cursor:pointer;margin-left:10px;
+  display:inline-flex;align-items:center;justify-content:center}
+.help-btn:hover{border-color:var(--cyan);background:#0e2c38}
+.modal-ov{position:fixed;inset:0;background:rgba(3,7,12,.72);backdrop-filter:blur(3px);
+  display:flex;align-items:center;justify-content:center;padding:20px;z-index:50}
+.modal{position:relative;max-width:520px;width:100%;background:var(--panel);
+  border:1px solid var(--line2);border-radius:14px;padding:22px 22px 24px;
+  box-shadow:0 20px 60px rgba(0,0,0,.5)}
+.modal h2{font:600 15px/1 var(--sans);letter-spacing:.06em;margin:0 0 14px;text-transform:uppercase}
+.modal h3{font:600 11px/1 var(--mono);letter-spacing:.16em;color:var(--muted);
+  text-transform:uppercase;margin:20px 0 12px}
+.modal-x{position:absolute;top:13px;right:13px;width:30px;height:30px;border-radius:50%;
+  border:1px solid var(--line2);background:transparent;color:var(--muted);
+  font:400 20px/1 var(--sans);cursor:pointer;display:inline-flex;align-items:center;justify-content:center}
+.modal-x:hover{color:#fff}
+.modal .disclaim{margin:0}
+.modal-legend{flex-direction:column;gap:11px;margin:0;font-size:11px;color:var(--text)}
+.modal-legend i{width:10px;height:10px}
 
 /* ---------- strips ---------- */
 .list{display:flex;flex-direction:column;gap:11px}
@@ -261,7 +284,6 @@ footer code{color:var(--cyan);background:#0c1c28;padding:2px 6px;border-radius:4
       <span class="beacon" aria-hidden="true"></span>
       <div>
         <h1>NOTAM Filter</h1>
-        <div class="sub">PRO BRIEFING · RELEVANCE FILTERING</div>
       </div>
     </div>
     <div class="entry">
@@ -272,6 +294,7 @@ footer code{color:var(--cyan);background:#0c1c28;padding:2px 6px;border-radius:4
       <div class="suggest" id="suggest" hidden></div>
     </div>
     <span class="region">EUR · AFI</span>
+    <button class="help-btn" id="helpBtn" aria-label="Information" title="Information">?</button>
   </div>
 </header>
 
@@ -286,9 +309,6 @@ footer code{color:var(--cyan);background:#0c1c28;padding:2px 6px;border-radius:4
     <button class="starbtn" id="star" aria-pressed="false" aria-label="Add to favorites" title="Add / remove from favorites">☆</button>
     <span class="stationname" id="stationName"></span>
   </div>
-
-  <p class="disclaim" id="disclaim"><b>Decision support</b> — simulated NOTAM data for demonstration.
-  This tool does not replace the official briefing (authoritative source: Eurocontrol EAD).</p>
 
   <div class="offline-banner" id="offlineBanner" hidden></div>
 
@@ -311,19 +331,27 @@ footer code{color:var(--cyan);background:#0c1c28;padding:2px 6px;border-radius:4
     <button class="allpill" id="all">All NOTAMs</button>
   </div>
 
-  <div class="legend">
-    <span><i style="background:var(--red)"></i>Critical — closed / unserviceable</span>
-    <span><i style="background:var(--amber)"></i>Caution — limited / works</span>
-    <span><i style="background:var(--green)"></i>Info — operational / restored</span>
-    <span><i style="background:#3a5468"></i>Unclassified — always shown</span>
-  </div>
-
   <div class="list" id="list"></div>
 
   <footer>
     Classification engine: ICAO Q-code (subject, letters&nbsp;2-3) + free-text safety net.
-    For production, plug your data source into <code>fetchNotams(icao)</code> in place of the demo set.
   </footer>
+</div>
+
+<div class="modal-ov" id="helpOv" hidden>
+  <div class="modal" role="dialog" aria-modal="true" aria-label="Information">
+    <button class="modal-x" id="helpClose" aria-label="Close">×</button>
+    <h2>About this tool</h2>
+    <p class="disclaim" id="disclaim"><b>Decision support</b> — live NOTAM data via your configured source.
+    This tool does not replace the official briefing (authoritative source: Eurocontrol EAD).</p>
+    <h3>Severity colours</h3>
+    <div class="legend modal-legend">
+      <span><i style="background:var(--red)"></i>Critical — closed / unserviceable</span>
+      <span><i style="background:var(--amber)"></i>Caution — limited / works</span>
+      <span><i style="background:var(--green)"></i>Info — operational / restored</span>
+      <span><i style="background:#3a5468"></i>Unclassified — always shown</span>
+    </div>
+  </div>
 </div>
 
 <script>
@@ -1009,12 +1037,15 @@ async function load(icao){
     if(cached && Array.isArray(cached.raw)){
       renderFromRaw(cached.raw);
       showOffline(cached.ts);
+      setBeacon(false);
     } else {
       renderError(icao,e);
+      setBeacon(false);
     }
     return;
   }
   if(my!==loadToken) return;               // une requête plus récente a pris le relais
+  setBeacon(true);
   if(raw===null){ current=[]; renderEmpty(icao); return; }
   saveOffline(icao, raw);                   // sauvegarde pour consultation hors-ligne
   renderFromRaw(raw);
@@ -1156,6 +1187,22 @@ $("#now").onclick=()=>{
   applyTime($("#htime").value);
 };
 $("#clearTime").onclick=()=>{ $("#htime").value=""; timeWin=null; render(); };
+
+function setBeacon(online){
+  const b=document.querySelector(".beacon");
+  if(!b) return;
+  b.classList.toggle("online", !!online);
+  b.classList.toggle("offline", !online);
+}
+setBeacon(navigator.onLine);
+window.addEventListener("online", ()=>setBeacon(true));
+window.addEventListener("offline", ()=>setBeacon(false));
+
+/* ---- fenêtre d'aide (?) ---- */
+$("#helpBtn").onclick=()=>{ $("#helpOv").hidden=false; };
+$("#helpClose").onclick=()=>{ $("#helpOv").hidden=true; };
+$("#helpOv").onclick=e=>{ if(e.target===$("#helpOv")) $("#helpOv").hidden=true; };
+document.addEventListener("keydown",e=>{ if(e.key==="Escape") $("#helpOv").hidden=true; });
 
 function updateDisclaimer(){
   const live=!!BACKEND_URL;
