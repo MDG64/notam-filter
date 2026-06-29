@@ -422,6 +422,15 @@ const FREETEXT_KEYWORDS = {
 const CRITICAL_TEXT = ["CLSD","CLOSED","U/S","UNSERVICEABLE","UNSERV","NOT AVBL",
   "NOT AVAILABLE","UNSAFE","WITHDRAWN"];
 
+// Activités / restrictions en vol qui priment : même si le Q-code pointe une
+// surface (piste, etc.), ces messages concernent le vol -> forcés en Flight.
+const FORCE_FLIGHT = [
+  "AD CIRCUIT","AERODROME CIRCUIT","TRAFFIC CIRCUIT","VFR CIRCUIT",
+  "CIRCUIT TRAINING","CIRCUITS PROHIBITED","CIRCUIT PROHIBITED"," CCT ",
+  "AEROBATIC","PARADROP","PARACHUT","GLIDER","GLIDING","BANNER TOW",
+  "AERIAL DISPLAY","AIR DISPLAY","FORMATION FLYING","DISPLAY FLYING"
+];
+
 function qcodeParts(q){
   if(!q) return [null,null];
   q=q.trim().toUpperCase();
@@ -455,6 +464,10 @@ function classifyNotam(q,e){
   if(cats.has("vol") && (cats.has("depart")||cats.has("approche")||cats.has("sol"))){
     cats.delete("vol");
   }
+  // Forçage Flight : activités/restrictions en vol (circuits, voltige, parachutage…)
+  // priment sur le sujet du Q-code et sont classées Flight uniquement.
+  const T=" "+(e||"").toUpperCase()+" ";
+  if(FORCE_FLIGHT.some(k=>T.includes(k))){ cats=new Set(["vol"]); source="text"; }
   if(!cats.size){ cats=new Set(["non_classe"]); source="unclassified"; }
   return {categories:[...cats], severity:severity(q,e), source};
 }
