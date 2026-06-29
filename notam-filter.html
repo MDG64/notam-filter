@@ -25,6 +25,32 @@
   --mono:'IBM Plex Mono',ui-monospace,Menlo,Consolas,monospace;
   --sans:'IBM Plex Sans',system-ui,-apple-system,sans-serif;
 }
+/* ---------- thème clair (mode jour) ---------- */
+body.light{
+  --bg:#ffffff; --bg2:#f4f7f9; --panel:#ffffff; --panel2:#f2f5f8;
+  --line:#e3e9ee; --line2:#d3dde4;
+  --text:#1b2228; --muted:#69737d; --muted2:#9aa6b0;
+  --cyan:#0e9bc4; --cyan-dim:#9fd6e6;
+  --red:#e5484d; --amber:#cf7a12; --green:#12936a; --gold:#c98a08;
+  --red-bg:#fdecec; --amber-bg:#fbf1e2; --green-bg:#e7f4ef; --grey-bg:#eef2f5;
+}
+body.light{ background:#ffffff; }
+body.light header{ background:rgba(255,255,255,.92); }
+body.light .help-btn{ background:#eef4f7; }
+body.light .help-btn:hover{ background:#e3edf1; }
+body.light footer code{ background:#eef2f5; }
+body.light .scratch input::placeholder{ color:#9aa6b0; }
+body.light .scratch{ background:#f4f7f9; box-shadow:none; }
+body.light .btn{ background:#eef4f7; }
+body.light .btn:hover{ background:#e3edf1; }
+body.light .stat.caut .n{ color:#caa300; }
+body.light .caut .led{ background:#caa300; box-shadow:0 0 8px #caa300; }
+body.light .clearTime{ border-color:#e6d3a8; }
+body.light .non_classe .sled{ background:#8b97a1; }
+body.light .tag.vol{ color:#0e7fa0; border-color:#bfe2ee; background:rgba(14,155,196,.08); }
+body.light .tag.depart{ color:#5a48c0; border-color:#d8d2f5; background:rgba(120,100,230,.08); }
+body.light .tag.approche{ color:#1f74a8; border-color:#cfe6f5; background:rgba(40,130,200,.08); }
+body.light .tag.sol{ color:#0f8a5f; border-color:#c9ead9; background:rgba(18,147,106,.08); }
 *{box-sizing:border-box}
 [hidden]{display:none!important}
 html,body{margin:0;padding:0}
@@ -159,10 +185,10 @@ header{
   display:flex;align-items:center;justify-content:center;gap:5px;min-width:0;height:46px;
   cursor:pointer;user-select:none;white-space:nowrap;
   background:var(--panel);border:1px solid var(--line);border-radius:10px;
-  padding:0 4px;font:600 12px/1 var(--sans);letter-spacing:0;color:#fff;
+  padding:0 4px;font:600 12px/1 var(--sans);letter-spacing:0;color:var(--text);
   transition:all .15s
 }
-.cat:hover{border-color:var(--line2);color:#fff}
+.cat:hover{border-color:var(--line2);color:var(--text)}
 .cat.on{color:var(--bg);background:var(--cyan);border-color:var(--cyan)}
 .cat .cnt{font:600 11px/1 var(--mono);opacity:.75}
 .allpill{
@@ -213,7 +239,7 @@ header{
 .modal-x{position:absolute;top:13px;right:13px;width:30px;height:30px;border-radius:50%;
   border:1px solid var(--line2);background:transparent;color:var(--muted);
   font:400 20px/1 var(--sans);cursor:pointer;display:inline-flex;align-items:center;justify-content:center}
-.modal-x:hover{color:#fff}
+.modal-x:hover{color:var(--text)}
 .modal .disclaim{margin:0}
 .modal-legend{flex-direction:column;gap:11px;margin:0;font-size:11px;color:var(--text)}
 .modal-legend i{width:10px;height:10px}
@@ -296,6 +322,7 @@ footer code{color:var(--cyan);background:#1a232a;padding:2px 6px;border-radius:4
       </div>
       <div class="suggest" id="suggest" hidden></div>
     </div>
+    <button class="help-btn" id="themeBtn" aria-label="Basculer le thème" title="Mode jour">☀</button>
     <button class="help-btn" id="helpBtn" aria-label="Information" title="Information">?</button>
   </div>
 </header>
@@ -455,9 +482,10 @@ function categoriesFromText(e){
 }
 function severity(q,e){
   const [subj,cond]=qcodeParts(q), t=(e||"").toUpperCase();
-  // NOTAM relatifs aux postes de stationnement (stands) -> Information,
-  // même s'ils contiennent CLSD (faible priorité opérationnelle pour l'équipage).
-  if(subj==="MP" || /\bSTANDS?\b/.test(t)) return "info";
+  // Passage en Information UNIQUEMENT pour les NOTAM dont le sujet EST un poste
+  // de stationnement (code Q « MP »). On ne se base PAS sur le mot « stand » dans
+  // le texte : une fermeture de taxiway/piste qui cite un stand reste critique.
+  if(subj==="MP") return "info";
   if(CRITICAL_TEXT.some(k=>t.includes(k))) return "critical";
   return CONDITION_SEVERITY[cond] || "caution";
 }
@@ -1231,6 +1259,21 @@ function setBeacon(online){
 setBeacon(navigator.onLine);
 window.addEventListener("online", ()=>setBeacon(true));
 window.addEventListener("offline", ()=>setBeacon(false));
+
+/* ---- thème jour / nuit (mémorisé) ---- */
+const THEME_KEY="notam_theme";
+function applyTheme(t){
+  document.body.classList.toggle("light", t==="light");
+  const b=$("#themeBtn");
+  if(b){ b.textContent = t==="light" ? "☾" : "☀"; b.title = t==="light" ? "Mode nuit" : "Mode jour"; }
+}
+let theme = localStorage.getItem(THEME_KEY) || "light";
+applyTheme(theme);
+$("#themeBtn").onclick=()=>{
+  theme = (theme==="light") ? "dark" : "light";
+  localStorage.setItem(THEME_KEY, theme);
+  applyTheme(theme);
+};
 
 /* ---- fenêtre d'aide (?) ---- */
 $("#helpBtn").onclick=()=>{ $("#helpOv").hidden=false; };
