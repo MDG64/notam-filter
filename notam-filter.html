@@ -123,6 +123,14 @@ header{
 }
 .disclaim b{color:var(--amber);font-weight:600}
 
+/* ---------- bannière hors-ligne ---------- */
+.offline-banner{
+  margin:14px 0 4px;font:600 12px/1.5 var(--sans);color:#ffd9a0;
+  border:1px solid var(--amber);background:rgba(246,178,62,.12);
+  padding:10px 14px;border-radius:8px;display:flex;gap:8px;align-items:flex-start
+}
+.offline-banner b{color:#fff;font-weight:700}
+
 /* ---------- summary ---------- */
 .summary{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin:18px 0}
 .stat{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:14px 16px}
@@ -281,6 +289,8 @@ footer code{color:var(--cyan);background:#0c1c28;padding:2px 6px;border-radius:4
 
   <p class="disclaim" id="disclaim"><b>Decision support</b> — simulated NOTAM data for demonstration.
   This tool does not replace the official briefing (authoritative source: Eurocontrol EAD).</p>
+
+  <div class="offline-banner" id="offlineBanner" hidden></div>
 
   <div class="summary" id="summary"></div>
 
@@ -847,6 +857,32 @@ let currentIcao="";         // code OACI chargé
 let tab="fav";              // onglet actif : "fav"
 function loadFavs(){ try{ return JSON.parse(localStorage.getItem("notam_favs")||"[]"); }catch(e){ return []; } }
 function saveFavs(a){ try{ localStorage.setItem("notam_favs",JSON.stringify(a)); }catch(e){} }
+
+/* ---- stockage hors-ligne des NOTAM consultés (avec horodatage) ---- */
+const OFFLINE_MAX=15;                       // nb max d'aérodromes gardés hors-ligne
+function offlineIdx(){ try{ return JSON.parse(localStorage.getItem("notam_data_idx")||"[]"); }catch(e){ return []; } }
+function saveOffline(icao, raw){
+  try{
+    localStorage.setItem("notam_data:"+icao, JSON.stringify({ts:Date.now(), raw}));
+    let idx=offlineIdx().filter(c=>c!==icao); idx.unshift(icao);
+    while(idx.length>OFFLINE_MAX){ const old=idx.pop(); localStorage.removeItem("notam_data:"+old); }
+    localStorage.setItem("notam_data_idx", JSON.stringify(idx));
+  }catch(e){
+    try{ offlineIdx().slice(5).forEach(c=>localStorage.removeItem("notam_data:"+c)); }catch(_){}
+  }
+}
+function loadOffline(icao){
+  try{ const s=localStorage.getItem("notam_data:"+icao); return s?JSON.parse(s):null; }catch(e){ return null; }
+}
+function stampZ(ts){
+  const d=new Date(ts);
+  return P(d.getUTCHours())+":"+P(d.getUTCMinutes())+"Z ("+P(d.getUTCDate())+"/"+P(d.getUTCMonth()+1)+")";
+}
+function showOffline(ts){
+  const el=$("#offlineBanner"); el.hidden=false;
+  el.innerHTML=`<span>⚠</span><span>OFFLINE — showing last saved data from <b>${stampZ(ts)}</b>. Reconnect to refresh; newer NOTAMs may exist.</span>`;
+}
+function hideOffline(){ const el=$("#offlineBanner"); el.hidden=true; el.innerHTML=""; }
 let favs=loadFavs();        // codes OACI favoris (persistés si possible)
 
 /* ---- fenêtre temporelle : aujourd'hui à H:M ± 1 h (UTC) ---- */
@@ -961,16 +997,30 @@ async function load(icao){
   showStation(icao);
   renderChips();
   const my=++loadToken;
+  hideOffline();
   renderLoading();
   let raw;
   try{
     raw=await fetchNotams(icao);
   }catch(e){
-    if(my===loadToken) renderError(icao,e);
+    if(my!==loadToken) return;
+    // pas de réseau : on tente les dernières données enregistrées
+    const cached=loadOffline(icao);
+    if(cached && Array.isArray(cached.raw)){
+      renderFromRaw(cached.raw);
+      showOffline(cached.ts);
+    } else {
+      renderError(icao,e);
+    }
     return;
   }
   if(my!==loadToken) return;               // une requête plus récente a pris le relais
   if(raw===null){ current=[]; renderEmpty(icao); return; }
+  saveOffline(icao, raw);                   // sauvegarde pour consultation hors-ligne
+  renderFromRaw(raw);
+}
+
+function renderFromRaw(raw){
   current=(raw||[]).map(r=>{ const n=parseNotam(r); return {...n, ...classifyNotam(n.qcode,n.e), schedule:parseSchedule(n.d)}; });
   activeCats.clear();
   render();
