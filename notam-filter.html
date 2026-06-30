@@ -230,19 +230,54 @@ header{
 .help-btn:hover{border-color:var(--cyan);background:#202a33}
 .modal-ov{position:fixed;inset:0;background:rgba(3,7,12,.72);backdrop-filter:blur(3px);
   display:flex;align-items:center;justify-content:center;padding:20px;z-index:50}
-.modal{position:relative;max-width:520px;width:100%;background:var(--panel);
-  border:1px solid var(--line2);border-radius:14px;padding:22px 22px 24px;
+.modal{position:relative;max-width:520px;width:100%;max-height:86vh;background:var(--panel);
+  border:1px solid var(--line2);border-radius:14px;overflow:hidden;
   box-shadow:0 20px 60px rgba(0,0,0,.5)}
-.modal h2{font:600 15px/1 var(--sans);letter-spacing:.06em;margin:0 0 14px;text-transform:uppercase}
-.modal h3{font:600 11px/1 var(--mono);letter-spacing:.16em;color:var(--muted);
-  text-transform:uppercase;margin:20px 0 12px}
-.modal-x{position:absolute;top:13px;right:13px;width:30px;height:30px;border-radius:50%;
-  border:1px solid var(--line2);background:transparent;color:var(--muted);
+.modal-x{position:absolute;top:12px;right:12px;z-index:3;width:30px;height:30px;border-radius:50%;
+  border:1px solid var(--line2);background:var(--panel);color:var(--muted);
   font:400 20px/1 var(--sans);cursor:pointer;display:inline-flex;align-items:center;justify-content:center}
 .modal-x:hover{color:var(--text)}
-.modal .disclaim{margin:0}
-.modal-legend{flex-direction:column;gap:11px;margin:0;font-size:11px;color:var(--text)}
-.modal-legend i{width:10px;height:10px}
+.hd-scroll{max-height:86vh;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:20px 20px 24px}
+
+/* ---------- contenu de la fenêtre ? (aide), thémé jour/nuit ---------- */
+.hd-title{font-size:16px;letter-spacing:.14em;text-transform:uppercase;font-weight:600;margin:0 0 12px;color:var(--text)}
+.hd-disclaimer{border:1px solid var(--red);border-radius:10px;padding:11px 13px;font-size:12.5px;line-height:1.5;color:var(--text);margin-bottom:16px;background:rgba(229,72,77,.07)}
+.hd-disclaimer b{font-weight:600}
+.hd-sec{font:600 11px/1 var(--mono);letter-spacing:.18em;color:var(--muted);text-transform:uppercase;margin:20px 0 11px;padding-bottom:7px;border-bottom:1px solid var(--line)}
+.hd-row{display:flex;align-items:center;gap:11px;margin-bottom:12px}
+.hd-vis{flex:none;display:flex;align-items:center;justify-content:center;min-width:54px}
+.hd-arr{flex:none;color:var(--cyan);font-size:17px;font-weight:700}
+.hd-desc{font-size:13px;line-height:1.45;color:var(--text)}
+.hd-desc b{font-weight:600}
+.hd-dot{width:13px;height:13px;border-radius:50%;display:inline-block}
+.hd-icao{border:1px solid var(--line2);border-radius:8px;padding:6px 10px;display:flex;align-items:center;gap:7px}
+.hd-icao .l{font:9px/1 var(--mono);letter-spacing:.14em;color:var(--muted)}
+.hd-icao .v{font:700 14px/1 var(--mono);color:var(--cyan)}
+.hd-cbtn{width:30px;height:30px;border-radius:50%;border:1px solid var(--cyan-dim);color:var(--cyan);display:flex;align-items:center;justify-content:center;font:700 14px/1}
+.hd-star{font-size:18px;color:var(--gold)}
+.hd-chip{border:1px solid var(--line);border-radius:9px;padding:9px 11px;font:600 12px/1 var(--sans);background:var(--panel2);color:var(--text)}
+.hd-chip.on{background:var(--cyan);color:var(--bg);border-color:var(--cyan)}
+.hd-tag{border:1px solid var(--line);border-radius:6px;padding:3px 7px;font:11px/1 var(--mono);color:var(--muted)}
+.hd-gtag{border:1px solid var(--green);border-radius:7px;padding:3px 8px;font:700 10px/1;letter-spacing:.08em;color:var(--green)}
+.hd-block{border:1px solid var(--line);border-radius:12px;padding:12px;margin-bottom:10px;background:var(--panel2)}
+.hd-stat{display:inline-flex;flex-direction:column;gap:5px;border:1px solid var(--line);border-radius:10px;padding:8px 12px;background:var(--panel);min-width:88px}
+.hd-stat .n{font:700 18px/1 var(--sans);display:flex;align-items:center;gap:6px;color:var(--red)}
+.hd-stat .k{font:9px/1 var(--mono);letter-spacing:.1em;color:var(--muted)}
+.hd-legend{display:flex;flex-direction:column;gap:9px}
+.hd-legend .li{display:flex;align-items:center;gap:9px;font-size:12.5px;color:var(--text)}
+.hd-legend .li b{font-weight:600}
+.hd-seg{display:grid;grid-template-columns:repeat(4,1fr);gap:5px;margin-bottom:9px}
+.hd-seg .hd-chip{text-align:center;padding:9px 2px;font-size:11px}
+.hd-note{font-size:11.5px;color:var(--muted);line-height:1.5}
+.hd-note b{color:var(--text)}
+.hd-notam{border:1px solid var(--line);border-left:4px solid var(--red);border-radius:10px;padding:11px 12px;background:var(--panel)}
+.hd-notam .nh{display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap}
+.hd-notam .id{font:700 13px/1 var(--mono);color:var(--text)}
+.hd-notam .txt{border-left:2px solid var(--line);padding-left:10px;font:12px/1.4 var(--mono);margin-bottom:8px;color:var(--text)}
+.hd-notam .dt{font:11px/1.6 var(--mono);color:var(--muted)}
+.hd-notam .dt b{color:var(--text)}
+.hd-caut{background:var(--amber)}
+body.light .hd-caut{background:#caa300}
 
 /* ---------- strips ---------- */
 .list{display:flex;flex-direction:column;gap:11px}
@@ -367,17 +402,99 @@ footer code{color:var(--cyan);background:#1a232a;padding:2px 6px;border-radius:4
 </div>
 
 <div class="modal-ov" id="helpOv" hidden>
-  <div class="modal" role="dialog" aria-modal="true" aria-label="Information">
+  <div class="modal" role="dialog" aria-modal="true" aria-label="How to use">
     <button class="modal-x" id="helpClose" aria-label="Close">×</button>
-    <h2>About this tool</h2>
-    <p class="disclaim" id="disclaim"><b>Decision support</b> — live NOTAM data via your configured source.
-    This tool does not replace the official briefing (authoritative source: Eurocontrol EAD).</p>
-    <h3>Severity colours</h3>
-    <div class="legend modal-legend">
-      <span><i style="background:var(--red)"></i>Critical — closed / unserviceable</span>
-      <span><i style="background:var(--amber)"></i>Caution — limited / works</span>
-      <span><i style="background:var(--green)"></i>Info — operational / restored</span>
-      <span><i style="background:#3a5468"></i>Unclassified — always shown</span>
+    <div class="hd-scroll">
+      <h2 class="hd-title">How to use</h2>
+      <div class="hd-disclaimer"><b>Decision support only.</b> This tool does not replace the official briefing of your company.</div>
+
+      <div class="hd-sec">Top bar</div>
+      <div class="hd-row">
+        <div class="hd-vis"><span class="hd-dot" style="background:var(--green)"></span></div>
+        <div class="hd-arr">→</div>
+        <div class="hd-desc"><b>Green dot</b> — network connection, NOTAMs can refresh.</div>
+      </div>
+      <div class="hd-row">
+        <div class="hd-vis"><span class="hd-dot" style="background:var(--red)"></span></div>
+        <div class="hd-arr">→</div>
+        <div class="hd-desc"><b>Red dot</b> — no connection, last saved data is shown.</div>
+      </div>
+      <div class="hd-row">
+        <div class="hd-vis"><span class="hd-icao"><span class="l">ICAO</span><span class="v">LFBO</span></span></div>
+        <div class="hd-arr">→</div>
+        <div class="hd-desc">Type the <b>4-letter ICAO code</b> of the aerodrome.</div>
+      </div>
+      <div class="hd-row">
+        <div class="hd-vis"><span class="hd-cbtn">☾</span></div>
+        <div class="hd-arr">→</div>
+        <div class="hd-desc">Switch <b>day / night</b> theme.</div>
+      </div>
+      <div class="hd-row">
+        <div class="hd-vis"><span class="hd-cbtn">?</span></div>
+        <div class="hd-arr">→</div>
+        <div class="hd-desc">Open this <b>help</b> page.</div>
+      </div>
+
+      <div class="hd-sec">Favourites</div>
+      <div class="hd-row">
+        <div class="hd-vis"><span class="hd-star">★</span></div>
+        <div class="hd-arr">→</div>
+        <div class="hd-desc">Tap the star to <b>save</b> an aerodrome. Saved ones appear in the Favourites bar for one-tap access.</div>
+      </div>
+
+      <div class="hd-sec">Severity counts</div>
+      <div class="hd-row">
+        <div class="hd-vis"><span class="hd-stat"><span class="n"><span class="hd-dot" style="background:var(--red);width:9px;height:9px"></span>53</span><span class="k">CRITICAL</span></span></div>
+        <div class="hd-arr">→</div>
+        <div class="hd-desc"><b>Tap a card</b> to show only that severity. A <b>green outline</b> means the filter is active. Tap again to clear.</div>
+      </div>
+      <div class="hd-block">
+        <div class="hd-legend">
+          <div class="li"><span class="hd-dot" style="background:var(--red)"></span><span><b>Critical</b> — closed / unserviceable</span></div>
+          <div class="li"><span class="hd-dot hd-caut"></span><span><b>Caution</b> — limited / work in progress</span></div>
+          <div class="li"><span class="hd-dot" style="background:var(--green)"></span><span><b>Information</b> — operational / low priority</span></div>
+        </div>
+      </div>
+
+      <div class="hd-sec">Flight time</div>
+      <div class="hd-row">
+        <div class="hd-vis" style="min-width:auto"><span class="hd-chip" style="font-family:var(--mono)">Z·UTC --:--</span></div>
+        <div class="hd-arr">→</div>
+        <div class="hd-desc">Enter a <b>UTC time</b> (or tap <b>Now</b>) to show only NOTAMs active within <b>±1 h</b>.</div>
+      </div>
+
+      <div class="hd-sec">Category filters</div>
+      <div class="hd-seg">
+        <span class="hd-chip on">Flight</span>
+        <span class="hd-chip">Departure</span>
+        <span class="hd-chip">Arrival</span>
+        <span class="hd-chip">Ground</span>
+      </div>
+      <div class="hd-note" style="margin-bottom:10px">Tap to filter by phase of flight. Tap again to remove. Combine with a severity card.</div>
+      <div class="hd-block">
+        <div class="hd-note">
+          <b>Flight</b> — en-route, airspace, aerodrome status<br>
+          <b>Departure</b> — take-off, SID<br>
+          <b>Arrival</b> — approach, STAR, landing<br>
+          <b>Ground</b> — taxiways, stands, aprons, services
+        </div>
+      </div>
+
+      <div class="hd-sec">A NOTAM card</div>
+      <div class="hd-notam">
+        <div class="nh">
+          <span class="hd-dot" style="background:var(--red);width:10px;height:10px"></span>
+          <span class="id">A1771/26</span>
+          <span class="hd-tag">QMXLC</span>
+          <span class="hd-gtag" style="margin-left:auto">GROUND</span>
+        </div>
+        <div class="txt">CLOSED TAXIWAYS : TWY W3 BTN TWY LP</div>
+        <div class="dt">Start <b>30 MAR 2026 21:30Z</b><br>End <b>31 JUL 2026 03:30Z</b></div>
+      </div>
+      <div class="hd-note" style="margin-top:9px">
+        <b>dot</b> = severity · <b>A1771/26</b> = NOTAM number · <b>QMXLC</b> = ICAO Q-code · <b>GROUND</b> = category<br>
+        Dates are in <b>UTC / Zulu</b>.
+      </div>
     </div>
   </div>
 </div>
@@ -1279,12 +1396,7 @@ $("#helpClose").onclick=()=>{ $("#helpOv").hidden=true; };
 $("#helpOv").onclick=e=>{ if(e.target===$("#helpOv")) $("#helpOv").hidden=true; };
 document.addEventListener("keydown",e=>{ if(e.key==="Escape") $("#helpOv").hidden=true; });
 
-function updateDisclaimer(){
-  const live=!!BACKEND_URL;
-  $("#disclaim").innerHTML=`<b>Decision support</b> — ${live?"live NOTAM data via your configured source":"simulated NOTAM data for demonstration"}. `
-    +`This tool does not replace the official briefing (authoritative source: Eurocontrol EAD).`;
-}
-updateDisclaimer(); updateFavCount(); buildSeg(); setTab("fav"); load(favs.length ? favs[0] : "LFBO");
+updateFavCount(); buildSeg(); setTab("fav"); load(favs.length ? favs[0] : "LFBO");
 </script>
 <script>
 if ("serviceWorker" in navigator) {
