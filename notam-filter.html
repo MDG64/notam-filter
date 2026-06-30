@@ -203,12 +203,15 @@ header{
   background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);
   padding:12px 14px;margin:6px 0 2px}
 .timebar .title{font:500 10px/1 var(--mono);color:var(--muted);letter-spacing:.18em;text-transform:uppercase}
+.tmodes{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
 .scratch.time input[type=time]{width:106px;background:transparent;border:0;outline:none;
   color:var(--cyan);font:600 17px/1 var(--mono);letter-spacing:.12em;padding:9px 12px 9px 8px}
 .scratch.time input[type=time]::-webkit-calendar-picker-indicator{
   filter:invert(.65) sepia(1) saturate(4) hue-rotate(150deg);cursor:pointer;opacity:.8}
 .btn.ghost{background:transparent;border-color:var(--line2);color:var(--muted)}
 .btn.ghost:hover{color:var(--text);border-color:var(--cyan-dim)}
+.btn.ghost.on{background:var(--cyan);border-color:var(--cyan);color:var(--bg)}
+body.light .btn.ghost.on{background:var(--cyan);color:#fff}
 .winreadout{font:500 11px/1.4 var(--mono);letter-spacing:.06em;color:var(--muted)}
 .winreadout.on{color:var(--cyan)}
 .winreadout.on b{color:var(--text);font-weight:600}
@@ -377,13 +380,16 @@ footer code{color:var(--cyan);background:#1a232a;padding:2px 6px;border-radius:4
   <div class="summary" id="summary"></div>
 
   <div class="timebar">
-    <span class="title">Flight time</span>
     <div class="scratch time">
       <label for="htime">Z·UTC</label>
       <input id="htime" type="time" aria-label="Flight time (UTC) for the time filter">
     </div>
-    <button class="btn ghost" id="now">Now</button>
-    <span class="winreadout" id="winreadout">Time filter off — showing all of today's NOTAMs</span>
+    <div class="tmodes">
+      <button class="btn ghost" id="now">Now</button>
+      <button class="btn ghost" id="todayBtn">Today</button>
+      <button class="btn ghost" id="tomBtn">Tomorrow</button>
+    </div>
+    <span class="winreadout" id="winreadout">Time filter off — showing all NOTAMs</span>
     <button class="clearTime" id="clearTime" hidden>× Clear</button>
   </div>
 
@@ -460,8 +466,19 @@ footer code{color:var(--cyan);background:#1a232a;padding:2px 6px;border-radius:4
       <div class="hd-row">
         <div class="hd-vis" style="min-width:auto"><span class="hd-chip" style="font-family:var(--mono)">Z·UTC --:--</span></div>
         <div class="hd-arr">→</div>
-        <div class="hd-desc">Enter a <b>UTC time</b> (or tap <b>Now</b>) to show only NOTAMs active within <b>±1 h</b>.</div>
+        <div class="hd-desc">Enter a <b>UTC time</b> (or tap <b>Now</b>) to show only NOTAMs active within <b>±1 h</b> today.</div>
       </div>
+      <div class="hd-row">
+        <div class="hd-vis" style="min-width:auto"><span class="hd-chip">Today</span></div>
+        <div class="hd-arr">→</div>
+        <div class="hd-desc">Show only NOTAMs active <b>today</b> (00:00–23:59 Z).</div>
+      </div>
+      <div class="hd-row">
+        <div class="hd-vis" style="min-width:auto"><span class="hd-chip">Tomorrow</span></div>
+        <div class="hd-arr">→</div>
+        <div class="hd-desc">Show only NOTAMs active <b>tomorrow</b> (00:00–23:59 Z).</div>
+      </div>
+      <div class="hd-note">With <b>no time selected</b>, all NOTAMs are shown — including upcoming ones starting on later days.</div>
 
       <div class="hd-sec">Category filters</div>
       <div class="hd-seg">
@@ -1047,6 +1064,7 @@ let activeCats=new Set();   // vide = "Tous"
 let activeSev=null;         // null = toutes sévérités ; sinon "critical"|"caution"|"info"
 let current=[];             // NOTAM classés de l'aérodrome courant
 let timeWin=null;           // null = filtre horaire inactif ; sinon {start,end,h,m}
+let timeMode=null;          // null | 'time' | 'today' | 'tomorrow'
 let currentIcao="";         // code OACI chargé
 let tab="fav";              // onglet actif : "fav"
 function loadFavs(){ try{ return JSON.parse(localStorage.getItem("notam_favs")||"[]"); }catch(e){ return []; } }
@@ -1090,6 +1108,19 @@ function windowFor(h,m){
   const now=new Date();
   const center=Date.UTC(now.getUTCFullYear(),now.getUTCMonth(),now.getUTCDate(),h,m);
   return {start:center-3600000, end:center+3600000, h, m};
+}
+function dayWindow(offset){   // journée complète UTC (00:00 -> 23:59) ; offset 0=aujourd'hui, 1=demain
+  const now=new Date();
+  const start=Date.UTC(now.getUTCFullYear(),now.getUTCMonth(),now.getUTCDate()+offset,0,0);
+  return {start, end:start+86340000};   // +23h59
+}
+const MON=["JAN","FEB","MAR","APR","MAY","JUN","JUL","AUG","SEP","OCT","NOV","DEC"];
+function dateLabel(ms){const d=new Date(ms);return P(d.getUTCDate())+" "+MON[d.getUTCMonth()];}
+function scopeLabel(){        // texte du bandeau selon le mode actif
+  if(!timeWin) return "Time filter off — showing all NOTAMs";
+  if(timeMode==="today")    return "Today · <b>00:00–23:59 Z</b>";
+  if(timeMode==="tomorrow") return "Tomorrow · <b>00:00–23:59 Z</b> · "+dateLabel(timeWin.start);
+  return "Window <b>"+hm(timeWin.start)+"–"+hm(timeWin.end)+" Z</b> · today (± 1 h)";
 }
 function activeAt(n,win){   // le NOTAM est-il actif quelque part dans la fenêtre ?
   const b=ts(n.b);
@@ -1281,15 +1312,11 @@ function render(){
 
   // bandeau horaire
   const ro=$("#winreadout");
-  if(timeWin){
-    ro.classList.add("on");
-    ro.innerHTML=`Window <b>${hm(timeWin.start)}–${hm(timeWin.end)} Z</b> · today (± 1 h)`;
-    $("#clearTime").hidden=false;
-  }else{
-    ro.classList.remove("on");
-    ro.textContent="Time filter off — showing all of today's NOTAMs";
-    $("#clearTime").hidden=true;
-  }
+  ro.classList.toggle("on", !!timeWin);
+  ro.innerHTML=scopeLabel();
+  $("#clearTime").hidden=!timeWin;
+  $("#todayBtn").classList.toggle("on", timeMode==="today");
+  $("#tomBtn").classList.toggle("on", timeMode==="tomorrow");
 
   const rows=visible().slice().sort((a,b)=>
     (SEV_RANK[a.severity]-SEV_RANK[b.severity]) || a.id.localeCompare(b.id));
@@ -1298,7 +1325,7 @@ function render(){
       ? `<h3>No active NOTAMs for ${esc(currentIcao)}</h3>
          <p>Nothing to show right now.</p>`
       : timeWin
-      ? `<h3>No NOTAM in the window ${hm(timeWin.start)}–${hm(timeWin.end)} Z</h3>
+      ? `<h3>No NOTAM ${timeMode==="today"?"today":timeMode==="tomorrow"?"tomorrow":"in the window "+hm(timeWin.start)+"–"+hm(timeWin.end)+" Z"}</h3>
          <p>Widen the time, clear the time filter, or switch category.</p>`
       : `<h3>No NOTAM in this selection</h3>
          <p>Tap an active filter again to turn it off.</p>`;
@@ -1352,10 +1379,9 @@ $("#tabFav").onclick=()=>setTab("fav");
 /* ---- filtre horaire ---- */
 function applyTime(val){
   const m=(val||"").match(/^(\d{1,2}):(\d{2})$/);
-  if(!m){ timeWin=null; render(); return; }
+  if(!m){ timeWin=null; timeMode=null; render(); return; }
   const h=Math.min(23,+m[1]), mi=Math.min(59,+m[2]);
-  timeWin=windowFor(h,mi);
-  render();
+  timeWin=windowFor(h,mi); timeMode="time"; render();
 }
 $("#htime").addEventListener("input",e=>applyTime(e.target.value));
 $("#now").onclick=()=>{
@@ -1363,7 +1389,17 @@ $("#now").onclick=()=>{
   $("#htime").value=P(d.getUTCHours())+":"+P(d.getUTCMinutes());
   applyTime($("#htime").value);
 };
-$("#clearTime").onclick=()=>{ $("#htime").value=""; timeWin=null; render(); };
+$("#todayBtn").onclick=()=>{
+  if(timeMode==="today"){ timeWin=null; timeMode=null; }
+  else { $("#htime").value=""; timeWin=dayWindow(0); timeMode="today"; }
+  render();
+};
+$("#tomBtn").onclick=()=>{
+  if(timeMode==="tomorrow"){ timeWin=null; timeMode=null; }
+  else { $("#htime").value=""; timeWin=dayWindow(1); timeMode="tomorrow"; }
+  render();
+};
+$("#clearTime").onclick=()=>{ $("#htime").value=""; timeWin=null; timeMode=null; render(); };
 
 function setBeacon(online){
   const b=document.querySelector(".beacon");
