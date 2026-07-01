@@ -222,6 +222,7 @@ body.light .btn.ghost{color:var(--muted)}
 .clearTime{margin-left:auto;font:500 11px/1 var(--mono);letter-spacing:.08em;color:var(--amber);
   background:transparent;border:1px solid #4a3a1a;border-radius:7px;padding:8px 11px;cursor:pointer}
 .clearTime:hover{background:rgba(246,178,62,.08)}
+.scratch.time.on{border-color:var(--green);box-shadow:0 0 0 1px var(--green)}
 .clearTime:focus-visible,.scratch.time:focus-within{outline:2px solid var(--cyan);outline-offset:2px}
 
 /* ---------- legend ---------- */
@@ -1321,6 +1322,8 @@ function render(){
   $("#clearTime").hidden=!timeWin;
   $("#todayBtn").classList.toggle("on", timeMode==="today");
   $("#tomBtn").classList.toggle("on", timeMode==="tomorrow");
+  $("#now").classList.toggle("on", timeMode==="time");
+  document.querySelector(".scratch.time").classList.toggle("on", timeMode==="time");
 
   const rows=visible().slice().sort((a,b)=>
     (SEV_RANK[a.severity]-SEV_RANK[b.severity]) || a.id.localeCompare(b.id));
