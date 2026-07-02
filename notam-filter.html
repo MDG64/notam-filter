@@ -162,13 +162,13 @@ header{
 .offline-banner b{color:#fff;font-weight:700}
 
 /* ---------- summary ---------- */
-.summary{display:grid;grid-template-columns:repeat(auto-fit,minmax(128px,1fr));gap:8px;margin:18px 0}
-.stat{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:10px 12px;
+.summary{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin:18px 0}
+.stat{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:14px 16px;
   cursor:pointer;transition:border-color .15s,box-shadow .15s}
 .stat:hover{border-color:var(--line2)}
 .stat.on{border-color:var(--green);box-shadow:0 0 0 1px var(--green)}
-.stat .n{font:600 21px/1 var(--mono);letter-spacing:.02em}
-.stat .k{font:500 9px/1 var(--mono);color:var(--muted);letter-spacing:.16em;text-transform:uppercase;margin-top:5px}
+.stat .n{font:600 26px/1 var(--mono);letter-spacing:.02em}
+.stat .k{font:500 10px/1 var(--mono);color:var(--muted);letter-spacing:.18em;text-transform:uppercase;margin-top:7px}
 .stat.tot .n{color:var(--text)}
 .stat.crit .n{color:var(--red)} .stat.caut .n{color:var(--amber)} .stat.info .n{color:var(--green)}
 .stat .row{display:flex;align-items:baseline;gap:8px}
@@ -205,25 +205,23 @@ header{
   background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);
   padding:12px 14px;margin:6px 0 2px}
 .timebar .title{font:500 10px/1 var(--mono);color:var(--muted);letter-spacing:.18em;text-transform:uppercase}
-.tmodes{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;flex:1 1 100%;order:5}
-.tmodes .btn{width:100%;height:29px;padding:0 6px;font-size:13px}
+.tmodes{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
 .scratch.time input[type=time]{width:106px;background:transparent;border:0;outline:none;
-  color:#fff;font:600 17px/1 var(--mono);letter-spacing:.12em;padding:9px 12px 9px 8px}
-body.light .scratch.time input[type=time]{color:var(--cyan)}
+  color:var(--cyan);font:600 17px/1 var(--mono);letter-spacing:.12em;padding:9px 12px 9px 8px}
 .scratch.time input[type=time]::-webkit-calendar-picker-indicator{
   filter:invert(.65) sepia(1) saturate(4) hue-rotate(150deg);cursor:pointer;opacity:.8}
-.btn.ghost{background:transparent;border-color:var(--line2);color:#fff}
-body.light .btn.ghost{color:var(--muted)}
+.btn.ghost{background:transparent;border-color:var(--line2);color:var(--muted)}
 .btn.ghost:hover{color:var(--text);border-color:var(--cyan-dim)}
-.btn.ghost.on{background:transparent;border-color:var(--green);box-shadow:0 0 0 1px var(--green);color:var(--text)}
+.btn.ghost.on{background:var(--cyan);border-color:var(--cyan);color:var(--bg)}
+body.light .btn.ghost.on{background:var(--cyan);color:#fff}
 .winreadout{font:500 11px/1.4 var(--mono);letter-spacing:.06em;color:var(--muted)}
 .winreadout.on{color:var(--cyan)}
 .winreadout.on b{color:var(--text);font-weight:600}
 .clearTime{margin-left:auto;font:500 11px/1 var(--mono);letter-spacing:.08em;color:var(--amber);
   background:transparent;border:1px solid #4a3a1a;border-radius:7px;padding:8px 11px;cursor:pointer}
 .clearTime:hover{background:rgba(246,178,62,.08)}
-.scratch.time.on{border-color:var(--green);box-shadow:0 0 0 1px var(--green)}
 .clearTime:focus-visible,.scratch.time:focus-within{outline:2px solid var(--cyan);outline-offset:2px}
+.scratch.time.active{outline:2px solid var(--green);outline-offset:2px}
 
 /* ---------- legend ---------- */
 .legend{display:flex;gap:16px;flex-wrap:wrap;margin:10px 0 18px;font:500 10px/1 var(--mono);
@@ -385,7 +383,7 @@ footer code{color:var(--cyan);background:#1a232a;padding:2px 6px;border-radius:4
   <div class="summary" id="summary"></div>
 
   <div class="timebar">
-    <div class="scratch time">
+    <div class="scratch time" id="timeScratch">
       <label for="htime">Z·UTC</label>
       <input id="htime" type="time" aria-label="Flight time (UTC) for the time filter">
     </div>
@@ -1322,8 +1320,7 @@ function render(){
   $("#clearTime").hidden=!timeWin;
   $("#todayBtn").classList.toggle("on", timeMode==="today");
   $("#tomBtn").classList.toggle("on", timeMode==="tomorrow");
-  $("#now").classList.toggle("on", timeMode==="time");
-  document.querySelector(".scratch.time").classList.toggle("on", timeMode==="time");
+  $("#timeScratch").classList.toggle("active", timeMode==="time");
 
   const rows=visible().slice().sort((a,b)=>
     (SEV_RANK[a.severity]-SEV_RANK[b.severity]) || a.id.localeCompare(b.id));
