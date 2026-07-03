@@ -217,11 +217,10 @@ body.light .btn.ghost.on{background:var(--cyan);color:#fff}
 .winreadout{font:500 11px/1.4 var(--mono);letter-spacing:.06em;color:var(--muted)}
 .winreadout.on{color:var(--cyan)}
 .winreadout.on b{color:var(--text);font-weight:600}
-.clearTime{margin-left:auto;font:500 11px/1 var(--mono);letter-spacing:.08em;color:var(--amber);
+.clearTime{font:500 11px/1 var(--mono);letter-spacing:.08em;color:var(--amber);
   background:transparent;border:1px solid #4a3a1a;border-radius:7px;padding:8px 11px;cursor:pointer}
 .clearTime:hover{background:rgba(246,178,62,.08)}
 .clearTime:focus-visible,.scratch.time:focus-within{outline:2px solid var(--cyan);outline-offset:2px}
-.scratch.time.active{outline:2px solid var(--green);outline-offset:2px}
 
 /* ---------- legend ---------- */
 .legend{display:flex;gap:16px;flex-wrap:wrap;margin:10px 0 18px;font:500 10px/1 var(--mono);
@@ -362,7 +361,6 @@ footer code{color:var(--cyan);background:#1a232a;padding:2px 6px;border-radius:4
       <button class="help-btn" id="themeBtn" aria-label="Basculer le thème" title="Mode jour">☀</button>
       <button class="help-btn" id="helpBtn" aria-label="Information" title="Information">?</button>
     </div>
-    <h1 class="brand-title">NOTAM Filter</h1>
   </div>
 </header>
 
@@ -383,31 +381,28 @@ footer code{color:var(--cyan);background:#1a232a;padding:2px 6px;border-radius:4
   <div class="summary" id="summary"></div>
 
   <div class="timebar">
-    <div class="scratch time" id="timeScratch">
+    <div class="scratch time">
       <label for="htime">Z·UTC</label>
       <input id="htime" type="time" aria-label="Flight time (UTC) for the time filter">
     </div>
+    <button class="clearTime" id="clearTime" hidden>× Clear</button>
     <div class="tmodes">
       <button class="btn ghost" id="now">Now</button>
       <button class="btn ghost" id="todayBtn">Today</button>
       <button class="btn ghost" id="tomBtn">Tomorrow</button>
     </div>
     <span class="winreadout" id="winreadout">Time filter off — showing all NOTAMs</span>
-    <button class="clearTime" id="clearTime" hidden>× Clear</button>
   </div>
 
   <div class="filters">
     <div class="filters-head">
-      <span class="title">Filter</span>
+      <span class="title">Filter by flight phase</span>
     </div>
     <div class="seg" id="seg"></div>
   </div>
 
   <div class="list" id="list"></div>
 
-  <footer>
-    Classification engine: ICAO Q-code (subject, letters&nbsp;2-3) + free-text safety net.
-  </footer>
 </div>
 
 <div class="modal-ov" id="helpOv" hidden>
@@ -1317,10 +1312,9 @@ function render(){
   const ro=$("#winreadout");
   ro.classList.toggle("on", !!timeWin);
   ro.innerHTML=scopeLabel();
-  $("#clearTime").hidden=!timeWin;
+  $("#clearTime").hidden=(timeMode!=="time");
   $("#todayBtn").classList.toggle("on", timeMode==="today");
   $("#tomBtn").classList.toggle("on", timeMode==="tomorrow");
-  $("#timeScratch").classList.toggle("active", timeMode==="time");
 
   const rows=visible().slice().sort((a,b)=>
     (SEV_RANK[a.severity]-SEV_RANK[b.severity]) || a.id.localeCompare(b.id));
