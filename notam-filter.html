@@ -77,7 +77,7 @@ header{
 .beacon{width:13px;height:13px;flex:none;border-radius:50%;background:var(--muted);transition:all .2s}
 .beacon.online{background:var(--green);box-shadow:0 0 0 3px rgba(46,204,113,.16),0 0 14px var(--green)}
 .beacon.offline{background:var(--red);box-shadow:0 0 0 3px rgba(229,72,77,.18),0 0 14px var(--red)}
-.hdr-actions{margin-left:auto;display:flex;align-items:center;gap:10px;flex:none}
+.hdr-actions{display:flex;align-items:center;gap:3px;flex:none}
 .brand-title{flex:1 1 100%;margin:8px 0 0;font-size:15px;letter-spacing:.16em;font-weight:600;
   text-transform:uppercase;color:var(--text)}
 .region{font:500 10px/1 var(--mono);color:var(--cyan);border:1px solid var(--cyan-dim);
@@ -337,12 +337,11 @@ body.light .hd-caut{background:#caa300}
 footer{margin:0;padding:0}
 footer code{color:var(--cyan);background:#1a232a;padding:2px 6px;border-radius:4px}
 
-/* ---------- page Route (écran dédié) ---------- */
-.route-entry{display:flex;justify-content:flex-start;margin:2px 0 4px;padding-left:175px}
-.routebtn{
-  font:600 12px/1 var(--sans);letter-spacing:.1em;color:var(--text);
-  border:1px solid var(--line2);background:var(--panel2);border-radius:22px;
-  padding:11px 22px;cursor:pointer;transition:background .15s,border-color .15s}
+/* ---------- bouton Route (dans le header) ---------- */
+.routebtn{margin-left:auto;
+  font:600 12px/1 var(--sans);letter-spacing:.08em;color:var(--text);
+  border:1px solid var(--line2);background:var(--panel2);border-radius:20px;
+  padding:9px 16px;cursor:pointer;transition:background .15s,border-color .15s;white-space:nowrap}
 .routebtn:hover{background:var(--panel);border-color:var(--muted)}
 .routebtn:focus-visible{outline:2px solid var(--cyan);outline-offset:2px}
 body.light .routebtn{background:#f2f5f8;color:#1b2228}
@@ -361,8 +360,13 @@ body.light .routebtn:hover{background:#e8edf1}
 .swapbtn:focus-visible{outline:2px solid var(--cyan);outline-offset:2px}
 body.light .swapbtn{background:#eef4f7}
 body.light .swapbtn:hover{background:#e3edf1}
-.route-form .scratch{flex:none}
+.swapbtn{align-self:flex-start;margin-top:4px}
+.route-form{display:flex;gap:10px;align-items:flex-start;flex-wrap:nowrap}
+.route-col{display:flex;flex-direction:column;gap:8px;flex:none}
+.route-actions{display:flex;flex-direction:column;gap:8px;margin-left:auto;align-items:flex-end;flex:none}
+.route-form .scratch{flex:none!important;width:164px!important}
 .route-form .scratch input{width:96px}
+
 /* GO : pilule arrondie — grise puis verte quand prête */
 .gobtn{
   border:1px solid var(--line2);background:var(--panel2);color:var(--muted);
@@ -422,11 +426,11 @@ body.light .apcard{background:#f2f5f8}
     <span class="beacon" aria-hidden="true"></span>
     <div class="entry">
       <div class="scratch">
-        <label for="icao">ICAO</label>
         <input id="icao" maxlength="4" placeholder="LFBO" autocomplete="off" spellcheck="false" aria-label="Aerodrome ICAO code">
       </div>
       <div class="suggest" id="suggest" hidden></div>
     </div>
+    <button class="routebtn" id="routeBtn">Route ➔</button>
     <div class="hdr-actions">
       <button class="help-btn" id="themeBtn" aria-label="Basculer le thème" title="Mode jour">☀</button>
       <button class="help-btn" id="helpBtn" aria-label="Information" title="Information">?</button>
@@ -435,9 +439,6 @@ body.light .apcard{background:#f2f5f8}
 </header>
 
 <div class="wrap">
-  <div class="route-entry">
-    <button class="routebtn" id="routeBtn">Route ➔</button>
-  </div>
   <div class="tabs">
     <button class="tab on" id="tabFav" aria-pressed="true"><span class="star">★</span> Favorites <span id="favCount">(0)</span></button>
   </div>
@@ -489,12 +490,10 @@ body.light .apcard{background:#f2f5f8}
     <div class="route-form">
       <div class="scratch rfrom"><label for="rFrom">FROM</label>
         <input id="rFrom" maxlength="4" placeholder="LFPO" autocomplete="off" spellcheck="false"></div>
+      <button class="swapbtn" id="swapBtn" aria-label="Swap FROM and TO" title="Swap FROM / TO">⇄</button>
       <div class="route-col">
-        <div class="route-line">
-          <div class="scratch"><label for="rTo">TO</label>
-            <input id="rTo" maxlength="4" placeholder="LEMG" autocomplete="off" spellcheck="false"></div>
-          <button class="swapbtn" id="swapBtn" aria-label="Swap FROM and TO" title="Swap FROM / TO">⇄</button>
-        </div>
+        <div class="scratch"><label for="rTo">TO</label>
+          <input id="rTo" maxlength="4" placeholder="LEMG" autocomplete="off" spellcheck="false"></div>
         <div class="scratch"><label for="rAlt">ALT</label>
           <input id="rAlt" maxlength="4" placeholder="----" autocomplete="off" spellcheck="false"></div>
       </div>
@@ -503,7 +502,7 @@ body.light .apcard{background:#f2f5f8}
         <button class="mapbtn" id="mapBtn" disabled>MAP</button>
       </div>
     </div>
-    <div class="route-status" id="routeStatus">Enter departure and destination (4-letter ICAO).</div>
+    <div class="route-status" id="routeStatus"></div>
     <div class="apgrid" id="apGrid"></div>
   </div>
 </div>
@@ -1755,7 +1754,7 @@ async function openRoute(){
       $("#routeStatus").innerHTML=`${curRoute.dep} → ${curRoute.arr}${curRoute.alt?" → "+curRoute.alt:""} · <b>${curRoute.distNM} NM</b> · ${curRoute.airports.length} aerodromes · route data from <b>${stampHM(saved.ts)}</b>`;
     }
   } else {
-    $("#routeStatus").textContent="Enter departure and destination (4-letter ICAO).";
+    $("#routeStatus").textContent="";
   }
   refreshGo(); refreshMapBtn();
 }
