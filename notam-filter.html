@@ -348,8 +348,8 @@ body.light .routebtn{background:#f2f5f8;color:#1b2228}
 body.light .routebtn:hover{background:#e8edf1}
 .route-screen{position:fixed;inset:0;z-index:45;background:var(--bg);overflow-y:auto;
   -webkit-overflow-scrolling:touch}
-.route-inner{max-width:1080px;margin:0 auto;padding:18px 20px 60px}
-.route-head{display:flex;align-items:center;gap:12px;margin-bottom:18px}
+.route-inner{max-width:1080px;margin:0 auto;padding:14px 20px 24px}
+.route-head{display:flex;align-items:center;gap:12px;margin-bottom:14px}
 .route-title{font:600 15px/1 var(--sans);letter-spacing:.16em;text-transform:uppercase}
 
 .swapbtn{width:40px;height:40px;flex:none;border-radius:50%;
@@ -361,11 +361,11 @@ body.light .routebtn:hover{background:#e8edf1}
 body.light .swapbtn{background:#eef4f7}
 body.light .swapbtn:hover{background:#e3edf1}
 .swapbtn{align-self:flex-start;margin-top:4px}
-.route-form{display:flex;gap:10px;align-items:flex-start;flex-wrap:nowrap}
+.route-form{display:flex;gap:8px;align-items:flex-start;flex-wrap:nowrap}
 .route-col{display:flex;flex-direction:column;gap:8px;flex:none}
-.route-actions{display:flex;flex-direction:column;gap:8px;margin-left:auto;align-items:flex-end;flex:none}
-.route-form .scratch{flex:none!important;width:164px!important}
-.route-form .scratch input{width:96px}
+.route-actions{display:flex;flex-direction:row;gap:10px;margin-top:12px}
+.route-form .scratch{flex:none!important;width:128px!important}
+.route-form .scratch input{width:64px;font-size:15px;letter-spacing:.1em;padding:11px 8px 11px 6px}
 
 /* GO : pilule arrondie — grise puis verte quand prête */
 .gobtn{
@@ -489,18 +489,18 @@ body.light .apcard{background:#f2f5f8}
     </div>
     <div class="route-form">
       <div class="scratch rfrom"><label for="rFrom">FROM</label>
-        <input id="rFrom" maxlength="4" placeholder="LFPO" autocomplete="off" spellcheck="false"></div>
+        <input id="rFrom" maxlength="4" placeholder="----" autocomplete="off" spellcheck="false"></div>
       <button class="swapbtn" id="swapBtn" aria-label="Swap FROM and TO" title="Swap FROM / TO">⇄</button>
       <div class="route-col">
         <div class="scratch"><label for="rTo">TO</label>
-          <input id="rTo" maxlength="4" placeholder="LEMG" autocomplete="off" spellcheck="false"></div>
+          <input id="rTo" maxlength="4" placeholder="----" autocomplete="off" spellcheck="false"></div>
         <div class="scratch"><label for="rAlt">ALT</label>
           <input id="rAlt" maxlength="4" placeholder="----" autocomplete="off" spellcheck="false"></div>
       </div>
-      <div class="route-actions">
-        <button class="gobtn" id="goBtn" disabled>GO</button>
-        <button class="mapbtn" id="mapBtn" disabled>MAP</button>
-      </div>
+    </div>
+    <div class="route-actions">
+      <button class="gobtn" id="goBtn" disabled>GO</button>
+      <button class="mapbtn" id="mapBtn" disabled>MAP</button>
     </div>
     <div class="route-status" id="routeStatus"></div>
     <div class="apgrid" id="apGrid"></div>
