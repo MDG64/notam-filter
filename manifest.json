@@ -1,7 +1,7 @@
 {
   "name": "NOTAM Filter",
   "short_name": "NOTAM",
-  "description": "Professional NOTAM filtering for EUR/AFI pilots",
+  "description": "Professional NOTAM filtering for pilots",
   "start_url": "./notam-filter.html",
   "display": "standalone",
   "background_color": "#0d1117",
