@@ -3350,6 +3350,7 @@ E) ${e}`;
       theme = (theme === "light") ? "dark" : "light";
       localStorage.setItem(THEME_KEY, theme);
       applyTheme(theme);
+      if (typeof scheduleDraw === "function" && mapView) scheduleDraw();   // repeint la carte si elle est ouverte
     };
 
     /* ---- fenêtre d'aide (?) ---- */
@@ -3963,7 +3964,7 @@ E) ${e}`;
     function drawMap() {
       if (!mapView) return;
       const cv = $("#routeMap"), ctx = cv.getContext("2d"), v = mapView;
-      const light = false;                 // la carte est toujours en Ice Graphite sombre
+      const light = document.body.classList.contains("light");   // la carte suit le thème jour/nuit de l'app
       const C = mapPalette(light);
       const dpr = v.dpr, kx = Math.cos(v.cy * Math.PI / 180);
       const X = lon => (cv.width / (2 * dpr) + (lon - v.cx) * kx * v.scale) * dpr;
@@ -4060,7 +4061,7 @@ E) ${e}`;
             else { ctx.moveTo(bx + rr, by); ctx.arcTo(bx + bw, by, bx + bw, by + boxH, rr); ctx.arcTo(bx + bw, by + boxH, bx, by + boxH, rr); ctx.arcTo(bx, by + boxH, bx, by, rr); ctx.arcTo(bx, by, bx + bw, by, rr); }
             // capsule transparente, liseré = couleur du point (vert=téléchargé, rouge=non)
             ctx.lineWidth = 1.4 * dpr; ctx.strokeStyle = col; ctx.stroke();
-            ctx.fillStyle = "#fff";
+            ctx.fillStyle = C.txt;
             ctx.textAlign = "left"; ctx.fillText(a.icao, bx + pad, cy); ctx.textAlign = "start";
           }
           mapWorldHits.push({
@@ -4115,7 +4116,7 @@ E) ${e}`;
         else { ctx.moveTo(boxX + rr, boxY); ctx.arcTo(boxX + boxW, boxY, boxX + boxW, boxY + boxH, rr); ctx.arcTo(boxX + boxW, boxY + boxH, boxX, boxY + boxH, rr); ctx.arcTo(boxX, boxY + boxH, boxX, boxY, rr); ctx.arcTo(boxX, boxY, boxX + boxW, boxY, rr); }
         // capsule transparente, liseré = couleur du point (vert=téléchargé, rouge=non)
         ctx.lineWidth = 1.4 * lr * dpr; ctx.strokeStyle = col; ctx.stroke();
-        ctx.fillStyle = "#fff";
+        ctx.fillStyle = C.txt;
         ctx.textAlign = "left"; ctx.fillText(a.icao, boxX + pad, y); ctx.textAlign = "start";
         // zone cliquable : pastille (rayon élargi pour le tactile) + rectangle d'étiquette,
         // dans l'ordre de dessin (le dernier poussé = dessiné au-dessus, donc prioritaire au clic)
