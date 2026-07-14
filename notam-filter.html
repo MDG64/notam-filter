@@ -2688,7 +2688,9 @@ m10970 -3289 c90 -8 172 -14 182 -14 15 0 19 -9 22 -37 l3 -38 69 -3 69 -3 -6
     }
     function parseNotam(raw) {
       const text = raw.trim();
-      const id = (text.match(/^([A-Z]\d{4}\/\d{2})/) || [])[1] || "(sans id)";
+      // ICAO (A1234/26) OU domestique US (04/461, MM/NNN) : les NOTAM US domestiques
+      // ont un ID au format cycle/séquence, sans lettre de série ni année.
+      const id = (text.match(/^([A-Z]\d{4}\/\d{2}|\d{2}\/\d{3,4})/) || [])[1] || "(sans id)";
       const qm = text.match(/Q\)\s*([^\n]+)/);
       let qcode = "", scope = "", traffic = "", purpose = "";
       if (qm) { const p = qm[1].split("/").map(s => s.trim()); qcode = p[1] || ""; traffic = p[2] || ""; purpose = p[3] || ""; scope = p[4] || ""; }
