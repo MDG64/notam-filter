@@ -1372,6 +1372,122 @@
       background: #caa300
     }
 
+    /* ---------- plan de plateforme ---------- */
+    .modal.plan {
+      max-width: 940px
+    }
+
+    .plan-wrap {
+      padding: 16px 16px 18px
+    }
+
+    .plan-head {
+      display: flex;
+      align-items: baseline;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-bottom: 10px
+    }
+
+    .plan-head .hd-title {
+      margin: 0
+    }
+
+    .plan-sub {
+      font: 500 11px/1.4 var(--mono);
+      color: var(--muted);
+      letter-spacing: .04em
+    }
+
+    #planCv {
+      display: block;
+      width: 100%;
+      margin: 0 auto;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: #0b0f13;
+      touch-action: none;
+      cursor: grab
+    }
+
+    #planCv:active {
+      cursor: grabbing
+    }
+
+    .plan-legend {
+      display: flex;
+      gap: 14px;
+      flex-wrap: wrap;
+      align-items: center;
+      margin-top: 10px;
+      font: 500 10px/1 var(--mono);
+      color: var(--muted);
+      letter-spacing: .08em
+    }
+
+    .plan-legend i {
+      width: 16px;
+      height: 3px;
+      border-radius: 2px;
+      display: inline-block;
+      margin-right: 5px;
+      vertical-align: middle
+    }
+
+    .plan-legend .dash {
+      background: repeating-linear-gradient(90deg, var(--muted) 0 4px, transparent 4px 7px)
+    }
+
+    /* Compteur d'honnêteté : il dit en permanence combien de NOTAMs de surface
+       n'ont pas pu être placés. Un plan qui tait ses angles morts ment. */
+    .plan-tally {
+      margin-top: 10px;
+      font: 500 11px/1.5 var(--sans);
+      color: var(--muted);
+      border-left: 2px solid var(--line2);
+      padding: 7px 11px;
+      background: var(--panel2);
+      border-radius: 0 6px 6px 0
+    }
+
+    .plan-tally b {
+      color: var(--text);
+      font-weight: 600
+    }
+
+    .plan-tally .warn {
+      color: var(--amber)
+    }
+
+    .plan-pick {
+      margin-top: 10px;
+      min-height: 0
+    }
+
+    .plan-pick:empty {
+      display: none
+    }
+
+    .plan-foot {
+      margin-top: 12px;
+      font: 500 9.5px/1.5 var(--mono);
+      color: var(--muted2);
+      letter-spacing: .06em;
+      border-top: 1px solid var(--line);
+      padding-top: 9px
+    }
+
+    .plan-msg {
+      padding: 40px 20px;
+      text-align: center;
+      color: var(--muted);
+      font: 500 13px/1.6 var(--sans)
+    }
+
+    .plan-msg .spinner {
+      margin: 0 auto 12px
+    }
+
     /* ---------- strips ---------- */
     .list {
       display: flex;
@@ -2515,13 +2631,16 @@ m10970 -3289 c90 -8 172 -14 182 -14 15 0 19 -9 22 -37 l3 -38 69 -3 69 -3 -6
   </div>
 
   <div class="modal-ov" id="planOv" hidden>
-    <div class="modal" role="dialog" aria-modal="true" aria-label="Plan de la plateforme">
+    <div class="modal plan" role="dialog" aria-modal="true" aria-label="Aerodrome layout">
       <button class="modal-x" id="planClose" aria-label="Close">×</button>
       <div class="hd-scroll">
-        <h2 class="hd-title">Plan plateforme — <span id="planIcao">—</span></h2>
-        <div class="hd-note">Vue en construction. Le rendu, le surlignage des taxiways
-          et le filtre horaire sont validés sur banc d'essai ; il reste à brancher la
-          source de géométrie (<b>/api/layout/:icao</b>) sur le proxy.</div>
+        <div class="plan-wrap">
+          <div class="plan-head">
+            <h2 class="hd-title">Layout — <span id="planIcao">—</span></h2>
+            <span class="plan-sub" id="planSub"></span>
+          </div>
+          <div id="planBody"></div>
+        </div>
       </div>
     </div>
   </div>
@@ -10245,6 +10364,10 @@ function renderInfo(icao) {
       $("#stationName").textContent = full;
       $("#stationName").title = full;      // tronqué à l'écran, entier au survol
       updateStar();
+      // Le bloc « plan » vit dans le second <script>, analysé après celui-ci.
+      // Au chargement, showStation() restaure le dernier terrain AVANT que
+      // updatePlanBtn n'existe : on garde donc l'appel conditionnel.
+      if (typeof updatePlanBtn === "function") updatePlanBtn(icao);
     }
     function updateStar() {
       const fav = favs.includes(currentIcao), s = $("#star");
@@ -10393,6 +10516,8 @@ function renderInfo(icao) {
     }
 
     function render() {
+      // Le plan est ouvert : il doit suivre le filtre horaire, et lui seul.
+      if (plan && !$("#planOv").hidden) { planDraw(); planTally(); planShowPick(plan.sel); }
       const c = counts();
       const base = baseSet();
       summary.innerHTML = `
@@ -10531,10 +10656,7 @@ function renderInfo(icao) {
     };
 
     /* ---- fenêtre d'aide (?) ---- */
-    $("#planBtn").onclick = () => {
-      $("#planIcao").textContent = currentIcao || "—";
-      $("#planOv").hidden = false;
-    };
+    $("#planBtn").onclick = () => { openPlan(); };
     $("#planClose").onclick = () => { $("#planOv").hidden = true; };
     $("#planOv").onclick = e => { if (e.target === $("#planOv")) $("#planOv").hidden = true; };
     $("#helpBtn").onclick = () => { $("#helpOv").hidden = false; };
@@ -12085,6 +12207,496 @@ window.addEventListener("scroll", hidePop, true);
     updateFavCount(); buildSeg(); setTab("fav"); load(favs.length ? favs[0] : "LFBO");
   </script>
   <script>
+
+    /* ============================================================
+       5) PLAN DE PLATEFORME
+          Géométrie : fichiers statiques layouts/<ICAO>.json produits une fois
+          depuis OpenStreetMap. Servis par GitHub Pages, même origine que cette
+          page — pas de CORS, pas de proxy, pas de quota. Le service worker les
+          garde : un terrain consulté une fois reste consultable hors ligne.
+       ============================================================ */
+    const LAYOUT_URL = "./layouts/";
+    const layoutCache = new Map();          // icao -> layout | null
+    let planIndex = null;                   // { ICAO: 2|1 }  2 = twy nommés, 1 = pistes seules
+
+    // L'index dit QUI a un plan, avant tout clic. Sans lui le bouton mentirait
+    // sur les terrains sans géométrie : un 404 n'est pas une réponse à un pilote.
+    async function loadPlanIndex() {
+      if (planIndex) return planIndex;
+      try {
+        const r = await fetch(LAYOUT_URL + "_index.json");
+        planIndex = r.ok ? await r.json() : {};
+      } catch (e) { planIndex = {}; }
+      return planIndex;
+    }
+    function hasPlan(icao) { return !!(planIndex && planIndex[icao]); }
+
+    async function fetchLayout(icao) {
+      if (layoutCache.has(icao)) return layoutCache.get(icao);
+      let out = null;
+      try {
+        const r = await fetch(LAYOUT_URL + encodeURIComponent(icao) + ".json");
+        if (r.ok) {
+          const j = await r.json();
+          if (j && Array.isArray(j.f) && Array.isArray(j.arp)) out = j;
+        }
+      } catch (e) { out = null; }
+      layoutCache.set(icao, out);
+      return out;
+    }
+
+      /* refsFromNotam v2 — séparateurs obligatoires, pas de glanage */
+      const STOP=new Set(["AND","BTN","BTWN","BETWEEN","CLSD","CLOSED","AVBL","WIP","DUE","FOR",
+      "TO","AT","OPS","MAINT","EDGE","LGT","CL","LIGHTING","LIGHTS","MARKINGS","SURFACE",
+      "INSPECTION","WORK","WORKS","IN","PROGRESS","NOT","NIGHT","AREA","AREAS","WI","OF","THE",
+      "ALL","TFC","VIA","REDUCED","WIDTH","SHOULDER","ACFT","USE","ARE","IS","REF","AIP","SUP",
+      "IFR","NEW","ONLY","EXP","EXPECT","TAXI","PN","MIN","MAX","INTERSECTION","THR","PSN","LTD",
+      "NOTAM","VOID","CNL","RESUMED","NORMAL","OPERATION","INOPERATION","SOUTH","NORTH","EAST",
+      "WEST","FROM","ON","OR","WITH","PROHIBITED","CODE","INCLUDED","PART","DP2","NIL"]);
+      const TWY_REF=/^(?:[A-Z]{1,3}\d{0,3}|\d{1,3})$/;
+      const NATO={ALPHA:"A",BRAVO:"B",CHARLIE:"C",DELTA:"D",ECHO:"E",FOXTROT:"F",GOLF:"G",
+      HOTEL:"H",INDIA:"I",JULIET:"J",JULIETT:"J",KILO:"K",LIMA:"L",MIKE:"M",NOVEMBER:"N",
+      OSCAR:"O",PAPA:"P",QUEBEC:"Q",ROMEO:"R",SIERRA:"S",TANGO:"T",UNIFORM:"U",VICTOR:"V",
+      WHISKEY:"W",XRAY:"X",YANKEE:"Y",ZULU:"Z"};
+      const TWY_KW=new Set(["TWY","TWYS","TAXIWAY","TAXIWAYS","TXL"]);
+      const APR_KW=new Set(["APRON","APN","RAMP"]);
+      const STD_KW=new Set(["STAND","STANDS","BAY","BAYS","PRKG","PARKING"]);
+
+      // tokenizer qui CONSERVE la ponctuation comme jetons
+      function lex(t){
+        return (t||"").toUpperCase().replace(/([.,;:()])/g," $1 ").split(/\s+/).filter(Boolean);
+      }
+      const SEP=new Set([",","AND"]);
+      const HARD=new Set([".",":",";","(",")"]);
+
+      // lit une série de refs après un mot-clé, séparateur obligatoire entre deux
+      function series(w,i,kw,ok){
+        const out=[]; let j=i+1, expectRef=true;
+        while(j<w.length){
+          let t=w[j];
+          if(HARD.has(t)) break;
+          if(SEP.has(t)){ if(out.length){expectRef=true; j++; continue;} break; }
+          if(kw.has(t)){ expectRef=true; j++; continue; }
+          if(!expectRef) break;                    // pas de séparateur -> on arrête
+          if(NATO[t]) t=NATO[t];
+          // plage "X TO Y"
+          if(w[j+1]==="TO" && ok(t) && ok(w[j+2])){
+            const r=range(t,w[j+2]);
+            if(r){ r.forEach(x=>out.push(x)); j+=3; expectRef=false; continue; }
+          }
+          const rg=range2(t);
+          if(rg){ rg.forEach(x=>out.push(x)); j++; expectRef=false; continue; }
+          if(!STOP.has(t) && ok(t)){ out.push(t); j++; expectRef=false; continue; }
+          break;
+        }
+        return out;
+      }
+      function range(a,b){
+        const m=a.match(/^([A-Z]{0,2})(\d{1,3})$/), n=b.match(/^([A-Z]{0,2})(\d{1,3})$/);
+        if(!m||!n||m[1]!==n[1]) return null;
+        const x=+m[2], y=+n[2]; if(y<x||y-x>40) return null;
+        const o=[]; for(let i=x;i<=y;i++)o.push(m[1]+i); return o;
+      }
+      const range2=s=>{const m=s.match(/^([A-Z]{0,2})(\d{1,3})-([A-Z]{0,2})(\d{1,3})$/);
+        return m?range(m[1]+m[2],m[3]+m[4]):null;};
+
+      function refsFromNotam(e){
+        const w=lex(e), T=" "+(e||"").toUpperCase()+" ";
+        const twy=new Set(),rwy=new Set(),stand=new Set(),apron=new Set(),partial=[];
+        const okT=t=>TWY_REF.test(t), okS=t=>/^[A-Z]{0,2}\d{1,3}$/.test(t);
+        for(let i=0;i<w.length;i++){
+          const k=w[i];
+          if(TWY_KW.has(k))  series(w,i,TWY_KW,okT).forEach(x=>twy.add(x));
+          if(STD_KW.has(k))  series(w,i,STD_KW,okS).forEach(x=>stand.add(x));
+          if(APR_KW.has(k)){ let t=w[i+1]; if(t&&!STOP.has(t)){ if(NATO[t])apron.add(NATO[t]);
+            else if(/^[A-Z]{1,2}\d{0,2}$/.test(t))apron.add(t); } }
+        }
+        // pistes : forme espacée ET collée (RWY21L, RWY03R)
+        let m; const rw=/\bRWY\s*(\d{2}[LRC]?)(?:\/(\d{2}[LRC]?))?/g;
+        while((m=rw.exec(T))){ rwy.add(m[1]); if(m[2])rwy.add(m[2]); }
+        const bt=/\b(?:BTN|BTWN|BETWEEN)\s+(?:TWY\s+)?([A-Z]{1,3}\d{0,3})\s+AND\s+(?:TWY\s+)?([A-Z]{1,3}\d{0,3})\b/g;
+        while((m=bt.exec(T))) if(!STOP.has(m[1])&&!STOP.has(m[2])) partial.push([m[1],m[2]]);
+        const hit=twy.size||rwy.size||stand.size||apron.size;
+        return {twy:[...twy],rwy:[...rwy],stand:[...stand],apron:[...apron],partial,hit:!!hit};
+      }
+
+    /* Le Q-code fait autorité quand il parle ; le texte ne comble que son silence.
+       Sans cette règle, le filet textuel de l'app (qui ajoute « sol » dès qu'il
+       voit MAINT ou WIP) peindrait des surfaces à tort : « ILS RWY 32L U/S DUE TO
+       MAINT » colorierait la piste alors que le NOTAM ne parle que de l'ILS. */
+    function paintsGround(n) {
+      const qc = categoriesFromQcode(n.qcode);
+      if (qc.size) return qc.has("sol");
+      return n.categories.includes("sol");
+    }
+
+    /* Fusion des tronçons OSM par ref : LFPG expose 788 objets « taxiway » pour
+       200 taxiways réels. On rassemble, sinon une étiquette par tronçon. */
+    function buildSurfaces(layout) {
+      const byRef = new Map(), loose = [];
+      for (const f of layout.f) {
+        if (!f.g || !f.g.length) continue;
+        if (f.r) {
+          const k = f.t + ":" + f.r;
+          if (!byRef.has(k)) byRef.set(k, { t: f.t, r: f.r, segs: [] });
+          byRef.get(k).segs.push(f.g);
+        } else loose.push({ t: f.t, r: null, segs: [f.g] });
+      }
+      return [...byRef.values(), ...loose];
+    }
+
+    const PLAN_RANK = { critical: 0, caution: 1, info: 2 };
+    const PLAN_COL = { critical: "#ff5d6c", caution: "#f6b23e", info: "#34d39a" };
+    const PLAN_W = { rwy: 9, twy: 4.2, apr: 1, std: 0 };
+    const KIND2T = { twy: "twy", rwy: "rwy", stand: "std", apron: "apr" };
+
+    let plan = null;   // tout l'état du plan courant
+
+    function planBuild(layout, notams) {
+      const SURF = buildSurfaces(layout);
+      /* Une piste porte DEUX noms. OSM l'indexe sous la paire (« 14L/32R »),
+         un NOTAM la cite indifféremment par la paire ou par un seul QFU
+         (« RWY 32R U/S »). On indexe donc sous les trois clés, sinon une piste
+         fermée reste grise — l'erreur la plus grave que ce plan puisse faire. */
+      const INDEX = new Map();
+      const idx = (k, s) => { if (!INDEX.has(k)) INDEX.set(k, []); if (!INDEX.get(k).includes(s)) INDEX.get(k).push(s); };
+      for (const s of SURF) if (s.r) {
+        idx(s.t + ":" + s.r, s);
+        if (s.t === "rwy" && s.r.includes("/"))
+          for (const end of s.r.split("/")) { const e = end.trim(); if (e) idx("rwy:" + e, s); }
+      }
+      const ground = notams.filter(paintsGround);
+      const TOUCH = new Map(), located = new Set();
+      for (const n of ground) {
+        const refs = refsFromNotam(n.e || "");
+        for (const kind of ["twy", "rwy", "stand", "apron"]) {
+          for (const ref of refs[kind]) {
+            const hits = INDEX.get(KIND2T[kind] + ":" + ref);
+            if (!hits) continue;
+            located.add(n.id);
+            for (const s of hits) {
+              if (!TOUCH.has(s)) TOUCH.set(s, []);
+              if (!TOUCH.get(s).includes(n)) TOUCH.get(s).push(n);
+            }
+          }
+        }
+      }
+      const lat0 = layout.arp[0], lon0 = layout.arp[1];
+      const KX = Math.cos(lat0 * Math.PI / 180);
+      const px = ([la, lo]) => [(lo - lon0) * KX, -(la - lat0)];
+      let x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9;
+      for (const s of SURF) for (const g of s.segs) for (const p of g) {
+        const [x, y] = px(p);
+        if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y;
+      }
+      if (!(x1 > x0)) { x0 -= 1e-4; x1 += 1e-4; }
+      if (!(y1 > y0)) { y0 -= 1e-4; y1 += 1e-4; }
+      return { layout, SURF, TOUCH, ground, located, px, B: { x0, y0, x1, y1 },
+               view: { k: 1, tx: 0, ty: 0 }, fit: { s: 1, ox: 0, oy: 0 }, sel: null };
+    }
+
+    const planWorst = arr => arr.reduce((a, n) => PLAN_RANK[n.severity] < PLAN_RANK[a] ? n.severity : a, "info");
+
+    /* Le temps est le SEUL filtre qui agit sur le plan. La sévérité et la
+       catégorie filtrent la liste, pas la réalité physique de la plateforme :
+       un taxiway fermé reste fermé même si on regarde « Information ». */
+    const planShown = n => !timeWin || activeAt(n, timeWin);
+    const planSpan = () => timeMode === "today" || timeMode === "tomorrow";
+
+    /* Deux rendus, dictés par la QUESTION et non par le NOTAM :
+         Now / heure précise -> instant. Réponse ferme : trait plein.
+         Today / Tomorrow    -> plage. Actif « à un moment » : pointillé.
+       Rien d'actif dans la fenêtre -> vierge. */
+    function planState(s) {
+      const ns = plan.TOUCH.get(s);
+      if (!ns || !ns.length) return null;
+      const act = ns.filter(planShown);
+      if (!act.length) return null;
+      return { state: planSpan() ? "span" : "instant", col: PLAN_COL[planWorst(act)], ns: act };
+    }
+
+    /* ---------- rendu ---------- */
+    let planDPR = Math.min(devicePixelRatio || 1, 2);
+    const planSC = p => {
+      const [x, y] = plan.px(p), f = plan.fit, v = plan.view;
+      return [(x * f.s + f.ox) * v.k + v.tx, (y * f.s + f.oy) * v.k + v.ty];
+    };
+    function planResize() {
+      const cv = $("#planCv"); if (!cv || !plan) return;
+      const B = plan.B, AR = (B.x1 - B.x0) / (B.y1 - B.y0);
+      // le cadre épouse l'emprise : un terrain en portrait n'obtient pas un
+      // canvas paysage à moitié vide.
+      const HMAX = Math.min(560, Math.round(innerHeight * 0.56));
+      cv.style.maxWidth = Math.round(HMAX * AR) + "px";
+      cv.style.aspectRatio = String(AR);
+      const w = cv.clientWidth || 320, h = Math.max(120, Math.round(w / AR));
+      cv.width = w * planDPR; cv.height = h * planDPR;
+      const pad = 30;
+      const sx = (w - pad * 2) / (B.x1 - B.x0), sy = (h - pad * 2) / (B.y1 - B.y0);
+      plan.fit.s = Math.min(sx, sy);
+      plan.fit.ox = pad + ((w - pad * 2) - (B.x1 - B.x0) * plan.fit.s) / 2 - B.x0 * plan.fit.s;
+      plan.fit.oy = pad + ((h - pad * 2) - (B.y1 - B.y0) * plan.fit.s) / 2 - B.y0 * plan.fit.s;
+      planDraw();
+    }
+    function planStroke(ctx, g, w, col, glow, dash) {
+      if (g.length < 2) return;
+      ctx.beginPath();
+      const a = planSC(g[0]); ctx.moveTo(a[0], a[1]);
+      for (let i = 1; i < g.length; i++) { const p = planSC(g[i]); ctx.lineTo(p[0], p[1]); }
+      ctx.save();
+      if (glow) { ctx.shadowColor = col; ctx.shadowBlur = 11 * planDPR; }
+      if (dash) { ctx.setLineDash([7 * planDPR, 5.5 * planDPR]); ctx.globalAlpha = .62; }
+      ctx.strokeStyle = col; ctx.lineWidth = w * planDPR * Math.min(plan.view.k, 2.2);
+      ctx.lineCap = dash ? "butt" : "round"; ctx.lineJoin = "round"; ctx.stroke();
+      ctx.restore();
+    }
+    function planFill(ctx, g, col) {
+      if (g.length < 3) return;
+      ctx.beginPath();
+      const a = planSC(g[0]); ctx.moveTo(a[0], a[1]);
+      for (let i = 1; i < g.length; i++) { const p = planSC(g[i]); ctx.lineTo(p[0], p[1]); }
+      ctx.closePath(); ctx.fillStyle = col; ctx.fill();
+    }
+    /* Étiquettes : anti-collision gloutonne. Une surface surlignée ne perd jamais
+       son nom — plusieurs points sont tentés le long du tracé, puis on force.
+       Un taxiway coloré sans nom attire l'œil sans rien dire. */
+    let planBoxes = [];
+    function planPlace(ctx, text, x, y, col, mode, force) {
+      const on = mode === "instant", pend = mode === "span";
+      ctx.font = (on ? "600 " : "500 ") + (on ? 11.5 : 10.5) * planDPR + "px 'IBM Plex Mono',monospace";
+      const w = ctx.measureText(text).width + 9 * planDPR, h = 15 * planDPR;
+      const bx = x - w / 2, by = y - h / 2;
+      if (!force) for (const b of planBoxes)
+        if (!(bx > b.x + b.w || bx + w < b.x || by > b.y + b.h || by + h < b.y)) return false;
+      planBoxes.push({ x: bx, y: by, w, h });
+      ctx.save();
+      if (pend) ctx.globalAlpha = .72;
+      ctx.fillStyle = on ? "rgba(14,17,20,.93)" : "rgba(14,17,20,.8)";
+      ctx.beginPath(); ctx.roundRect(bx, by, w, h, 4 * planDPR); ctx.fill();
+      if (on) { ctx.strokeStyle = col; ctx.lineWidth = 1 * planDPR; ctx.stroke(); }
+      else if (pend) {
+        ctx.setLineDash([3 * planDPR, 2.5 * planDPR]); ctx.strokeStyle = col;
+        ctx.lineWidth = 1 * planDPR; ctx.stroke(); ctx.setLineDash([]);
+      }
+      ctx.fillStyle = (on || pend) ? col : "#828a91";
+      ctx.textAlign = "center"; ctx.textBaseline = "middle";
+      ctx.fillText(text, x, y + 0.5 * planDPR);
+      ctx.restore();
+      return true;
+    }
+    function planLongest(segs) {
+      let best = null, len = -1;
+      for (const g of segs) {
+        let L = 0;
+        for (let i = 1; i < g.length; i++) {
+          const a = plan.px(g[i - 1]), b = plan.px(g[i]); L += Math.hypot(a[0] - b[0], a[1] - b[1]);
+        }
+        if (L > len) { len = L; best = g; }
+      }
+      return best;
+    }
+    function planLabel(ctx, text, segs, col, mode) {
+      const g = planLongest(segs); if (!g) return;
+      const pts = [0.5, 0.35, 0.65, 0.2, 0.8].map(t =>
+        planSC(g[Math.min(g.length - 1, Math.round(t * (g.length - 1)))]));
+      for (const [x, y] of pts) if (planPlace(ctx, text, x, y, col, mode, false)) return;
+      if (mode !== "off" && pts.length) planPlace(ctx, text, pts[0][0], pts[0][1], col, mode, true);
+    }
+    function planDraw() {
+      const cv = $("#planCv"); if (!cv || !plan) return;
+      const ctx = cv.getContext("2d");
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      ctx.clearRect(0, 0, cv.width, cv.height);
+      planBoxes = [];
+      const S = plan.SURF;
+      for (const s of S) if (s.t === "apr") for (const g of s.segs) planFill(ctx, g, "#222a32");
+      for (const s of S) if (s.t === "rwy") for (const g of s.segs) planStroke(ctx, g, PLAN_W.rwy, "#454f5b", false);
+      for (const s of S) if (s.t === "twy") for (const g of s.segs) planStroke(ctx, g, PLAN_W.twy, "#2c343d", false);
+      for (const s of S) if (s.t === "std") for (const g of s.segs) {
+        const p = planSC(g[0]); ctx.beginPath();
+        ctx.arc(p[0], p[1], 1.8 * planDPR * Math.min(plan.view.k, 2), 0, 7);
+        ctx.fillStyle = "#39434e"; ctx.fill();
+      }
+      const drawn = S.map(s => ({ s, st: planState(s) })).filter(x => x.st);
+      for (const { s, st } of drawn) {
+        const dim = st.state === "span", col = st.col;
+        if (s.t === "std") {
+          for (const g of s.segs) {
+            const p = planSC(g[0]); ctx.save();
+            ctx.beginPath(); ctx.arc(p[0], p[1], 3.4 * planDPR * Math.min(plan.view.k, 2), 0, 7);
+            if (dim) { ctx.globalAlpha = .7; ctx.strokeStyle = col; ctx.lineWidth = 1.5 * planDPR; ctx.stroke(); }
+            else { ctx.shadowColor = col; ctx.shadowBlur = 9 * planDPR; ctx.fillStyle = col; ctx.fill(); }
+            ctx.restore();
+          }
+          continue;
+        }
+        if (s.t === "apr") {
+          for (const g of s.segs) { if (!dim) planFill(ctx, g, col + "26"); planStroke(ctx, g, 1.6, col, false, dim); }
+          continue;
+        }
+        for (const g of s.segs) planStroke(ctx, g, s.t === "rwy" ? PLAN_W.rwy : PLAN_W.twy, col, !dim, dim);
+      }
+      const lab = S.filter(s => s.r && (s.t === "twy" || s.t === "rwy"));
+      const st_ = new Map(drawn.map(x => [x.s, x.st]));
+      for (const s of lab) if (st_.get(s)) planLabel(ctx, s.r, s.segs, st_.get(s).col, st_.get(s).state);
+      if (plan.view.k > 1.15) for (const s of lab) if (!st_.get(s)) planLabel(ctx, s.r, s.segs, "#828a91", "off");
+    }
+
+    /* ---------- compteur d'honnêteté ---------- */
+    function planTally() {
+      const g = plan.ground.filter(planShown);
+      const loc = g.filter(n => plan.located.has(n.id)).length;
+      const un = g.length - loc;
+      const el = $("#planTally"); if (!el) return;
+      const scope = timeWin ? (timeMode === "today" ? "today" : timeMode === "tomorrow" ? "tomorrow" : "in the selected window") : "in total";
+      el.innerHTML = `<b>${loc}</b> of <b>${g.length}</b> ground NOTAM${g.length === 1 ? "" : "s"} shown on the layout ${scope}.` +
+        (un ? ` <span class="warn">${un} could not be placed</span> — read the full list.` : "");
+    }
+
+    /* ---------- interaction ---------- */
+    function planPick(mx, my) {
+      let best = null, bd = 15 * planDPR;
+      for (const s of plan.SURF) {
+        if (!planState(s)) continue;
+        for (const g of s.segs) {
+          if (s.t === "std") {
+            const p = planSC(g[0]); const d = Math.hypot(p[0] - mx, p[1] - my);
+            if (d < bd) { bd = d; best = s; }
+            continue;
+          }
+          for (let i = 1; i < g.length; i++) {
+            const a = planSC(g[i - 1]), b = planSC(g[i]);
+            const d = planDistSeg(mx, my, a[0], a[1], b[0], b[1]);
+            if (d < bd) { bd = d; best = s; }
+          }
+        }
+      }
+      return best;
+    }
+    function planDistSeg(px_, py_, x1, y1, x2, y2) {
+      const dx = x2 - x1, dy = y2 - y1, L = dx * dx + dy * dy;
+      let t = L ? ((px_ - x1) * dx + (py_ - y1) * dy) / L : 0;
+      t = Math.max(0, Math.min(1, t));
+      return Math.hypot(px_ - (x1 + t * dx), py_ - (y1 + t * dy));
+    }
+    function planShowPick(s) {
+      const el = $("#planPick"); if (!el) return;
+      if (!s) { el.innerHTML = ""; return; }
+      const st = planState(s); if (!st) { el.innerHTML = ""; return; }
+      const T = { twy: "TWY", rwy: "RWY", std: "STAND", apr: "APRON" }[s.t] || s.t;
+      el.innerHTML = st.ns.map(n => `<article class="strip ${n.severity}" style="margin-bottom:8px">
+        <div class="rail"></div>
+        <div class="body">
+          <div class="shead">
+            <span class="sled"></span><span class="nid">${esc(n.id)}</span>
+            <span class="qc">${esc(n.qcode || "—")}</span>
+            <div class="tags"><span class="tag sol">${T} ${esc(s.r || "")}</span></div>
+          </div>
+          <div class="etext">${esc(n.e || n.raw)}</div>
+          <div class="meta">
+            <span><b>Start</b> <span class="v">${fmtDate(n.b)}</span></span>
+            <span><b>End</b> <span class="v">${fmtDate(n.c)}</span></span>
+            ${n.d ? `<span><b>Schedule</b> <span class="v">${esc(n.d)}</span></span>` : ""}
+          </div>
+        </div></article>`).join("");
+    }
+
+    /* ---------- ouverture ---------- */
+    function planLegend() {
+      return `<div class="plan-legend">
+        <span><i style="background:${PLAN_COL.critical}"></i>CRITICAL</span>
+        <span><i style="background:${PLAN_COL.caution}"></i>CAUTION</span>
+        <span><i style="background:${PLAN_COL.info}"></i>INFO</span>
+        <span style="margin-left:auto"><i class="dash"></i>ACTIVE AT SOME POINT IN RANGE</span>
+      </div>`;
+    }
+    function planWire() {
+      const cv = $("#planCv"); if (!cv) return;
+      let drag = null;
+      cv.addEventListener("pointerdown", e => {
+        cv.setPointerCapture(e.pointerId);
+        drag = { x: e.clientX, y: e.clientY, tx: plan.view.tx, ty: plan.view.ty, moved: false };
+      });
+      cv.addEventListener("pointermove", e => {
+        if (!drag) return;
+        const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
+        if (Math.abs(dx) + Math.abs(dy) > 4) drag.moved = true;
+        plan.view.tx = drag.tx + dx * planDPR; plan.view.ty = drag.ty + dy * planDPR;
+        planDraw();
+      });
+      cv.addEventListener("pointerup", e => {
+        const wasDrag = drag && drag.moved; drag = null;
+        if (wasDrag) return;
+        const r = cv.getBoundingClientRect();
+        const mx = (e.clientX - r.left) * (cv.width / r.width);
+        const my = (e.clientY - r.top) * (cv.height / r.height);
+        const s = planPick(mx, my);
+        plan.sel = s; planShowPick(s);
+      });
+      cv.addEventListener("wheel", e => {
+        e.preventDefault();
+        const r = cv.getBoundingClientRect();
+        const mx = (e.clientX - r.left) * (cv.width / r.width);
+        const my = (e.clientY - r.top) * (cv.height / r.height);
+        const k0 = plan.view.k;
+        const k = Math.max(1, Math.min(8, k0 * (e.deltaY < 0 ? 1.18 : 1 / 1.18)));
+        plan.view.tx = mx - (mx - plan.view.tx) * (k / k0);
+        plan.view.ty = my - (my - plan.view.ty) * (k / k0);
+        plan.view.k = k;
+        if (k === 1) { plan.view.tx = 0; plan.view.ty = 0; }
+        planDraw();
+      }, { passive: false });
+    }
+
+    /* Le bouton ne promet que ce qui existe. L'index est chargé une fois et dit
+       qui a un plan : sans lui, un clic sur un terrain sans géométrie répondrait
+       404 à un pilote — une promesse rompue vaut moins qu'une absence de bouton. */
+    async function updatePlanBtn(icao) {
+      const btn = $("#planBtn"); if (!btn) return;
+      btn.hidden = true;
+      if (!icao) return;
+      await loadPlanIndex();
+      if (currentIcao !== icao) return;
+      btn.hidden = !hasPlan(icao);
+      btn.title = planIndex[icao] === 1
+        ? "Layout — runways only, taxiways unnamed in OpenStreetMap"
+        : "Aerodrome layout";
+    }
+
+    async function openPlan() {
+      const icao = currentIcao;
+      const ov = $("#planOv"), body = $("#planBody");
+      $("#planIcao").textContent = icao || "—";
+      $("#planSub").textContent = "";
+      ov.hidden = false;
+      body.innerHTML = `<div class="plan-msg"><div class="spinner"></div>Loading layout…</div>`;
+      if (!icao) { body.innerHTML = `<div class="plan-msg">Load an aerodrome first.</div>`; return; }
+
+      const layout = await fetchLayout(icao);
+      if ($("#planOv").hidden || currentIcao !== icao) return;   // fermé ou terrain changé entre-temps
+      if (!layout) {
+        body.innerHTML = `<div class="plan-msg">No layout available for <b>${esc(icao)}</b>.<br>
+          OpenStreetMap has no mapped surfaces for this aerodrome.</div>`;
+        return;
+      }
+      plan = planBuild(layout, current);
+      const nTwy = plan.SURF.filter(s => s.t === "twy" && s.r).length;
+      const nRwy = plan.SURF.filter(s => s.t === "rwy" && s.r).length;
+      $("#planSub").textContent = `${nRwy} runway${nRwy === 1 ? "" : "s"} · ${nTwy} named taxiway${nTwy === 1 ? "" : "s"}`;
+      body.innerHTML = `<canvas id="planCv"></canvas>
+        ${planLegend()}
+        <div class="plan-tally" id="planTally"></div>
+        <div class="plan-pick" id="planPick"></div>
+        <div class="plan-foot">INDICATIVE · NOT AIP-COMPLIANT · NOT FOR NAVIGATION · © OpenStreetMap contributors, ODbL</div>`;
+      planWire();
+      planResize();
+      planTally();
+    }
+    addEventListener("resize", () => { if (!$("#planOv").hidden && plan) planResize(); });
+
+    // rattrapage : si un terrain était déjà affiché quand ce script s'est chargé
+    if (currentIcao) updatePlanBtn(currentIcao);
+
     if ("serviceWorker" in navigator) {
       navigator.serviceWorker.register("./sw.js").catch(() => { });
     }
