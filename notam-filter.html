@@ -429,6 +429,16 @@
       margin: 18px 0 0
     }
 
+    /* Les actions du terrain (info, plan) sont poussées contre le bord droit :
+       le nom garde sa place à gauche, les boutons ne migrent plus avec lui. */
+    .station-actions {
+      margin-left: auto;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex: none
+    }
+
     .stationcode {
       font: 600 22px/1 var(--mono);
       letter-spacing: .14em;
@@ -508,9 +518,19 @@
       outline-offset: 2px
     }
 
+    /* Le nom prend la place restante et se tronque au besoin. Sans ceci, un nom
+       long (FHAW : « Ascension Island · Saint Helena, Ascension and Tristan da
+       Cunha ») fait enfler la ligne sur 8 lignes en 320px ; et un mot insécable
+       (KAPG : « Aberdeen Proving Grounds(Aberdeen) », sans espace avant la
+       parenthèse) déborde et décolle les icônes du bord droit. */
     .stationname {
-      font: 500 13px/1 var(--sans);
-      color: var(--muted)
+      font: 500 13px/1.3 var(--sans);
+      color: var(--muted);
+      flex: 1 1 auto;
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap
     }
 
     .suggest {
@@ -996,6 +1016,35 @@
     .help-btn:hover {
       border-color: var(--cyan);
       background: #202a33
+    }
+
+    /* Panneau de guidage : il garde ses couleurs réelles (jaune/noir) — c'est un
+       objet du monde, pas un pictogramme, donc il ne suit pas le thème. Posé dans
+       la ligne station, il suit le traitement de #infoBtn : pastille sans rond,
+       le fond du panneau lui suffit. */
+    .planbtn {
+      flex: none;
+      border: 0;
+      background: transparent;
+      padding: 0;
+      cursor: pointer;
+      border-radius: 3px;
+      line-height: 0;
+      transition: transform .12s, opacity .12s
+    }
+
+    .planbtn:hover {
+      transform: scale(1.06)
+    }
+
+    .planbtn:focus-visible {
+      outline: 2px solid var(--cyan);
+      outline-offset: 3px
+    }
+
+    .planbtn svg {
+      display: block;
+      height: auto
     }
 
     .modal-ov {
@@ -2154,6 +2203,10 @@
         font-size: 12px
       }
 
+      .planbtn svg {
+        width: 34px
+      }
+
       .hdr-actions {
         gap: 2px
       }
@@ -2324,6 +2377,15 @@ m10970 -3289 c90 -8 172 -14 182 -14 15 0 19 -9 22 -37 l3 -38 69 -3 69 -3 -6
 1259 15 883 0 1115 -3 1118 -12z M320 2225 l-45 -24 8610 0 8610 0 -30 24 -30
 25 -8535 -1 -8535 0 -45 -24z"/>
 </g></symbol>
+<symbol id="icon-plansign" viewBox="0 0 34 14">
+  <rect x=".5" y=".5" width="33" height="13" rx="1.6" fill="#111417"/>
+  <rect x="11.4" y=".5" width="22.1" height="13" rx="1.6" fill="#f5c518"/>
+  <rect x="11.4" y=".5" width="1.2" height="13" fill="#f5c518"/>
+  <text x="6" y="10.6" font-family="'IBM Plex Sans',sans-serif" font-weight="700"
+        font-size="10" fill="#f5c518" text-anchor="middle">B</text>
+  <text x="22.5" y="10.4" font-family="'IBM Plex Sans',sans-serif" font-weight="700"
+        font-size="9.4" fill="#111417" text-anchor="middle">&#8592;C&#8594;</text>
+</symbol>
   </defs>
 </svg>
   <header>
@@ -2357,14 +2419,19 @@ m10970 -3289 c90 -8 172 -14 182 -14 15 0 19 -9 22 -37 l3 -38 69 -3 69 -3 -6
       <span class="stationcode" id="stationCode">—</span>
       <button class="starbtn" id="star" aria-pressed="false" aria-label="Add to favorites"
         title="Add / remove from favorites">☆</button>
-      <button class="help-btn" id="infoBtn" aria-label="Airport info" title="Airport info" style="margin-left:4px;border:none;background:transparent;padding:0">
-        <svg viewBox="0 0 24 24" width="26" height="26" aria-hidden="true">
-          <rect x="1" y="1" width="22" height="22" rx="5" fill="#16232f"/>
-          <circle cx="12" cy="7" r="1.9" fill="#fff"/>
-          <rect x="10.1" y="10.6" width="3.8" height="9" rx="1.9" fill="#fff"/>
-        </svg>
-      </button>
       <span class="stationname" id="stationName"></span>
+      <div class="station-actions">
+        <button class="help-btn" id="infoBtn" aria-label="Airport info" title="Airport info" style="border:none;background:transparent;padding:0">
+          <svg viewBox="0 0 24 24" width="26" height="26" aria-hidden="true">
+            <rect x="1" y="1" width="22" height="22" rx="5" fill="#16232f"/>
+            <circle cx="12" cy="7" r="1.9" fill="#fff"/>
+            <rect x="10.1" y="10.6" width="3.8" height="9" rx="1.9" fill="#fff"/>
+          </svg>
+        </button>
+        <button class="planbtn" id="planBtn" aria-label="Plan de la plateforme" title="Plan de la plateforme">
+          <svg viewBox="0 0 34 14" width="42" aria-hidden="true"><use href="#icon-plansign"/></svg>
+        </button>
+      </div>
     </div>
 
     <div class="offline-banner" id="offlineBanner" hidden></div>
@@ -2445,6 +2512,18 @@ m10970 -3289 c90 -8 172 -14 182 -14 15 0 19 -9 22 -37 l3 -38 69 -3 69 -3 -6
   <div class="map-ov" id="mapOv" hidden>
     <button class="map-x" id="mapClose" aria-label="Back">←</button>
     <canvas id="routeMap"></canvas>
+  </div>
+
+  <div class="modal-ov" id="planOv" hidden>
+    <div class="modal" role="dialog" aria-modal="true" aria-label="Plan de la plateforme">
+      <button class="modal-x" id="planClose" aria-label="Close">×</button>
+      <div class="hd-scroll">
+        <h2 class="hd-title">Plan plateforme — <span id="planIcao">—</span></h2>
+        <div class="hd-note">Vue en construction. Le rendu, le surlignage des taxiways
+          et le filtre horaire sont validés sur banc d'essai ; il reste à brancher la
+          source de géométrie (<b>/api/layout/:icao</b>) sur le proxy.</div>
+      </div>
+    </div>
   </div>
 
   <div class="modal-ov" id="helpOv" hidden>
@@ -10162,7 +10241,9 @@ function renderInfo(icao) {
       const m = AIRPORTS[icao];
       $("#station").hidden = false;
       $("#stationCode").textContent = icao;
-      $("#stationName").textContent = m ? `${m.city} · ${m.cc}` : "";
+      const full = m ? `${m.city} · ${m.cc}` : "";
+      $("#stationName").textContent = full;
+      $("#stationName").title = full;      // tronqué à l'écran, entier au survol
       updateStar();
     }
     function updateStar() {
@@ -10450,10 +10531,16 @@ function renderInfo(icao) {
     };
 
     /* ---- fenêtre d'aide (?) ---- */
+    $("#planBtn").onclick = () => {
+      $("#planIcao").textContent = currentIcao || "—";
+      $("#planOv").hidden = false;
+    };
+    $("#planClose").onclick = () => { $("#planOv").hidden = true; };
+    $("#planOv").onclick = e => { if (e.target === $("#planOv")) $("#planOv").hidden = true; };
     $("#helpBtn").onclick = () => { $("#helpOv").hidden = false; };
     $("#helpClose").onclick = () => { $("#helpOv").hidden = true; };
     $("#helpOv").onclick = e => { if (e.target === $("#helpOv")) $("#helpOv").hidden = true; };
-    document.addEventListener("keydown", e => { if (e.key === "Escape") { $("#helpOv").hidden = true; $("#infoOv").hidden = true; } });
+    document.addEventListener("keydown", e => { if (e.key === "Escape") { $("#helpOv").hidden = true; $("#infoOv").hidden = true; $("#planOv").hidden = true; } });
     $("#infoBtn").onclick = () => {
       if (!currentIcao) return;
       $("#infoTitle").textContent = currentIcao + " — Airport info";
