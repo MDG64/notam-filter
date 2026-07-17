@@ -1402,6 +1402,26 @@
     /* Pas de width:fit-content ici : le canvas est en width:100%, les deux se
        référencent l'un l'autre et le conteneur s'effondre. C'est le conteneur
        qui porte la largeur max, calculée dans planResize. */
+    .plan-time {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      flex-wrap: wrap;
+      margin-bottom: 10px
+    }
+
+    .plan-time .btn {
+      padding: 6px 13px;
+      font-size: 11.5px
+    }
+
+    .plan-time-note {
+      font: 500 10px/1.3 var(--mono);
+      color: var(--muted2);
+      letter-spacing: .05em;
+      margin-left: auto
+    }
+
     .plan-cvwrap {
       position: relative;
       margin: 0 auto
@@ -10584,8 +10604,7 @@ function renderInfo(icao) {
     }
 
     function render() {
-      // Le plan est ouvert : il doit suivre le filtre horaire, et lui seul.
-      if (plan && !$("#planOv").hidden) { planDraw(); planTally(); planShowPick(plan.sel); }
+      // Le plan a son propre filtre horaire : la liste ne le touche pas.
       const c = counts();
       const base = baseSet();
       summary.innerHTML = `
@@ -12481,14 +12500,53 @@ window.addEventListener("scroll", hidePop, true);
       const lat0 = layout.arp[0], lon0 = layout.arp[1];
       const KX = Math.cos(lat0 * Math.PI / 180);
       const px = ([la, lo]) => [(lo - lon0) * KX, -(la - lat0)];
-      let x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9;
-      for (const s of SURF) for (const g of s.segs) for (const p of g) {
-        const [x, y] = px(p);
-        if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y;
+
+      const bb = SURF.map(s => {
+        let a = 1e9, b = 1e9, c = -1e9, d = -1e9;
+        for (const g of s.segs) for (const p of g) {
+          const [x, y] = px(p);
+          if (x < a) a = x; if (x > c) c = x; if (y < b) b = y; if (y > d) d = y;
+        }
+        return { x0: a, y0: b, x1: c, y1: d };
+      });
+      const box = idx => {
+        let a = 1e9, b = 1e9, c = -1e9, d = -1e9;
+        for (const i of idx) {
+          const q = bb[i];
+          if (q.x0 < a) a = q.x0; if (q.x1 > c) c = q.x1;
+          if (q.y0 < b) b = q.y0; if (q.y1 > d) d = q.y1;
+        }
+        if (!(c > a)) { a -= 1e-4; c += 1e-4; }
+        if (!(d > b)) { b -= 1e-4; d += 1e-4; }
+        return { x0: a, y0: b, x1: c, y1: d };
+      };
+
+      /* Deux emprises, et c'est voulu :
+           B    — TOUT, y compris les fragments isolés qu'OSM range dans le rayon
+                  d'extraction. Elle borne le déplacement : rien n'est inatteignable.
+           Bfit — le seul groupe CONNECTÉ, celui qui est l'aérodrome. Elle décide du
+                  cadrage d'ouverture.
+         Sans ce partage, un bout de bitume orphelin à 1 km étire le cadre et rapetisse
+         tout le terrain. À LFBO : 9 fragments sur 364 coûtaient 29 % de taille. Ils
+         restent dessinés — on les rejoint en dézoomant. */
+      const LINK = 0.8 / 111.32;      // 800 m : deux surfaces plus proches se touchent
+      const par = SURF.map((_, i) => i);
+      const find = a => { while (par[a] !== a) { par[a] = par[par[a]]; a = par[a]; } return a; };
+      const near = (p, q) => !(p.x0 - LINK > q.x1 || p.x1 + LINK < q.x0 ||
+                               p.y0 - LINK > q.y1 || p.y1 + LINK < q.y0);
+      for (let i = 0; i < SURF.length; i++)
+        for (let j = i + 1; j < SURF.length; j++)
+          if (near(bb[i], bb[j])) { const a = find(i), b = find(j); if (a !== b) par[b] = a; }
+      const comp = new Map();
+      for (let i = 0; i < SURF.length; i++) {
+        const r = find(i);
+        if (!comp.has(r)) comp.set(r, []);
+        comp.get(r).push(i);
       }
-      if (!(x1 > x0)) { x0 -= 1e-4; x1 += 1e-4; }
-      if (!(y1 > y0)) { y0 -= 1e-4; y1 += 1e-4; }
-      return { layout, SURF, TOUCH, ground, located, px, B: { x0, y0, x1, y1 },
+      const main = [...comp.values()].sort((a, b) => b.length - a.length)[0] || SURF.map((_, i) => i);
+
+      return { layout, SURF, TOUCH, ground, located, px,
+               B: box(SURF.map((_, i) => i)), Bfit: box(main),
                view: { k: 1, tx: 0, ty: 0 }, fit: { s: 1, ox: 0, oy: 0 }, sel: null };
     }
 
@@ -12507,11 +12565,29 @@ window.addEventListener("scroll", hidePop, true);
     }
     const planWorst = arr => arr.reduce((a, n) => PLAN_RANK[planSev(n)] < PLAN_RANK[a] ? planSev(n) : a, "info");
 
-    /* Le temps est le SEUL filtre qui agit sur le plan. La sévérité et la
-       catégorie filtrent la liste, pas la réalité physique de la plateforme :
-       un taxiway fermé reste fermé même si on regarde « Information ». */
-    const planShown = n => !timeWin || activeAt(n, timeWin);
-    const planSpan = () => timeMode === "today" || timeMode === "tomorrow";
+    /* Le plan a SON PROPRE filtre horaire. Il ne lit pas celui de la liste et ne
+       l'écrit pas : deux questions différentes, deux réponses. Sur la liste on
+       trie ce qu'on veut lire ; sur le plan on demande « à quoi ressemble le
+       terrain à tel moment ». Ouvrir le plan repart toujours de Today, quelle
+       que soit la liste derrière.
+       La sévérité et la catégorie, elles, n'agissent sur le plan ni de près ni
+       de loin : un taxiway fermé reste fermé même en filtre « Information ». */
+    let planTMode = "today";        // 'now' | 'today' | 'tomorrow'
+    let planTWin = null;
+
+    function planSetTime(mode) {
+      planTMode = mode;
+      if (mode === "now") { const d = new Date(); planTWin = windowFor(d.getUTCHours(), d.getUTCMinutes()); }
+      else planTWin = dayWindow(mode === "tomorrow" ? 1 : 0);
+      for (const m of ["now", "today", "tomorrow"]) {
+        const b = $("#planT-" + m);
+        if (b) b.classList.toggle("on", m === mode);
+      }
+      if (plan) { planDraw(); planTally(); planShowPick(plan.sel); }
+    }
+
+    const planShown = n => !planTWin || activeAt(n, planTWin);
+    const planSpan = () => planTMode !== "now";
 
     /* Deux rendus, dictés par la QUESTION et non par le NOTAM :
          Now / heure précise -> instant. Réponse ferme : trait plein.
@@ -12562,7 +12638,7 @@ window.addEventListener("scroll", hidePop, true);
 
     function planResize() {
       const cv = $("#planCv"); if (!cv || !plan) return;
-      const B = plan.B, AR = (B.x1 - B.x0) / (B.y1 - B.y0);
+      const B = plan.Bfit, AR = (B.x1 - B.x0) / (B.y1 - B.y0);
       // le cadre épouse l'emprise : un terrain en portrait n'obtient pas un
       // canvas paysage à moitié vide.
       // Sur mobile la modale est plein écran : le canvas peut prendre bien plus
@@ -12717,7 +12793,9 @@ window.addEventListener("scroll", hidePop, true);
       const loc = g.filter(n => plan.located.has(n.id)).length;
       const un = g.length - loc;
       const el = $("#planTally"); if (!el) return;
-      const scope = timeWin ? (timeMode === "today" ? "today" : timeMode === "tomorrow" ? "tomorrow" : "in the selected window") : "in total";
+      const scope = planTMode === "today" ? "today"
+                  : planTMode === "tomorrow" ? "tomorrow"
+                  : "right now";
       el.innerHTML = `<b>${loc}</b> of <b>${g.length}</b> ground NOTAM${g.length === 1 ? "" : "s"} shown on the layout ${scope}.` +
         (un ? ` <span class="warn">${un} could not be placed</span> — read the full list.` : "");
     }
@@ -12893,7 +12971,13 @@ window.addEventListener("scroll", hidePop, true);
       const nTwy = plan.SURF.filter(s => s.t === "twy" && s.r).length;
       const nRwy = plan.SURF.filter(s => s.t === "rwy" && s.r).length;
       $("#planSub").textContent = `${nRwy} runway${nRwy === 1 ? "" : "s"} · ${nTwy} named taxiway${nTwy === 1 ? "" : "s"}`;
-      body.innerHTML = `<div class="plan-cvwrap">
+      body.innerHTML = `<div class="plan-time">
+          <button class="btn ghost" id="planT-now">Now</button>
+          <button class="btn ghost" id="planT-today">Today</button>
+          <button class="btn ghost" id="planT-tomorrow">Tomorrow</button>
+          <span class="plan-time-note" id="planTNote"></span>
+        </div>
+        <div class="plan-cvwrap">
           <canvas id="planCv"></canvas>
           <div class="plan-zoom">
             <button id="planZin"  aria-label="Zoom in"  title="Zoom in">+</button>
@@ -12905,8 +12989,12 @@ window.addEventListener("scroll", hidePop, true);
         <div class="plan-pick" id="planPick"></div>
         <div class="plan-foot">INDICATIVE · NOT AIP-COMPLIANT · NOT FOR NAVIGATION</div>`;
       planWire();
+      for (const m of ["now", "today", "tomorrow"]) {
+        const b = $("#planT-" + m);
+        if (b) b.onclick = () => planSetTime(m);
+      }
       planResize();
-      planTally();
+      planSetTime("today");   // le plan repart toujours de Today, quoi que dise la liste
     }
     addEventListener("resize", () => { if (!$("#planOv").hidden && plan) planResize(); });
 
