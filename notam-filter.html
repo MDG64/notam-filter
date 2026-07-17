@@ -12638,25 +12638,46 @@ window.addEventListener("scroll", hidePop, true);
 
     function planResize() {
       const cv = $("#planCv"); if (!cv || !plan) return;
-      const B = plan.Bfit, AR = (B.x1 - B.x0) / (B.y1 - B.y0);
-      // le cadre épouse l'emprise : un terrain en portrait n'obtient pas un
-      // canvas paysage à moitié vide.
-      // Sur mobile la modale est plein écran : le canvas peut prendre bien plus
-      // de hauteur. Sur desktop il reste dans une fenêtre, donc plus mesuré.
-      const HMAX = innerWidth < 640
-        ? Math.round(innerHeight * 0.70)
-        : Math.min(560, Math.round(innerHeight * 0.56));
       const wrap = cv.parentElement;
-      if (wrap && wrap.classList.contains("plan-cvwrap"))
-        wrap.style.maxWidth = Math.round(HMAX * AR) + "px";
-      cv.style.aspectRatio = String(AR);
-      const w = cv.clientWidth || 320, h = Math.max(120, Math.round(w / AR));
-      cv.width = w * planDPR; cv.height = h * planDPR;
-      /* Le cadrage se calcule en pixels PHYSIQUES, pas en pixels CSS : le canvas
-         fait planDPR fois la taille affichée. Calculer ici en CSS dessinerait le
-         terrain à 1/planDPR d'échelle, tassé dans le coin haut-gauche — les
-         épaisseurs de trait, elles, sont déjà multipliées par planDPR. */
-      const W = cv.width, H = cv.height, pad = 30 * planDPR;
+
+      /* Le cadre ne suit PLUS la forme du terrain. Un canvas taillé sur l'emprise
+         donne, à l'ouverture, le plus grand terrain possible — mais dès qu'on
+         zoome, c'est la taille de la FENÊTRE qui compte, pas celle du plan. Un
+         cadre large laisse voir le voisinage du taxiway qu'on inspecte ; un cadre
+         étroit oblige à déplacer sans cesse. On prend donc toute la place offerte,
+         et le terrain se centre dedans. Le prix : du noir autour à l'ouverture. */
+      if (wrap && wrap.classList.contains("plan-cvwrap")) wrap.style.maxWidth = "none";
+      cv.style.aspectRatio = "auto";
+      cv.style.width = "100%";
+
+      const availW = Math.max(160, (wrap ? wrap.clientWidth : 0) || 320);
+      // ce qui vit sous le canvas et doit rester visible
+      let after = 0;
+      for (const q of [".plan-tally", ".plan-foot"]) {
+        const e = document.querySelector("#planBody " + q);
+        if (e) after += e.getBoundingClientRect().height + 10;
+      }
+      /* La référence est le VIEWPORT, jamais le conteneur : sa hauteur dépend de
+         son contenu, donc du canvas — lui demander la place disponible revient à
+         demander à la boîte sa taille pour décider de sa taille. */
+      let availH;
+      if (innerWidth < 640) {
+        const top = (wrap || cv).getBoundingClientRect().top;   // sous l'en-tête et les boutons
+        availH = Math.max(240, innerHeight - top - after - 16);
+      } else {
+        availH = Math.max(320, Math.min(660, Math.round(innerHeight * 0.72) - after));
+      }
+
+      cv.style.height = availH + "px";
+      cv.width = Math.round(availW * planDPR);
+      cv.height = Math.round(availH * planDPR);
+
+      /* Le cadrage se calcule en pixels PHYSIQUES : le canvas fait planDPR fois
+         sa taille affichée, et les épaisseurs de trait sont déjà multipliées par
+         planDPR. Mélanger les deux unités dessinerait le terrain à 1/planDPR,
+         tassé dans le coin haut-gauche. */
+      const B = plan.Bfit;
+      const W = cv.width, H = cv.height, pad = 26 * planDPR;
       const sx = (W - pad * 2) / (B.x1 - B.x0), sy = (H - pad * 2) / (B.y1 - B.y0);
       plan.fit.s = Math.min(sx, sy);
       plan.fit.ox = pad + ((W - pad * 2) - (B.x1 - B.x0) * plan.fit.s) / 2 - B.x0 * plan.fit.s;
@@ -12993,8 +13014,10 @@ window.addEventListener("scroll", hidePop, true);
         const b = $("#planT-" + m);
         if (b) b.onclick = () => planSetTime(m);
       }
-      planResize();
+      // planSetTime d'abord : il remplit le compteur, dont planResize mesure la
+      // hauteur pour savoir combien de place il reste au canvas.
       planSetTime("today");   // le plan repart toujours de Today, quoi que dise la liste
+      planResize();
     }
     addEventListener("resize", () => { if (!$("#planOv").hidden && plan) planResize(); });
 
