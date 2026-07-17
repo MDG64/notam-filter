@@ -1399,6 +1399,53 @@
       letter-spacing: .04em
     }
 
+    /* Pas de width:fit-content ici : le canvas est en width:100%, les deux se
+       référencent l'un l'autre et le conteneur s'effondre. C'est le conteneur
+       qui porte la largeur max, calculée dans planResize. */
+    .plan-cvwrap {
+      position: relative;
+      margin: 0 auto
+    }
+
+    .plan-zoom {
+      position: absolute;
+      right: 8px;
+      bottom: 8px;
+      display: flex;
+      flex-direction: column;
+      gap: 5px
+    }
+
+    .plan-zoom button {
+      width: 34px;
+      height: 34px;
+      border-radius: 8px;
+      border: 1px solid var(--line2);
+      background: rgba(14, 17, 20, .72);
+      color: var(--text);
+      font: 600 16px/1 var(--sans);
+      cursor: pointer;
+      backdrop-filter: blur(4px);
+      display: flex;
+      align-items: center;
+      justify-content: center
+    }
+
+    body.light .plan-zoom button {
+      background: rgba(255, 255, 255, .82);
+      color: #1b2228
+    }
+
+    .plan-zoom button:hover {
+      border-color: var(--cyan);
+      color: var(--cyan)
+    }
+
+    .plan-zoom button:focus-visible {
+      outline: 2px solid var(--cyan);
+      outline-offset: 2px
+    }
+
     #planCv {
       display: block;
       width: 100%;
@@ -1452,6 +1499,42 @@
       letter-spacing: .06em;
       border-top: 1px solid var(--line);
       padding-top: 9px
+    }
+
+    /* Sur mobile, une modale à marges est un luxe : le plan a besoin de chaque
+       pixel. Elle passe plein écran, le canvas suit. */
+    @media (max-width: 640px) {
+      #planOv {
+        padding: 0
+      }
+
+      .modal.plan {
+        max-width: 100%;
+        width: 100%;
+        max-height: 100%;
+        height: 100dvh;
+        border-radius: 0;
+        border: 0
+      }
+
+      .modal.plan .hd-scroll {
+        max-height: 100dvh;
+        padding: 0
+      }
+
+      .plan-wrap {
+        padding: 10px 10px 16px
+      }
+
+      .plan-head {
+        margin-bottom: 8px
+      }
+
+      .plan-zoom button {
+        width: 40px;
+        height: 40px;
+        font-size: 18px
+      }
     }
 
     .plan-msg {
@@ -12448,13 +12531,48 @@ window.addEventListener("scroll", hidePop, true);
       const [x, y] = plan.px(p), f = plan.fit, v = plan.view;
       return [(x * f.s + f.ox) * v.k + v.tx, (y * f.s + f.oy) * v.k + v.ty];
     };
+    /* Le déplacement est borné : le terrain ne peut jamais quitter le cadre.
+       Sans ça, un doigt qui glisse laisse un rectangle noir et plus aucun repère
+       — on ne sait plus où est le plan, ni comment y revenir.
+         · terrain plus PETIT que le cadre -> il reste entièrement visible
+         · terrain plus GRAND -> le cadre reste entièrement couvert
+       Les deux cas tombent de la même formule : les bornes se croisent. */
+    function planClamp() {
+      const cv = $("#planCv"); if (!cv || !plan) return;
+      const B = plan.B, f = plan.fit, k = plan.view.k;
+      const x0 = (B.x0 * f.s + f.ox) * k, x1 = (B.x1 * f.s + f.ox) * k;
+      const y0 = (B.y0 * f.s + f.oy) * k, y1 = (B.y1 * f.s + f.oy) * k;
+      const cl = (v, a, b) => Math.min(Math.max(v, Math.min(a, b)), Math.max(a, b));
+      plan.view.tx = cl(plan.view.tx, cv.width - x1, -x0);
+      plan.view.ty = cl(plan.view.ty, cv.height - y1, -y0);
+    }
+
+    const PLAN_KMAX = 9;
+    // zoom en gardant un point fixe sous le doigt (ou le curseur)
+    function planZoomAt(mx, my, k) {
+      const k0 = plan.view.k;
+      k = Math.max(1, Math.min(PLAN_KMAX, k));
+      if (k === k0) return;
+      plan.view.tx = mx - (mx - plan.view.tx) * (k / k0);
+      plan.view.ty = my - (my - plan.view.ty) * (k / k0);
+      plan.view.k = k;
+      planClamp(); planDraw();
+    }
+    function planFit() { plan.view.k = 1; plan.view.tx = 0; plan.view.ty = 0; planClamp(); planDraw(); }
+
     function planResize() {
       const cv = $("#planCv"); if (!cv || !plan) return;
       const B = plan.B, AR = (B.x1 - B.x0) / (B.y1 - B.y0);
       // le cadre épouse l'emprise : un terrain en portrait n'obtient pas un
       // canvas paysage à moitié vide.
-      const HMAX = Math.min(560, Math.round(innerHeight * 0.56));
-      cv.style.maxWidth = Math.round(HMAX * AR) + "px";
+      // Sur mobile la modale est plein écran : le canvas peut prendre bien plus
+      // de hauteur. Sur desktop il reste dans une fenêtre, donc plus mesuré.
+      const HMAX = innerWidth < 640
+        ? Math.round(innerHeight * 0.70)
+        : Math.min(560, Math.round(innerHeight * 0.56));
+      const wrap = cv.parentElement;
+      if (wrap && wrap.classList.contains("plan-cvwrap"))
+        wrap.style.maxWidth = Math.round(HMAX * AR) + "px";
       cv.style.aspectRatio = String(AR);
       const w = cv.clientWidth || 320, h = Math.max(120, Math.round(w / AR));
       cv.width = w * planDPR; cv.height = h * planDPR;
@@ -12467,6 +12585,7 @@ window.addEventListener("scroll", hidePop, true);
       plan.fit.s = Math.min(sx, sy);
       plan.fit.ox = pad + ((W - pad * 2) - (B.x1 - B.x0) * plan.fit.s) / 2 - B.x0 * plan.fit.s;
       plan.fit.oy = pad + ((H - pad * 2) - (B.y1 - B.y0) * plan.fit.s) / 2 - B.y0 * plan.fit.s;
+      planClamp();
       planDraw();
     }
     function planStroke(ctx, g, w, col, glow, dash) {
@@ -12654,40 +12773,89 @@ window.addEventListener("scroll", hidePop, true);
     /* ---------- ouverture ---------- */
     function planWire() {
       const cv = $("#planCv"); if (!cv) return;
-      let drag = null;
+      const pts = new Map();            // pointeurs actifs : 1 = glisser, 2 = pincer
+      let drag = null, pinch = null, lastTap = 0;
+      const loc = e => {
+        const r = cv.getBoundingClientRect();
+        return [(e.clientX - r.left) * (cv.width / r.width),
+                (e.clientY - r.top) * (cv.height / r.height)];
+      };
+
       cv.addEventListener("pointerdown", e => {
         cv.setPointerCapture(e.pointerId);
-        drag = { x: e.clientX, y: e.clientY, tx: plan.view.tx, ty: plan.view.ty, moved: false };
+        pts.set(e.pointerId, loc(e));
+        if (pts.size === 2) {
+          // deux doigts : on abandonne le glissement en cours et on pince
+          drag = null;
+          const [a, b] = [...pts.values()];
+          pinch = { d: Math.hypot(a[0] - b[0], a[1] - b[1]), k: plan.view.k };
+        } else if (pts.size === 1) {
+          const [x, y] = loc(e);
+          drag = { x, y, tx: plan.view.tx, ty: plan.view.ty, moved: false };
+        }
       });
+
       cv.addEventListener("pointermove", e => {
+        if (!pts.has(e.pointerId)) return;
+        pts.set(e.pointerId, loc(e));
+
+        if (pts.size === 2 && pinch) {
+          const [a, b] = [...pts.values()];
+          const d = Math.hypot(a[0] - b[0], a[1] - b[1]);
+          if (pinch.d > 4) planZoomAt((a[0] + b[0]) / 2, (a[1] + b[1]) / 2, pinch.k * (d / pinch.d));
+          return;
+        }
         if (!drag) return;
-        const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
-        if (Math.abs(dx) + Math.abs(dy) > 4) drag.moved = true;
-        plan.view.tx = drag.tx + dx * planDPR; plan.view.ty = drag.ty + dy * planDPR;
-        planDraw();
+        const [x, y] = loc(e);
+        const dx = x - drag.x, dy = y - drag.y;
+        if (Math.abs(dx) + Math.abs(dy) > 5 * planDPR) drag.moved = true;
+        plan.view.tx = drag.tx + dx; plan.view.ty = drag.ty + dy;
+        planClamp(); planDraw();
       });
+
+      const release = e => {
+        pts.delete(e.pointerId);
+        if (pts.size < 2) pinch = null;
+        // après un pincement, le doigt restant ne doit pas repartir en glissement
+        if (pts.size === 1) {
+          const [x, y] = [...pts.values()][0];
+          drag = { x, y, tx: plan.view.tx, ty: plan.view.ty, moved: true };
+        }
+      };
+
       cv.addEventListener("pointerup", e => {
-        const wasDrag = drag && drag.moved; drag = null;
-        if (wasDrag) return;
-        const r = cv.getBoundingClientRect();
-        const mx = (e.clientX - r.left) * (cv.width / r.width);
-        const my = (e.clientY - r.top) * (cv.height / r.height);
-        const s = planPick(mx, my);
-        plan.sel = s; planShowPick(s);
+        const wasDrag = drag && drag.moved, [mx, my] = loc(e);
+        const solo = pts.size === 1 && !pinch;
+        release(e);
+        if (!solo || wasDrag) return;
+
+        // double tap : zoom sur l'endroit touché, ou retour à la vue d'ensemble
+        const now = Date.now();
+        if (now - lastTap < 320) {
+          lastTap = 0;
+          if (plan.view.k > 1.2) planFit(); else planZoomAt(mx, my, 3.2);
+          return;
+        }
+        lastTap = now;
+
+        const surf = planPick(mx, my);
+        plan.sel = surf; planShowPick(surf);
       });
+      cv.addEventListener("pointercancel", release);
+
       cv.addEventListener("wheel", e => {
         e.preventDefault();
-        const r = cv.getBoundingClientRect();
-        const mx = (e.clientX - r.left) * (cv.width / r.width);
-        const my = (e.clientY - r.top) * (cv.height / r.height);
-        const k0 = plan.view.k;
-        const k = Math.max(1, Math.min(8, k0 * (e.deltaY < 0 ? 1.18 : 1 / 1.18)));
-        plan.view.tx = mx - (mx - plan.view.tx) * (k / k0);
-        plan.view.ty = my - (my - plan.view.ty) * (k / k0);
-        plan.view.k = k;
-        if (k === 1) { plan.view.tx = 0; plan.view.ty = 0; }
-        planDraw();
+        const [mx, my] = loc(e);
+        planZoomAt(mx, my, plan.view.k * (e.deltaY < 0 ? 1.18 : 1 / 1.18));
       }, { passive: false });
+
+      // Boutons : le pincement reste invisible pour qui ne l'essaie pas, et se
+      // pratique mal avec des gants. Ils coûtent trois boutons.
+      const z = (id, fn) => { const b = $(id); if (b) b.onclick = fn; };
+      const mid = () => [cv.width / 2, cv.height / 2];
+      z("#planZin",  () => planZoomAt(...mid(), plan.view.k * 1.6));
+      z("#planZout", () => planZoomAt(...mid(), plan.view.k / 1.6));
+      z("#planZfit", () => planFit());
     }
 
     /* Le bouton ne promet que ce qui existe. L'index est chargé une fois et dit
@@ -12725,7 +12893,14 @@ window.addEventListener("scroll", hidePop, true);
       const nTwy = plan.SURF.filter(s => s.t === "twy" && s.r).length;
       const nRwy = plan.SURF.filter(s => s.t === "rwy" && s.r).length;
       $("#planSub").textContent = `${nRwy} runway${nRwy === 1 ? "" : "s"} · ${nTwy} named taxiway${nTwy === 1 ? "" : "s"}`;
-      body.innerHTML = `<canvas id="planCv"></canvas>
+      body.innerHTML = `<div class="plan-cvwrap">
+          <canvas id="planCv"></canvas>
+          <div class="plan-zoom">
+            <button id="planZin"  aria-label="Zoom in"  title="Zoom in">+</button>
+            <button id="planZout" aria-label="Zoom out" title="Zoom out">−</button>
+            <button id="planZfit" aria-label="Fit"      title="Fit to screen">⤢</button>
+          </div>
+        </div>
         <div class="plan-tally" id="planTally"></div>
         <div class="plan-pick" id="planPick"></div>
         <div class="plan-foot">INDICATIVE · NOT AIP-COMPLIANT · NOT FOR NAVIGATION</div>`;
