@@ -1414,29 +1414,6 @@
       cursor: grabbing
     }
 
-    .plan-legend {
-      display: flex;
-      gap: 14px;
-      flex-wrap: wrap;
-      align-items: center;
-      margin-top: 10px;
-      font: 500 10px/1 var(--mono);
-      color: var(--muted);
-      letter-spacing: .08em
-    }
-
-    .plan-legend i {
-      width: 16px;
-      height: 3px;
-      border-radius: 2px;
-      display: inline-block;
-      margin-right: 5px;
-      vertical-align: middle
-    }
-
-    .plan-legend .dash {
-      background: repeating-linear-gradient(90deg, var(--muted) 0 4px, transparent 4px 7px)
-    }
 
     /* Compteur d'honnêteté : il dit en permanence combien de NOTAMs de surface
        n'ont pas pu être placés. Un plan qui tait ses angles morts ment. */
@@ -2762,6 +2739,14 @@ m10970 -3289 c90 -8 172 -14 182 -14 15 0 19 -9 22 -37 l3 -38 69 -3 69 -3 -6
           <b>dot</b> = severity · <b>A1771/26</b> = NOTAM number · <b>QMXLC</b> = ICAO Q-code · <b>GROUND</b> =
           category<br>
           Dates are in <b>UTC / Zulu</b>.
+        </div>
+
+        <div class="hd-sec">Data sources</div>
+        <div class="hd-note">
+          <b>NOTAMs</b> — FAA NOTAM Management Service (international distribution).<br>
+          <b>Aerodrome layouts</b> — map data © <b>OpenStreetMap</b> contributors, available
+          under the Open Database Licence (ODbL). Layouts are indicative, not AIP-compliant,
+          and not for navigation.
         </div>
       </div>
     </div>
@@ -10655,8 +10640,6 @@ function renderInfo(icao) {
       if (typeof scheduleDraw === "function" && mapView) scheduleDraw();   // repeint la carte si elle est ouverte
       // idem pour le plan de plateforme, légende comprise
       if (typeof plan !== "undefined" && plan && !$("#planOv").hidden) {
-        const lg = document.querySelector("#planBody .plan-legend");
-        if (lg) lg.outerHTML = planLegend();
         planDraw(); planShowPick(plan.sel);
       }
     };
@@ -12376,9 +12359,9 @@ window.addEventListener("scroll", hidePop, true);
     const planLight = () => document.body.classList.contains("light");
     const planPal = () => planLight() ? PLAN_THEME.light : PLAN_THEME.dark;
     const PLAN_W = { rwy: 9, twy: 4.2, apr: 1, std: 0 };
-    // Couleurs des surfaces NON surlignées. Elles doivent rester lisibles sans
-    // jamais rivaliser avec le surlignage — c'est la trame, pas le message.
-    const PLAN_BASE = { rwy: "#606e7f", twy: "#485563", apr: "#2e3944", std: "#53616f" };
+    // Les couleurs des surfaces non surlignées vivent dans PLAN_THEME.base,
+    // par thème (voir plus bas). La trame doit rester lisible sans jamais
+    // rivaliser avec le surlignage : c'est le décor, pas le message.
     const KIND2T = { twy: "twy", rwy: "rwy", stand: "std", apron: "apr" };
 
     let plan = null;   // tout l'état du plan courant
@@ -12669,15 +12652,6 @@ window.addEventListener("scroll", hidePop, true);
     }
 
     /* ---------- ouverture ---------- */
-    function planLegend() {
-      const C = planPal().col;
-      return `<div class="plan-legend">
-        <span><i style="background:${C.critical}"></i>CRITICAL</span>
-        <span><i style="background:${C.caution}"></i>CAUTION</span>
-        <span><i style="background:${C.info}"></i>INFO</span>
-        <span style="margin-left:auto"><i class="dash"></i>ACTIVE AT SOME POINT IN RANGE</span>
-      </div>`;
-    }
     function planWire() {
       const cv = $("#planCv"); if (!cv) return;
       let drag = null;
@@ -12752,10 +12726,9 @@ window.addEventListener("scroll", hidePop, true);
       const nRwy = plan.SURF.filter(s => s.t === "rwy" && s.r).length;
       $("#planSub").textContent = `${nRwy} runway${nRwy === 1 ? "" : "s"} · ${nTwy} named taxiway${nTwy === 1 ? "" : "s"}`;
       body.innerHTML = `<canvas id="planCv"></canvas>
-        ${planLegend()}
         <div class="plan-tally" id="planTally"></div>
         <div class="plan-pick" id="planPick"></div>
-        <div class="plan-foot">INDICATIVE · NOT AIP-COMPLIANT · NOT FOR NAVIGATION · © OpenStreetMap contributors, ODbL</div>`;
+        <div class="plan-foot">INDICATIVE · NOT AIP-COMPLIANT · NOT FOR NAVIGATION</div>`;
       planWire();
       planResize();
       planTally();
