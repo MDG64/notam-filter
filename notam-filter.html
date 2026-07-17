@@ -10653,6 +10653,12 @@ function renderInfo(icao) {
       localStorage.setItem(THEME_KEY, theme);
       applyTheme(theme);
       if (typeof scheduleDraw === "function" && mapView) scheduleDraw();   // repeint la carte si elle est ouverte
+      // idem pour le plan de plateforme, légende comprise
+      if (typeof plan !== "undefined" && plan && !$("#planOv").hidden) {
+        const lg = document.querySelector("#planBody .plan-legend");
+        if (lg) lg.outerHTML = planLegend();
+        planDraw(); planShowPick(plan.sel);
+      }
     };
 
     /* ---- fenêtre d'aide (?) ---- */
@@ -12346,8 +12352,33 @@ window.addEventListener("scroll", hidePop, true);
     }
 
     const PLAN_RANK = { critical: 0, caution: 1, info: 2 };
-    const PLAN_COL = { critical: "#ff5d6c", caution: "#f6b23e", info: "#34d39a" };
+
+    /* Deux thèmes, et pas seulement deux jeux de couleurs : la hiérarchie
+       s'inverse. Sur fond sombre, une surface ressort en s'éclaircissant ;
+       sur fond clair, en s'assombrissant. La piste, qui doit primer sur les
+       taxiways, est donc la plus CLAIRE en nuit et la plus FONCÉE en jour.
+       Le halo lumineux, lui, n'a de sens que sur fond sombre : sur du blanc
+       il ne fait que salir la couleur. */
+    const PLAN_THEME = {
+      dark: {
+        col: { critical: "#ff5d6c", caution: "#f6b23e", info: "#34d39a" },
+        base: { rwy: "#606e7f", twy: "#485563", apr: "#2e3944", std: "#53616f" },
+        chip: "rgba(14,17,20,.93)", chipDim: "rgba(14,17,20,.8)", off: "#828a91",
+        glow: true
+      },
+      light: {
+        col: { critical: "#e5484d", caution: "#cf7a12", info: "#12936a" },
+        base: { rwy: "#7d8f9f", twy: "#a3b2bf", apr: "#e6ecf1", std: "#b0bdc8" },
+        chip: "rgba(255,255,255,.94)", chipDim: "rgba(255,255,255,.86)", off: "#69737d",
+        glow: false
+      }
+    };
+    const planLight = () => document.body.classList.contains("light");
+    const planPal = () => planLight() ? PLAN_THEME.light : PLAN_THEME.dark;
     const PLAN_W = { rwy: 9, twy: 4.2, apr: 1, std: 0 };
+    // Couleurs des surfaces NON surlignées. Elles doivent rester lisibles sans
+    // jamais rivaliser avec le surlignage — c'est la trame, pas le message.
+    const PLAN_BASE = { rwy: "#606e7f", twy: "#485563", apr: "#2e3944", std: "#53616f" };
     const KIND2T = { twy: "twy", rwy: "rwy", stand: "std", apron: "apr" };
 
     let plan = null;   // tout l'état du plan courant
@@ -12395,7 +12426,20 @@ window.addEventListener("scroll", hidePop, true);
                view: { k: 1, tx: 0, ty: 0 }, fit: { s: 1, ox: 0, oy: 0 }, sel: null };
     }
 
-    const planWorst = arr => arr.reduce((a, n) => PLAN_RANK[n.severity] < PLAN_RANK[a] ? n.severity : a, "info");
+    /* Sur le plan, une couleur dit l'ÉTAT d'une surface — pas sa priorité de
+       lecture. La règle « sujet MP -> Information » est juste dans la LISTE : un
+       poste fermé ne doit pas y écraser une piste fermée. Mais elle peindrait ce
+       même poste en VERT, ce qui se lit « disponible ». On défait ce déclassement
+       ici, et ici seulement : la liste garde son Information, le plan dit fermé.
+       Aucun autre sujet n'est touché. */
+    function planSev(n) {
+      const [subj, cond] = qcodeParts(n.qcode);
+      if (subj !== "MP") return n.severity;
+      const T = (n.e || "").toUpperCase();
+      if (CRITICAL_TEXT.some(k => T.includes(k))) return "critical";
+      return CONDITION_SEVERITY[cond] || "caution";
+    }
+    const planWorst = arr => arr.reduce((a, n) => PLAN_RANK[planSev(n)] < PLAN_RANK[a] ? planSev(n) : a, "info");
 
     /* Le temps est le SEUL filtre qui agit sur le plan. La sévérité et la
        catégorie filtrent la liste, pas la réalité physique de la plateforme :
@@ -12412,7 +12456,7 @@ window.addEventListener("scroll", hidePop, true);
       if (!ns || !ns.length) return null;
       const act = ns.filter(planShown);
       if (!act.length) return null;
-      return { state: planSpan() ? "span" : "instant", col: PLAN_COL[planWorst(act)], ns: act };
+      return { state: planSpan() ? "span" : "instant", col: planPal().col[planWorst(act)], ns: act };
     }
 
     /* ---------- rendu ---------- */
@@ -12431,11 +12475,15 @@ window.addEventListener("scroll", hidePop, true);
       cv.style.aspectRatio = String(AR);
       const w = cv.clientWidth || 320, h = Math.max(120, Math.round(w / AR));
       cv.width = w * planDPR; cv.height = h * planDPR;
-      const pad = 30;
-      const sx = (w - pad * 2) / (B.x1 - B.x0), sy = (h - pad * 2) / (B.y1 - B.y0);
+      /* Le cadrage se calcule en pixels PHYSIQUES, pas en pixels CSS : le canvas
+         fait planDPR fois la taille affichée. Calculer ici en CSS dessinerait le
+         terrain à 1/planDPR d'échelle, tassé dans le coin haut-gauche — les
+         épaisseurs de trait, elles, sont déjà multipliées par planDPR. */
+      const W = cv.width, H = cv.height, pad = 30 * planDPR;
+      const sx = (W - pad * 2) / (B.x1 - B.x0), sy = (H - pad * 2) / (B.y1 - B.y0);
       plan.fit.s = Math.min(sx, sy);
-      plan.fit.ox = pad + ((w - pad * 2) - (B.x1 - B.x0) * plan.fit.s) / 2 - B.x0 * plan.fit.s;
-      plan.fit.oy = pad + ((h - pad * 2) - (B.y1 - B.y0) * plan.fit.s) / 2 - B.y0 * plan.fit.s;
+      plan.fit.ox = pad + ((W - pad * 2) - (B.x1 - B.x0) * plan.fit.s) / 2 - B.x0 * plan.fit.s;
+      plan.fit.oy = pad + ((H - pad * 2) - (B.y1 - B.y0) * plan.fit.s) / 2 - B.y0 * plan.fit.s;
       planDraw();
     }
     function planStroke(ctx, g, w, col, glow, dash) {
@@ -12444,7 +12492,7 @@ window.addEventListener("scroll", hidePop, true);
       const a = planSC(g[0]); ctx.moveTo(a[0], a[1]);
       for (let i = 1; i < g.length; i++) { const p = planSC(g[i]); ctx.lineTo(p[0], p[1]); }
       ctx.save();
-      if (glow) { ctx.shadowColor = col; ctx.shadowBlur = 11 * planDPR; }
+      if (glow && planPal().glow) { ctx.shadowColor = col; ctx.shadowBlur = 11 * planDPR; }
       if (dash) { ctx.setLineDash([7 * planDPR, 5.5 * planDPR]); ctx.globalAlpha = .62; }
       ctx.strokeStyle = col; ctx.lineWidth = w * planDPR * Math.min(plan.view.k, 2.2);
       ctx.lineCap = dash ? "butt" : "round"; ctx.lineJoin = "round"; ctx.stroke();
@@ -12471,14 +12519,15 @@ window.addEventListener("scroll", hidePop, true);
       planBoxes.push({ x: bx, y: by, w, h });
       ctx.save();
       if (pend) ctx.globalAlpha = .72;
-      ctx.fillStyle = on ? "rgba(14,17,20,.93)" : "rgba(14,17,20,.8)";
+      const P = planPal();
+      ctx.fillStyle = on ? P.chip : P.chipDim;
       ctx.beginPath(); ctx.roundRect(bx, by, w, h, 4 * planDPR); ctx.fill();
       if (on) { ctx.strokeStyle = col; ctx.lineWidth = 1 * planDPR; ctx.stroke(); }
       else if (pend) {
         ctx.setLineDash([3 * planDPR, 2.5 * planDPR]); ctx.strokeStyle = col;
         ctx.lineWidth = 1 * planDPR; ctx.stroke(); ctx.setLineDash([]);
       }
-      ctx.fillStyle = (on || pend) ? col : "#828a91";
+      ctx.fillStyle = (on || pend) ? col : P.off;
       ctx.textAlign = "center"; ctx.textBaseline = "middle";
       ctx.fillText(text, x, y + 0.5 * planDPR);
       ctx.restore();
@@ -12509,13 +12558,14 @@ window.addEventListener("scroll", hidePop, true);
       ctx.clearRect(0, 0, cv.width, cv.height);
       planBoxes = [];
       const S = plan.SURF;
-      for (const s of S) if (s.t === "apr") for (const g of s.segs) planFill(ctx, g, "#222a32");
-      for (const s of S) if (s.t === "rwy") for (const g of s.segs) planStroke(ctx, g, PLAN_W.rwy, "#454f5b", false);
-      for (const s of S) if (s.t === "twy") for (const g of s.segs) planStroke(ctx, g, PLAN_W.twy, "#2c343d", false);
+      const BASE = planPal().base;
+      for (const s of S) if (s.t === "apr") for (const g of s.segs) planFill(ctx, g, BASE.apr);
+      for (const s of S) if (s.t === "rwy") for (const g of s.segs) planStroke(ctx, g, PLAN_W.rwy, BASE.rwy, false);
+      for (const s of S) if (s.t === "twy") for (const g of s.segs) planStroke(ctx, g, PLAN_W.twy, BASE.twy, false);
       for (const s of S) if (s.t === "std") for (const g of s.segs) {
         const p = planSC(g[0]); ctx.beginPath();
         ctx.arc(p[0], p[1], 1.8 * planDPR * Math.min(plan.view.k, 2), 0, 7);
-        ctx.fillStyle = "#39434e"; ctx.fill();
+        ctx.fillStyle = BASE.std; ctx.fill();
       }
       const drawn = S.map(s => ({ s, st: planState(s) })).filter(x => x.st);
       for (const { s, st } of drawn) {
@@ -12525,7 +12575,7 @@ window.addEventListener("scroll", hidePop, true);
             const p = planSC(g[0]); ctx.save();
             ctx.beginPath(); ctx.arc(p[0], p[1], 3.4 * planDPR * Math.min(plan.view.k, 2), 0, 7);
             if (dim) { ctx.globalAlpha = .7; ctx.strokeStyle = col; ctx.lineWidth = 1.5 * planDPR; ctx.stroke(); }
-            else { ctx.shadowColor = col; ctx.shadowBlur = 9 * planDPR; ctx.fillStyle = col; ctx.fill(); }
+            else { if (planPal().glow) { ctx.shadowColor = col; ctx.shadowBlur = 9 * planDPR; } ctx.fillStyle = col; ctx.fill(); }
             ctx.restore();
           }
           continue;
@@ -12539,7 +12589,24 @@ window.addEventListener("scroll", hidePop, true);
       const lab = S.filter(s => s.r && (s.t === "twy" || s.t === "rwy"));
       const st_ = new Map(drawn.map(x => [x.s, x.st]));
       for (const s of lab) if (st_.get(s)) planLabel(ctx, s.r, s.segs, st_.get(s).col, st_.get(s).state);
-      if (plan.view.k > 1.15) for (const s of lab) if (!st_.get(s)) planLabel(ctx, s.r, s.segs, "#828a91", "off");
+      if (plan.view.k > 1.15) for (const s of lab) if (!st_.get(s)) planLabel(ctx, s.r, s.segs, planPal().off, "off");
+
+      /* Postes : 130 à LFBO, 519 à LFPG. Les étiqueter tous à l'échelle d'ouverture
+         donnerait une bouillie. Un poste touché reçoit son nom dès k>=2,2 ; les
+         autres attendent k>=3,5, où ils servent de repères. Pas de forçage : deux
+         postes voisins sont à ~30 m, s'écraser l'un l'autre ne dirait rien de plus
+         — sous le seuil, le point coloré et le clic suffisent. */
+      const P_ = planPal();
+      if (plan.view.k >= 2.2) {
+        for (const s of S) {
+          if (s.t !== "std" || !s.r) continue;
+          const st = st_.get(s);
+          if (!st && plan.view.k < 3.5) continue;
+          const pt = planSC(s.segs[0][0]);
+          planPlace(ctx, s.r, pt[0], pt[1] - 11 * planDPR,
+                    st ? st.col : P_.off, st ? st.state : "off", false);
+        }
+      }
     }
 
     /* ---------- compteur d'honnêteté ---------- */
@@ -12603,10 +12670,11 @@ window.addEventListener("scroll", hidePop, true);
 
     /* ---------- ouverture ---------- */
     function planLegend() {
+      const C = planPal().col;
       return `<div class="plan-legend">
-        <span><i style="background:${PLAN_COL.critical}"></i>CRITICAL</span>
-        <span><i style="background:${PLAN_COL.caution}"></i>CAUTION</span>
-        <span><i style="background:${PLAN_COL.info}"></i>INFO</span>
+        <span><i style="background:${C.critical}"></i>CRITICAL</span>
+        <span><i style="background:${C.caution}"></i>CAUTION</span>
+        <span><i style="background:${C.info}"></i>INFO</span>
         <span style="margin-left:auto"><i class="dash"></i>ACTIVE AT SOME POINT IN RANGE</span>
       </div>`;
     }
