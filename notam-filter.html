@@ -12431,7 +12431,52 @@ window.addEventListener("scroll", hidePop, true);
        Sans cette règle, le filet textuel de l'app (qui ajoute « sol » dès qu'il
        voit MAINT ou WIP) peindrait des surfaces à tort : « ILS RWY 32L U/S DUE TO
        MAINT » colorierait la piste alors que le NOTAM ne parle que de l'ILS. */
+    /* Un NOTAM peut annoncer la LEVÉE d'une restriction, pas son imposition :
+       « RWY 07/25 RESUMED NORMAL OPR », « NOTAM CNL », « TWY M23 - NOTAM CNL ».
+       Le Q-code et le sujet sont identiques à une fermeture — seul le TEXTE le
+       dit. Sans ce filtre, une reprise de service se peint en rouge comme une
+       fermeture : l'inverse exact de ce que le NOTAM annonce.
+       Prudence : un mot de levée ne l'emporte que si aucun mot de fermeture actif
+       (CLSD, U/S…) n'est présent. « CLSD, PREVIOUS NOTAM CNL » doit rester peint —
+       c'est la nouvelle fermeture qui prime, pas l'ancienne levée. */
+    /* Deux façons dont un NOTAM annonce une LEVÉE plutôt qu'une fermeture :
+         (a) le NOTAM lui-même est retiré (« NOTAM CNL », « NOTAM CANCELLED »,
+             un simple « ... CNL. » en fin de message) — le message entier est
+             annulé, ce qu'il décrivait par ailleurs ne s'applique plus.
+         (b) une installation reprend un service normal (« RESUMED NORMAL OPR »,
+             « RE-OPENED », « BACK TO NORMAL ») — vrai seulement si aucun mot de
+             fermeture n'apparaît par ailleurs dans le même message.
+       Un message qui mélangerait une reprise ET une fermeture d'une AUTRE
+       installation dans le même texte reste un angle mort connu : notre
+       granularité est le NOTAM entier, pas la phrase. Aucun cas de ce genre
+       n'est apparu dans les 208 NOTAMs réels observés. */
+    const CNL_TEXT = ["NOTAM CNL", "NOTAM CANCELLED", "NOTAM WITHDRAWN"];
+    const RESUME_TEXT = ["RESUMED NORMAL", "RE-OPENED", "REOPENED", "BACK TO NORMAL", "NORMAL OPERATION"];
+    function isResumption(n) {
+      const T = (n.e || "").toUpperCase();
+      if (CNL_TEXT.some(k => T.includes(k))) return true;
+      if (/(?:^|\s)CNL\.?(?:\s|$)/.test(T)) return true;         // "... CNL." isolé, ex. événement annulé
+      if (RESUME_TEXT.some(k => T.includes(k)))
+        return !CRITICAL_TEXT.some(k => T.includes(k));
+      return false;
+    }
+    /* Une fermeture (CLSD, U/S…) interdit tout accès : rouge plein. Une
+       RESTRICTION (limite d'envergure, interdiction à certains types d'appareil)
+       laisse la surface utilisable pour d'autres : ambre hachuré, pas rouge.
+       Détection sur le TEXTE seulement, jamais sur le Q-code seul — un texte
+       ambigu reste fermeture par défaut (le choix le plus sûr), seule une
+       formulation de restriction explicite fait basculer en ambre. Un mot de
+       fermeture explicite garde toujours la priorité. */
+    const RESTRICT_TEXT = ["PROHIBITED TO", "RESTRICTION", "LIMITED TO", "LTD TO",
+      "WINGSPAN GREATER", "WINGSPAN ABOVE", "WINGSPAN OVER", "NOT AVBL FOR ACFT", "ACFT TYPE"];
+    function planKind(n) {
+      const T = (n.e || "").toUpperCase();
+      if (CRITICAL_TEXT.some(k => T.includes(k))) return "closed";
+      if (RESTRICT_TEXT.some(k => T.includes(k))) return "restricted";
+      return "closed";
+    }
     function paintsGround(n) {
+      if (isResumption(n)) return false;
       const qc = categoriesFromQcode(n.qcode);
       if (qc.size) return qc.has("sol");
       return n.categories.includes("sol");
@@ -12465,12 +12510,14 @@ window.addEventListener("scroll", hidePop, true);
     const PLAN_THEME = {
       dark: {
         closed: "#ff5d6c",
+        restricted: "#f6b23e",
         base: { rwy: "#606e7f", twy: "#485563", apr: "#2e3944", std: "#53616f" },
         chip: "rgba(14,17,20,.93)", chipDim: "rgba(14,17,20,.8)", off: "#828a91",
         glow: true
       },
       light: {
         closed: "#e5484d",
+        restricted: "#cf7a12",
         base: { rwy: "#7d8f9f", twy: "#a3b2bf", apr: "#e6ecf1", std: "#b0bdc8" },
         chip: "rgba(255,255,255,.94)", chipDim: "rgba(255,255,255,.86)", off: "#69737d",
         glow: false
@@ -12737,10 +12784,15 @@ window.addEventListener("scroll", hidePop, true);
       if (!ns || !ns.length) return null;
       const act = ns.filter(planShown);
       if (!act.length) return null;
-      // un seul NOTAM qui couvre toute la fenêtre suffit à garantir une fermeture
-      // continue -> plein. Sinon, la fermeture n'est qu'intermittente -> pointillé.
-      const full = !planTWin || act.some(n => planFullyCovers(n, planTWin));
-      return { state: full ? "instant" : "span", col: planPal().closed, ns: act };
+      /* Si une fermeture ET une restriction touchent la même surface, la
+         fermeture prime : c'est l'information la plus grave, et une surface
+         fermée n'est de toute façon plus utilisable même si un NOTAM la dit
+         « restreinte » par ailleurs. */
+      const closed = act.filter(n => planKind(n) === "closed");
+      const kind = closed.length ? "closed" : "restricted";
+      const relevant = closed.length ? closed : act;
+      const full = !planTWin || relevant.some(n => planFullyCovers(n, planTWin));
+      return { state: full ? "instant" : "span", kind, col: planPal()[kind], ns: act };
     }
 
     /* ---------- rendu ---------- */
@@ -12827,6 +12879,41 @@ window.addEventListener("scroll", hidePop, true);
       planClamp();
       planDraw();
     }
+    /* Trait hachuré : une ligne fine continue + des perches perpendiculaires
+       régulières, façon voie ferrée. Visuellement distinct du pointillé temporel
+       (qui reste un simple tireté fin) — on ne veut jamais confondre « limité »
+       et « fermé mais actif une partie du temps seulement ». pts est un tableau
+       de points ÉCRAN [x,y] déjà projetés. */
+    function planHatchPts(ctx, pts, w, col, dim) {
+      if (pts.length < 2) return;
+      ctx.save();
+      if (!dim && planPal().glow) { ctx.shadowColor = col; ctx.shadowBlur = 10 * planDPR; }
+      if (dim) ctx.globalAlpha = .62;
+      ctx.strokeStyle = col; ctx.fillStyle = col;
+      const lw = w * planDPR * Math.min(plan.view.k, 2.2);
+      ctx.lineWidth = lw * 0.55; ctx.lineCap = "round"; ctx.lineJoin = "round";
+      ctx.beginPath(); ctx.moveTo(pts[0][0], pts[0][1]);
+      for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i][0], pts[i][1]);
+      ctx.stroke();
+      const step = Math.max(9 * planDPR, lw * 1.8), tick = lw * 1.15;
+      let carry = step * 0.5;
+      for (let i = 1; i < pts.length; i++) {
+        const [x1, y1] = pts[i - 1], [x2, y2] = pts[i];
+        const dx = x2 - x1, dy = y2 - y1, len = Math.hypot(dx, dy); if (!len) continue;
+        const ux = dx / len, uy = dy / len, nx = -uy, ny = ux;
+        let d = carry;
+        while (d < len) {
+          const cx = x1 + ux * d, cy = y1 + uy * d;
+          ctx.lineWidth = lw * 0.85;
+          ctx.beginPath(); ctx.moveTo(cx - nx * tick, cy - ny * tick); ctx.lineTo(cx + nx * tick, cy + ny * tick); ctx.stroke();
+          d += step;
+        }
+        carry = d - len;
+      }
+      ctx.restore();
+    }
+    // variante lat/lon : projette via planSC avant de hachurer
+    function planHatch(ctx, g, w, col, dim) { planHatchPts(ctx, g.map(planSC), w, col, dim); }
     function planStroke(ctx, g, w, col, glow, dash) {
       if (g.length < 2) return;
       ctx.beginPath();
@@ -12928,6 +13015,13 @@ window.addEventListener("scroll", hidePop, true);
       const drawn = S.map(s => ({ s, st: planState(s) })).filter(x => x.st);
       for (const { s, st } of drawn) {
         const dim = st.state === "span", col = st.col;
+        /* Une restriction (envergure, type d'appareil) ne concerne qu'une
+           poignée de vols : la peindre comme une fermeture — trait, hachure ou
+           point plein — sur-alerte tout le monde pour presque personne. Seul
+           le NOM (piste ou taxiway) passe en ambre ; la géométrie reste dans
+           ses couleurs de fond habituelles. La fermeture, elle, continue de
+           peindre toute la surface : c'est elle qui concerne chaque vol. */
+        if (st.kind === "restricted") continue;
         if (s.t === "std") {
           for (const g of s.segs) {
             const p = planSC(g[0]); ctx.save();
@@ -12952,25 +13046,38 @@ window.addEventListener("scroll", hidePop, true);
         if (cuts.length && !wholeN.length) {
           // uniquement des portions : segments + marqueurs, jamais l'entier
           for (const c of cuts) {
+            // Chaque portion garde la couleur/nature de SON propre NOTAM, pas celle
+            // du reste de la surface : un segment restreint sur un taxiway par
+            // ailleurs fermé ailleurs s'affiche bien en ambre, pas en rouge.
+            const ck = planKind(c.n);
+            const ccol = planPal()[ck];
+            const cfull = !planTWin || planFullyCovers(c.n, planTWin);
+            const cdim = !cfull;
             if (c.cut.seg) {
-              // seg est en projeté -> le repasser par planSC via un faux "latlon" : on
-              // reconstruit un tracé écran directement
-              ctx.save();
-              if (!dim && planPal().glow) { ctx.shadowColor = col; ctx.shadowBlur = 11 * planDPR; }
-              if (dim) { ctx.setLineDash([7 * planDPR, 5.5 * planDPR]); ctx.globalAlpha = .62; }
-              ctx.strokeStyle = col; ctx.lineWidth = PLAN_W.twy * planDPR * Math.min(plan.view.k, 2.2);
-              ctx.lineCap = dim ? "butt" : "round"; ctx.lineJoin = "round";
-              ctx.beginPath();
-              const a = planSCp(c.cut.seg[0]); ctx.moveTo(a[0], a[1]);
-              for (let i = 1; i < c.cut.seg.length; i++) { const q = planSCp(c.cut.seg[i]); ctx.lineTo(q[0], q[1]); }
-              ctx.stroke(); ctx.restore();
+              const pts = c.cut.seg.map(planSCp);
+              if (ck === "restricted") planHatchPts(ctx, pts, PLAN_W.twy, ccol, cdim);
+              else {
+                ctx.save();
+                if (!cdim && planPal().glow) { ctx.shadowColor = ccol; ctx.shadowBlur = 11 * planDPR; }
+                if (cdim) { ctx.setLineDash([7 * planDPR, 5.5 * planDPR]); ctx.globalAlpha = .62; }
+                ctx.strokeStyle = ccol; ctx.lineWidth = PLAN_W.twy * planDPR * Math.min(plan.view.k, 2.2);
+                ctx.lineCap = cdim ? "butt" : "round"; ctx.lineJoin = "round";
+                ctx.beginPath();
+                const a = pts[0]; ctx.moveTo(a[0], a[1]);
+                for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i][0], pts[i][1]);
+                ctx.stroke(); ctx.restore();
+              }
             }
-            for (const m of c.cut.marks) planMark(ctx, m, col, dim);
+            for (const m of c.cut.marks) planMark(ctx, m, ccol, cdim);
           }
           continue;
         }
         // au moins un NOTAM ferme l'entier -> comportement classique
-        for (const g of s.segs) planStroke(ctx, g, s.t === "rwy" ? PLAN_W.rwy : PLAN_W.twy, col, !dim, dim);
+        const wRef = s.t === "rwy" ? PLAN_W.rwy : PLAN_W.twy;
+        for (const g of s.segs) {
+          if (st.kind === "restricted") planHatch(ctx, g, wRef, col, dim);
+          else planStroke(ctx, g, wRef, col, !dim, dim);
+        }
         // et si en plus il y a des portions, leurs marqueurs restent utiles
         for (const c of cuts) for (const m of c.cut.marks) planMark(ctx, m, col, dim);
       }
