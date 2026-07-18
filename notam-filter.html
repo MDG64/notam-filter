@@ -12494,7 +12494,13 @@ window.addEventListener("scroll", hidePop, true);
       const T = (n.e || "").toUpperCase();
       if (CRITICAL_TEXT.some(k => T.includes(k))) return "closed";
       if (RESTRICT_TEXT.some(k => T.includes(k))) return "restricted";
-      return "closed";
+      // Fallback : un NOTAM « sol » qui référence une surface SANS mot de fermeture
+      // (CLSD/U/S…) NI de restriction n'est PAS une fermeture — panneau ou marquage
+      // manquant, éclairage, minima, obstacle « près de RWY xx »… On surligne en
+      // AMBRE (« à vérifier »), jamais en rouge « fermé » : le rouge est réservé aux
+      // vraies fermetures. Évite qu'un panneau de TWY cité à côté d'une piste
+      // (« RWY 26L TWY DIRECTION SIGN … MISSING ») peigne la piste comme fermée.
+      return "restricted";
     }
     function paintsGround(n) {
       if (isResumption(n)) return false;
