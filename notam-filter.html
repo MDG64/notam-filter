@@ -12451,7 +12451,7 @@ window.addEventListener("scroll", hidePop, true);
        installation dans le même texte reste un angle mort connu : notre
        granularité est le NOTAM entier, pas la phrase. Aucun cas de ce genre
        n'est apparu dans les 208 NOTAMs réels observés. */
-    const CNL_TEXT = ["NOTAM CNL", "NOTAM CANCELLED", "NOTAM WITHDRAWN"];
+    const CNL_TEXT = ["NOTAM CNL", "NOTAM CANCELLED", "NOTAM WITHDRAWN", "NOTAM VOID"];
     const RESUME_TEXT = ["RESUMED NORMAL", "RE-OPENED", "REOPENED", "BACK TO NORMAL", "NORMAL OPERATION"];
     function isResumption(n) {
       const T = (n.e || "").toUpperCase();
