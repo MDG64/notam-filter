@@ -1044,7 +1044,7 @@
 
     .planbtn svg {
       display: block;
-      height: auto
+      height: 26px
     }
 
     .modal-ov {
@@ -2400,7 +2400,8 @@
       }
 
       .planbtn svg {
-        width: 34px
+        width: 34px;
+        height: 21px
       }
 
       .hdr-actions {
@@ -2619,9 +2620,9 @@ m10970 -3289 c90 -8 172 -14 182 -14 15 0 19 -9 22 -37 l3 -38 69 -3 69 -3 -6
       <div class="station-actions">
         <button class="help-btn" id="infoBtn" aria-label="Airport info" title="Airport info" style="border:none;background:transparent;padding:0">
           <svg viewBox="0 0 24 24" width="26" height="26" aria-hidden="true">
-            <rect x="1" y="1" width="22" height="22" rx="5" fill="#16232f"/>
-            <circle cx="12" cy="7" r="1.9" fill="#fff"/>
-            <rect x="10.1" y="10.6" width="3.8" height="9" rx="1.9" fill="#fff"/>
+            <rect x="1" y="1" width="22" height="22" rx="5" fill="#ffffff" stroke="#d5dbe0" stroke-width="1"/>
+            <circle cx="12" cy="7" r="1.9" fill="#16232f"/>
+            <rect x="10.1" y="10.6" width="3.8" height="9" rx="1.9" fill="#16232f"/>
           </svg>
         </button>
         <button class="planbtn" id="planBtn" aria-label="Plan de la plateforme" title="Plan de la plateforme">
@@ -2811,10 +2812,10 @@ m10970 -3289 c90 -8 172 -14 182 -14 15 0 19 -9 22 -37 l3 -38 69 -3 69 -3 -6
 
         <div class="hd-sec">Category filters</div>
         <div class="hd-seg">
-          <span class="hd-chip on"><svg class="cat-ico" viewBox="0 0 1778 884" aria-label="Flight"><use href="#icon-flight"/></svg></span>
+          <span class="hd-chip on"><svg class="cat-ico" viewBox="0 0 1774 887" aria-label="Ground"><use href="#icon-ground"/></svg></span>
           <span class="hd-chip"><svg class="cat-ico" viewBox="0 0 1707 921" aria-label="Departure"><use href="#icon-depart"/></svg></span>
+          <span class="hd-chip"><svg class="cat-ico" viewBox="0 0 1778 884" aria-label="Flight"><use href="#icon-flight"/></svg></span>
           <span class="hd-chip"><svg class="cat-ico" viewBox="0 0 1707 921" aria-label="Arrival"><use href="#icon-arrival"/></svg></span>
-          <span class="hd-chip"><svg class="cat-ico" viewBox="0 0 1774 887" aria-label="Ground"><use href="#icon-ground"/></svg></span>
         </div>
         <div class="hd-note" style="margin-bottom:10px">Tap to filter by phase of flight. Tap again to remove. Combine
           with a severity card.</div>
@@ -10499,7 +10500,7 @@ function renderInfo(icao) {
     }
 
     function buildSeg() {
-      ["vol", "depart", "approche", "sol"].forEach(c => {
+      ["sol", "depart", "vol", "approche"].forEach(c => {
         const b = document.createElement("button");
         b.className = "cat"; b.dataset.cat = c; b.setAttribute("aria-pressed", "false");
         b.title = CAT_LABEL[c];
