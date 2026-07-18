@@ -12405,8 +12405,24 @@ window.addEventListener("scroll", hidePop, true);
         // pistes : forme espacée ET collée (RWY21L, RWY03R)
         let m; const rw=/\bRWY\s*(\d{2}[LRC]?)(?:\/(\d{2}[LRC]?))?/g;
         while((m=rw.exec(T))){ rwy.add(m[1]); if(m[2])rwy.add(m[2]); }
-        const bt=/\b(?:BTN|BTWN|BETWEEN)\s+(?:TWY\s+)?([A-Z]{1,3}\d{0,3})\s+AND\s+(?:TWY\s+)?([A-Z]{1,3}\d{0,3})\b/g;
-        while((m=bt.exec(T))) if(!STOP.has(m[1])&&!STOP.has(m[2])) partial.push([m[1],m[2]]);
+        /* Portions « entre deux bornes ». Un parseur souple, parce que la vraie
+           vie écrit « BTN ITS JUNCTIONS WITH TWY E AND TWY F », « FROM TWY A TO
+           TWY C », « BTN PRKG PSN 125 AND 43 ». On saute les mots de liaison
+           (ITS, JUNCTIONS, WITH, TWY, PRKG, PSN…) entre le connecteur et la
+           borne, et on gère BTN/BETWEEN…AND comme FM/FROM…TO. */
+        const PSKIP=new Set(["ITS","JUNCTION","JUNCTIONS","WITH","THE","TWY","TAXIWAY",
+          "PRKG","PARKING","PSN","STAND","STANDS","BAY","POSITION","AND","RAPID","EXIT","OF"]);
+        const isRef=t=>/^[A-Z]{0,3}\d{0,3}$/.test(t)&&/[A-Z0-9]/.test(t)&&t.length<=4&&!STOP.has(t);
+        const firstRef=(from)=>{ for(let i=from;i<w.length&&i<from+6;i++){ const t=w[i];
+          if(PSKIP.has(t))continue; if(isRef(t))return{ref:t,at:i}; } return null; };
+        for(let i=0;i<w.length;i++){ const k=w[i];
+          if(k==="BTN"||k==="BTWN"||k==="BETWEEN"){ const a=firstRef(i+1); if(!a)continue;
+            let j=a.at+1; while(j<w.length&&w[j]!=="AND")j++; const b=firstRef(j+1);
+            if(b) partial.push([a.ref,b.ref]); }
+          else if(k==="FM"||k==="FROM"){ const a=firstRef(i+1); if(!a)continue;
+            let j=a.at+1; while(j<w.length&&w[j]!=="TO")j++; if(j>=w.length)continue;
+            const b=firstRef(j+1); if(b) partial.push([a.ref,b.ref]); }
+        }
         const hit=twy.size||rwy.size||stand.size||apron.size;
         return {twy:[...twy],rwy:[...rwy],stand:[...stand],apron:[...apron],partial,hit:!!hit};
       }
@@ -12436,23 +12452,25 @@ window.addEventListener("scroll", hidePop, true);
       return [...byRef.values(), ...loose];
     }
 
-    const PLAN_RANK = { critical: 0, caution: 1, info: 2 };
 
     /* Deux thèmes, et pas seulement deux jeux de couleurs : la hiérarchie
        s'inverse. Sur fond sombre, une surface ressort en s'éclaircissant ;
        sur fond clair, en s'assombrissant. La piste, qui doit primer sur les
        taxiways, est donc la plus CLAIRE en nuit et la plus FONCÉE en jour.
        Le halo lumineux, lui, n'a de sens que sur fond sombre : sur du blanc
-       il ne fait que salir la couleur. */
+       il ne fait que salir la couleur.
+       Le plan n'a QU'UNE couleur de surlignage : le rouge « fermé ». La sévérité
+       ne colore pas le plan — une surface est concernée ou elle ne l'est pas.
+       La nuance (critique/info) vit dans la liste, pas sur la piste. */
     const PLAN_THEME = {
       dark: {
-        col: { critical: "#ff5d6c", caution: "#f6b23e", info: "#34d39a" },
+        closed: "#ff5d6c",
         base: { rwy: "#606e7f", twy: "#485563", apr: "#2e3944", std: "#53616f" },
         chip: "rgba(14,17,20,.93)", chipDim: "rgba(14,17,20,.8)", off: "#828a91",
         glow: true
       },
       light: {
-        col: { critical: "#e5484d", caution: "#cf7a12", info: "#12936a" },
+        closed: "#e5484d",
         base: { rwy: "#7d8f9f", twy: "#a3b2bf", apr: "#e6ecf1", std: "#b0bdc8" },
         chip: "rgba(255,255,255,.94)", chipDim: "rgba(255,255,255,.86)", off: "#69737d",
         glow: false
@@ -12468,6 +12486,68 @@ window.addEventListener("scroll", hidePop, true);
 
     let plan = null;   // tout l'état du plan courant
 
+    /* ---------- géométrie de découpe ----------
+       Un NOTAM « TWY B BTN E AND F » ne ferme qu'une portion. Si on sait placer
+       les deux bornes sur le taxiway, on ne peint que le segment entre elles ;
+       si on n'en place qu'une, un marqueur ; si aucune, un marqueur sur le
+       taxiway entier (il est cité mais on ignore où). On ne peint JAMAIS tout le
+       taxiway pour une portion — ce serait sur-alerter. */
+    function segCross(a1, a2, b1, b2) {
+      const d = (a2[0] - a1[0]) * (b2[1] - b1[1]) - (a2[1] - a1[1]) * (b2[0] - b1[0]);
+      if (Math.abs(d) < 1e-12) return null;
+      const t = ((b1[0] - a1[0]) * (b2[1] - b1[1]) - (b1[1] - a1[1]) * (b2[0] - b1[0])) / d;
+      const u = ((b1[0] - a1[0]) * (a2[1] - a1[1]) - (b1[1] - a1[1]) * (a2[0] - a1[0])) / d;
+      if (t < -0.05 || t > 1.05 || u < -0.05 || u > 1.05) return null;
+      return { p: [a1[0] + t * (a2[0] - a1[0]), a1[1] + t * (a2[1] - a1[1])], t };
+    }
+    // longueur cumulée le long d'une polyligne
+    function polyCum(g) {
+      const c = [0];
+      for (let i = 1; i < g.length; i++) c.push(c[i - 1] + Math.hypot(g[i][0] - g[i - 1][0], g[i][1] - g[i - 1][1]));
+      return c;
+    }
+    // le segment le plus long d'une surface (sa polyligne représentative)
+    function mainLine(surf) {
+      let best = null, L = -1;
+      for (const g of surf.segs) {
+        let l = 0; for (let i = 1; i < g.length; i++) l += Math.hypot(g[i][0] - g[i - 1][0], g[i][1] - g[i - 1][1]);
+        if (l > L) { L = l; best = g; }
+      }
+      return best;
+    }
+    // position (0..1) le long de gA du croisement avec une autre surface — ou d'un point
+    function posAlong(gA, other) {
+      const cum = polyCum(gA), total = cum[cum.length - 1] || 1;
+      if (other.point) {
+        // projection d'un point (centre d'un poste) sur gA : le plus proche
+        let bp = 0, bd = Infinity;
+        for (let i = 1; i < gA.length; i++) {
+          const ax = gA[i - 1][0], ay = gA[i - 1][1], bx = gA[i][0], by = gA[i][1];
+          const dx = bx - ax, dy = by - ay, L2 = dx * dx + dy * dy || 1e-12;
+          let t = ((other.point[0] - ax) * dx + (other.point[1] - ay) * dy) / L2;
+          t = Math.max(0, Math.min(1, t));
+          const qx = ax + t * dx, qy = ay + t * dy;
+          const d = Math.hypot(other.point[0] - qx, other.point[1] - qy);
+          if (d < bd) { bd = d; bp = (cum[i - 1] + t * (cum[i] - cum[i - 1])) / total; }
+        }
+        return bd < 0.9 / 111.32 ? { pos: bp, p: other.point } : null;   // 900 m max sinon hors sujet
+      }
+      // croisement avec les segments d'un autre taxiway
+      let res = [];
+      for (let i = 1; i < gA.length; i++)
+        for (const gB of other.segs) for (let j = 1; j < gB.length; j++) {
+          const r = segCross(gA[i - 1], gA[i], gB[j - 1], gB[j]);
+          if (r) res.push({ pos: (cum[i - 1] + r.t * (cum[i] - cum[i - 1])) / total, p: r.p });
+        }
+      return res.length ? res.sort((a, b) => Math.abs(a.pos - 0.5) - Math.abs(b.pos - 0.5))[0] : null;
+    }
+    function sliceLine(gA, p0, p1) {
+      const [lo, hi] = [Math.min(p0, p1), Math.max(p0, p1)];
+      const cum = polyCum(gA), total = cum[cum.length - 1] || 1, out = [];
+      for (let i = 0; i < gA.length; i++) { const f = cum[i] / total; if (f >= lo && f <= hi) out.push(gA[i]); }
+      return out.length >= 2 ? out : null;
+    }
+
     function planBuild(layout, notams) {
       const SURF = buildSurfaces(layout);
       /* Une piste porte DEUX noms. OSM l'indexe sous la paire (« 14L/32R »),
@@ -12481,8 +12561,32 @@ window.addEventListener("scroll", hidePop, true);
         if (s.t === "rwy" && s.r.includes("/"))
           for (const end of s.r.split("/")) { const e = end.trim(); if (e) idx("rwy:" + e, s); }
       }
+      const lat0 = layout.arp[0], lon0 = layout.arp[1];
+      const KX = Math.cos(lat0 * Math.PI / 180);
+      const px = ([la, lo]) => [(lo - lon0) * KX, -(la - lat0)];
+
+      /* Pour résoudre une borne « BTN X AND Y », on cherche X et Y parmi TOUTES
+         les surfaces : un taxiway (on croise), ou un poste (on projette son
+         centre). REF regroupe chaque ref à sa géométrie utile. */
+      const centre = surf => {
+        let sx = 0, sy = 0, k = 0;
+        for (const g of surf.segs) for (const p of g) { const [x, y] = px(p); sx += x; sy += y; k++; }
+        return k ? [sx / k, sy / k] : null;
+      };
+      const REF = new Map();   // ref -> { segs:[proj] } pour taxiway, { point:[x,y] } pour poste
+      for (const s of SURF) {
+        if (!s.r || REF.has(s.r)) continue;
+        if (s.t === "twy" || s.t === "rwy")
+          REF.set(s.r, { segs: s.segs.map(g => g.map(px)) });
+        else if (s.t === "std")
+          REF.set(s.r, { point: centre(s) });
+      }
+
       const ground = notams.filter(paintsGround);
       const TOUCH = new Map(), located = new Set();
+      // CUTS : par NOTAM, la géométrie de découpe résolue (segment peint ou marqueurs)
+      const CUTS = new Map();
+
       for (const n of ground) {
         const refs = refsFromNotam(n.e || "");
         for (const kind of ["twy", "rwy", "stand", "apron"]) {
@@ -12496,10 +12600,43 @@ window.addEventListener("scroll", hidePop, true);
             }
           }
         }
+
+        /* Portions « BTN X AND Y ». On travaille sur le taxiway déjà retenu par
+           le filet ci-dessus (celui que le NOTAM ferme). Trois issues :
+             2 bornes placées et distinctes -> on note le SEGMENT (il sera peint,
+                                                le taxiway entier ne le sera pas)
+             1 borne placée                 -> 1 MARQUEUR sur ce point
+             bornes confondues              -> 1 MARQUEUR (fermeture ponctuelle)
+             0 borne                        -> 1 MARQUEUR sur le taxiway (cité, position inconnue) */
+        for (const [rx, ry] of refs.partial || []) {
+          // le taxiway hôte = celui que le NOTAM cite hors des deux bornes.
+          // refs.twy contient toutes les refs taxiway du NOTAM ; on prend celle
+          // qui n'est ni rx ni ry.
+          const hostRef = (refs.twy || []).find(r => r !== rx && r !== ry);
+          if (!hostRef) continue;
+          const hostHits = INDEX.get("twy:" + hostRef);
+          const host = hostHits && hostHits[0];
+          if (!host) continue;
+          const gA = mainLine(host); if (!gA) continue;
+          const gAp = gA.map(px);
+          const bx = REF.get(rx), by = REF.get(ry);
+          const pax = bx ? posAlong(gAp, bx) : null;
+          const pay = by ? posAlong(gAp, by) : null;
+
+          let cut;
+          if (pax && pay && Math.abs(pax.pos - pay.pos) > 0.04) {
+            const seg = sliceLine(gAp, pax.pos, pay.pos);
+            cut = seg ? { seg, marks: [pax.p, pay.p] } : { marks: [pax.p, pay.p] };
+          } else if (pax || pay) {
+            cut = { marks: [(pax || pay).p] };                      // 1 point (ou bornes confondues)
+          } else {
+            const m = gAp[Math.floor(gAp.length / 2)];
+            cut = { marks: [m], whole: host };                      // 0 point : marqueur sur le taxiway
+          }
+          if (!CUTS.has(host)) CUTS.set(host, []);
+          CUTS.get(host).push({ n, cut });
+        }
       }
-      const lat0 = layout.arp[0], lon0 = layout.arp[1];
-      const KX = Math.cos(lat0 * Math.PI / 180);
-      const px = ([la, lo]) => [(lo - lon0) * KX, -(la - lat0)];
 
       const bb = SURF.map(s => {
         let a = 1e9, b = 1e9, c = -1e9, d = -1e9;
@@ -12545,25 +12682,10 @@ window.addEventListener("scroll", hidePop, true);
       }
       const main = [...comp.values()].sort((a, b) => b.length - a.length)[0] || SURF.map((_, i) => i);
 
-      return { layout, SURF, TOUCH, ground, located, px,
+      return { layout, SURF, TOUCH, CUTS, ground, located, px,
                B: box(SURF.map((_, i) => i)), Bfit: box(main),
                view: { k: 1, tx: 0, ty: 0 }, fit: { s: 1, ox: 0, oy: 0 }, sel: null };
     }
-
-    /* Sur le plan, une couleur dit l'ÉTAT d'une surface — pas sa priorité de
-       lecture. La règle « sujet MP -> Information » est juste dans la LISTE : un
-       poste fermé ne doit pas y écraser une piste fermée. Mais elle peindrait ce
-       même poste en VERT, ce qui se lit « disponible ». On défait ce déclassement
-       ici, et ici seulement : la liste garde son Information, le plan dit fermé.
-       Aucun autre sujet n'est touché. */
-    function planSev(n) {
-      const [subj, cond] = qcodeParts(n.qcode);
-      if (subj !== "MP") return n.severity;
-      const T = (n.e || "").toUpperCase();
-      if (CRITICAL_TEXT.some(k => T.includes(k))) return "critical";
-      return CONDITION_SEVERITY[cond] || "caution";
-    }
-    const planWorst = arr => arr.reduce((a, n) => PLAN_RANK[planSev(n)] < PLAN_RANK[a] ? planSev(n) : a, "info");
 
     /* Le plan a SON PROPRE filtre horaire. Il ne lit pas celui de la liste et ne
        l'écrit pas : deux questions différentes, deux réponses. Sur la liste on
@@ -12598,7 +12720,7 @@ window.addEventListener("scroll", hidePop, true);
       if (!ns || !ns.length) return null;
       const act = ns.filter(planShown);
       if (!act.length) return null;
-      return { state: planSpan() ? "span" : "instant", col: planPal().col[planWorst(act)], ns: act };
+      return { state: planSpan() ? "span" : "instant", col: planPal().closed, ns: act };
     }
 
     /* ---------- rendu ---------- */
@@ -12750,6 +12872,23 @@ window.addEventListener("scroll", hidePop, true);
       for (const [x, y] of pts) if (planPlace(ctx, text, x, y, col, mode, false)) return;
       if (mode !== "off" && pts.length) planPlace(ctx, text, pts[0][0], pts[0][1], col, mode, true);
     }
+    // planSC travaille en lat/lon ; les découpes sont en projeté. planSCp fait
+    // le même écran-mapping en partant du projeté.
+    function planSCp(xy) {
+      const f = plan.fit, v = plan.view;
+      return [(xy[0] * f.s + f.ox) * v.k + v.tx, (xy[1] * f.s + f.oy) * v.k + v.ty];
+    }
+    // marqueur : le point qui renvoie au NOTAM (jonction, ou position citée)
+    function planMark(ctx, xyProj, col, dim) {
+      const p = planSCp(xyProj), r = 6.5 * planDPR;
+      ctx.save();
+      if (!dim && planPal().glow) { ctx.shadowColor = col; ctx.shadowBlur = 10 * planDPR; }
+      ctx.beginPath(); ctx.arc(p[0], p[1], r, 0, 7); ctx.fillStyle = col;
+      if (dim) ctx.globalAlpha = .7;
+      ctx.fill(); ctx.restore();
+      ctx.beginPath(); ctx.arc(p[0], p[1], r * 0.42, 0, 7);
+      ctx.fillStyle = planLight() ? "#f7fafc" : "#0b0f13"; ctx.fill();
+    }
     function planDraw() {
       const cv = $("#planCv"); if (!cv || !plan) return;
       const ctx = cv.getContext("2d");
@@ -12783,7 +12922,37 @@ window.addEventListener("scroll", hidePop, true);
           for (const g of s.segs) { if (!dim) planFill(ctx, g, col + "26"); planStroke(ctx, g, 1.6, col, false, dim); }
           continue;
         }
+        /* Découpe : si ce taxiway a des NOTAMs « BTN X AND Y » actifs, on ne peint
+           PAS l'entier. On peint le(s) segment(s) résolu(s), et on pose les
+           marqueurs. Les NOTAMs de ce taxiway qui ne sont PAS des portions (« TWY
+           s CLSD » simple) repeignent l'entier — d'où le partage ci-dessous. */
+        const cuts = (plan.CUTS.get(s) || []).filter(c => st.ns.includes(c.n));
+        const partialN = new Set(cuts.map(c => c.n));
+        const wholeN = st.ns.filter(n => !partialN.has(n));
+        if (cuts.length && !wholeN.length) {
+          // uniquement des portions : segments + marqueurs, jamais l'entier
+          for (const c of cuts) {
+            if (c.cut.seg) {
+              // seg est en projeté -> le repasser par planSC via un faux "latlon" : on
+              // reconstruit un tracé écran directement
+              ctx.save();
+              if (!dim && planPal().glow) { ctx.shadowColor = col; ctx.shadowBlur = 11 * planDPR; }
+              if (dim) { ctx.setLineDash([7 * planDPR, 5.5 * planDPR]); ctx.globalAlpha = .62; }
+              ctx.strokeStyle = col; ctx.lineWidth = PLAN_W.twy * planDPR * Math.min(plan.view.k, 2.2);
+              ctx.lineCap = dim ? "butt" : "round"; ctx.lineJoin = "round";
+              ctx.beginPath();
+              const a = planSCp(c.cut.seg[0]); ctx.moveTo(a[0], a[1]);
+              for (let i = 1; i < c.cut.seg.length; i++) { const q = planSCp(c.cut.seg[i]); ctx.lineTo(q[0], q[1]); }
+              ctx.stroke(); ctx.restore();
+            }
+            for (const m of c.cut.marks) planMark(ctx, m, col, dim);
+          }
+          continue;
+        }
+        // au moins un NOTAM ferme l'entier -> comportement classique
         for (const g of s.segs) planStroke(ctx, g, s.t === "rwy" ? PLAN_W.rwy : PLAN_W.twy, col, !dim, dim);
+        // et si en plus il y a des portions, leurs marqueurs restent utiles
+        for (const c of cuts) for (const m of c.cut.marks) planMark(ctx, m, col, dim);
       }
       const lab = S.filter(s => s.r && (s.t === "twy" || s.t === "rwy"));
       const st_ = new Map(drawn.map(x => [x.s, x.st]));
@@ -12824,6 +12993,18 @@ window.addEventListener("scroll", hidePop, true);
     /* ---------- interaction ---------- */
     function planPick(mx, my) {
       let best = null, bd = 15 * planDPR;
+      // Marqueurs de découpe : ce sont souvent le SEUL point cliquable d'un NOTAM
+      // (cas « 1 balise »). On les teste en premier, avec un rayon un peu large.
+      for (const [host, arr] of plan.CUTS) {
+        const st = planState(host); if (!st) continue;
+        for (const c of arr) {
+          if (!st.ns.includes(c.n)) continue;
+          for (const m of c.cut.marks) {
+            const p = planSCp(m), d = Math.hypot(p[0] - mx, p[1] - my);
+            if (d < 12 * planDPR && d < bd) { bd = d; best = host; }
+          }
+        }
+      }
       for (const s of plan.SURF) {
         if (!planState(s)) continue;
         for (const g of s.segs) {
