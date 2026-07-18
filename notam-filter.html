@@ -1523,7 +1523,12 @@
 
     /* Sur mobile, une modale à marges est un luxe : le plan a besoin de chaque
        pixel. Elle passe plein écran, le canvas suit. */
-    @media (max-width: 640px) {
+    /* Tablette : ni la largeur d'un iPad (768 à 1366px selon le modèle et
+       l'orientation) ni son écran ne ressemblent à un téléphone — mais comme
+       lui, il n'a pas de souris. C'est ce critère qui doit décider du plein
+       écran, pas une largeur en pixels qu'aucun seuil ne couvre tous les
+       modèles. */
+    @media (max-width: 640px), (hover: none) and (pointer: coarse) {
       #planOv {
         padding: 0
       }
@@ -12797,6 +12802,11 @@ window.addEventListener("scroll", hidePop, true);
     }
 
     /* ---------- rendu ---------- */
+    // Même critère que la media query CSS : pas de souris = plein écran,
+    // qu'il s'agisse d'un téléphone ou d'une tablette (iPad, peu importe le
+    // modèle ou l'orientation — la largeur en pixels ne les couvre pas tous).
+    const planIsFullScreen = () =>
+      matchMedia("(max-width: 640px), (hover: none) and (pointer: coarse)").matches;
     let planDPR = Math.min(devicePixelRatio || 1, 2);
     const planSC = p => {
       const [x, y] = plan.px(p), f = plan.fit, v = plan.view;
@@ -12856,7 +12866,7 @@ window.addEventListener("scroll", hidePop, true);
          son contenu, donc du canvas — lui demander la place disponible revient à
          demander à la boîte sa taille pour décider de sa taille. */
       let availH;
-      if (innerWidth < 640) {
+      if (planIsFullScreen()) {
         const top = (wrap || cv).getBoundingClientRect().top;   // sous l'en-tête et les boutons
         availH = Math.max(240, innerHeight - top - after - 16);
       } else {
