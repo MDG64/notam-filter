@@ -12709,7 +12709,24 @@ window.addEventListener("scroll", hidePop, true);
     }
 
     const planShown = n => !planTWin || activeAt(n, planTWin);
-    const planSpan = () => planTMode !== "now";
+
+    /* Plein = fermé sur TOUTE la période regardée. Pointillé = fermé seulement
+       une PARTIE de cette période (horaire récurrent, ou fenêtre B-C qui ne
+       couvre pas tout). Ce n'est PAS une question de bouton (Now/Today/Tomorrow) :
+       un NOTAM permanent est plein en Today comme en Tomorrow ; un NOTAM
+       « DAILY 2200-0400 » reste pointillé même en Today, puisqu'une partie
+       seulement de la journée est concernée. */
+    function planFullyCovers(n, win) {
+      const b = ts(n.b);
+      const c = /PERM/i.test(n.c) ? Infinity : ts(n.c);
+      const bb = (b == null) ? -Infinity : b, cc = (c == null) ? Infinity : c;
+      const s = n.schedule;
+      if (!s || s.h24 || s.unknown) return bb <= win.start && cc >= win.end;
+      // horaire récurrent : chaque minute de la fenêtre doit tomber dans l'enveloppe ET un créneau
+      for (let t = win.start; t <= win.end; t += 60000)
+        if (!(t >= bb && t <= cc && scheduleActiveAt(s, t))) return false;
+      return true;
+    }
 
     /* Deux rendus, dictés par la QUESTION et non par le NOTAM :
          Now / heure précise -> instant. Réponse ferme : trait plein.
@@ -12720,7 +12737,10 @@ window.addEventListener("scroll", hidePop, true);
       if (!ns || !ns.length) return null;
       const act = ns.filter(planShown);
       if (!act.length) return null;
-      return { state: planSpan() ? "span" : "instant", col: planPal().closed, ns: act };
+      // un seul NOTAM qui couvre toute la fenêtre suffit à garantir une fermeture
+      // continue -> plein. Sinon, la fermeture n'est qu'intermittente -> pointillé.
+      const full = !planTWin || act.some(n => planFullyCovers(n, planTWin));
+      return { state: full ? "instant" : "span", col: planPal().closed, ns: act };
     }
 
     /* ---------- rendu ---------- */
@@ -13028,6 +13048,19 @@ window.addEventListener("scroll", hidePop, true);
       t = Math.max(0, Math.min(1, t));
       return Math.hypot(px_ - (x1 + t * dx), py_ - (y1 + t * dy));
     }
+    /* Après un clic sur un repère (surface peinte, marqueur de découpe, poste),
+       la fiche NOTAM apparaît sous le canvas — mais souvent hors du cadre visible,
+       surtout sur mobile où la modale est plein écran. On fait défiler le SEUL
+       scroll existant (.hd-scroll de la modale) jusqu'à ce que la fiche soit
+       visible, sans jamais remonter si elle l'est déjà. */
+    function planScrollToPick() {
+      const box = document.querySelector("#planOv .hd-scroll");
+      const pick = $("#planPick");
+      if (!box || !pick || !pick.innerHTML.trim()) return;
+      const b = box.getBoundingClientRect(), p = pick.getBoundingClientRect();
+      const overflow = p.bottom - b.bottom;
+      if (overflow > 4) box.scrollBy({ top: overflow + 16, behavior: "smooth" });
+    }
     function planShowPick(s) {
       const el = $("#planPick"); if (!el) return;
       if (!s) { el.innerHTML = ""; return; }
@@ -13120,6 +13153,7 @@ window.addEventListener("scroll", hidePop, true);
 
         const surf = planPick(mx, my);
         plan.sel = surf; planShowPick(surf);
+        if (surf) requestAnimationFrame(() => setTimeout(planScrollToPick, 30));
       });
       cv.addEventListener("pointercancel", release);
 
