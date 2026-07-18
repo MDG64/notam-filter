@@ -3014,9 +3014,24 @@ m10970 -3289 c90 -8 172 -14 182 -14 15 0 19 -9 22 -37 l3 -38 69 -3 69 -3 -6
       const m = text.match(re);
       return m ? m[1].trim().replace(/\s+/g, " ") : "";
     }
+    // Nettoie le HTML que la FAA glisse dans certains NOTAM US (FDC/obstacles) :
+    // <B>…</B>, <BR>, entités échappées. Sans ça ces balises cassent l'extraction
+    // du Q-code (badge parasite type "B>KZMA") et collent les items à l'affichage.
+    // No-op sur un NOTAM ICAO normal (aucune balise). Préserve les sauts de ligne
+    // = structure Q)/A)/B)/C)/E) intacte pour le reste du parseur.
+    function cleanHtml(s) {
+      let t = (s || "");
+      t = t.replace(/&lt;/gi, "<").replace(/&gt;/gi, ">").replace(/&quot;/gi, '"')
+           .replace(/&#0?39;|&apos;/gi, "'").replace(/&nbsp;/gi, " ").replace(/&amp;/gi, "&");
+      t = t.replace(/<br\s*\/?>/gi, "\n").replace(/<\/?[a-z][^>]*>/gi, "");
+      t = t.replace(/[ \t]+/g, " ").replace(/[ \t]*\n[ \t]*/g, "\n").replace(/\n{3,}/g, "\n\n").trim();
+      return t;
+    }
     function parseNotam(raw) {
-      const text = raw.trim();
-      const id = (text.match(/^([A-Z]\d{4}\/\d{2})/) || [])[1] || "(sans id)";
+      const text = cleanHtml(raw);
+      // ICAO (A1234/26) OU domestique US (07/211, MM/NNN) : les NOTAM US
+      // domestiques ont un ID cycle/séquence, sans lettre de série ni année.
+      const id = (text.match(/^([A-Z]\d{4}\/\d{2}|\d{2}\/\d{3,4})/) || [])[1] || "(sans id)";
       const qm = text.match(/Q\)\s*([^\n]+)/);
       let qcode = "", scope = "", traffic = "", purpose = "";
       if (qm) { const p = qm[1].split("/").map(s => s.trim()); qcode = p[1] || ""; traffic = p[2] || ""; purpose = p[3] || ""; scope = p[4] || ""; }
