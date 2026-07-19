@@ -11463,7 +11463,7 @@ function renderInfo(icao) {
       {
         const routeSet = new Set(((curRoute && curRoute.ok) ? curRoute.airports : []).map(a => a.icao));
         const minRwy = v.scale < 6 ? 3000 : v.scale < 11 ? 2400 : v.scale < 18 ? 2000 : 0;
-        const showLabels = v.scale > 9;
+        const showLabels = v.scale > 58;   // 2 crans de molette plus tôt que 81 (chaque cran = ×1.18)
         const GREEN = "#34d39a", RED = light ? "#e5484d" : "#ff5d6c";
         const dotR = 3 * dpr, placed = [];
         // anti-collision avec les libellés de villes du fond : on reprojette leurs boîtes
@@ -11546,6 +11546,7 @@ function renderInfo(icao) {
       const st = (activeRoute() || {}).status || {};
       mapHitboxes = [];
       const GREEN = "#34d39a", RED = light ? "#e5484d" : "#ff5d6c";
+      const showRouteLabels = v.scale > 58;   // même seuil que la couche mondiale : point seul au dézoom, code ICAO au zoom
       for (const a of ((curRoute && curRoute.ok) ? curRoute.airports : [])) {
         const x = X(a.lon), y = Y(a.lat);
         if (x < -40 * dpr || x > cv.width + 40 * dpr || y < -20 * dpr || y > cv.height + 20 * dpr) continue;
@@ -11556,23 +11557,26 @@ function renderInfo(icao) {
         const dotR = (depArr ? 6 : 4.5) * dpr;
         ctx.beginPath(); ctx.arc(x, y, dotR, 0, 7); ctx.fill();
         ctx.strokeStyle = light ? "#fff" : "#0a0f14"; ctx.lineWidth = 1.6 * dpr; ctx.stroke();
-        // taille FIXE, alignée sur les plus petites capsules (couche mondiale, 11px)
-        const labelPx = 11;
-        const lr = labelPx / 12;                      // ratio par rapport à la taille de référence (12px)
-        ctx.font = (depArr ? "700 " : "600 ") + (labelPx * dpr) + "px 'IBM Plex Mono',monospace";
-        const w = ctx.measureText(a.icao).width;
-        const pad = 6 * dpr, bh = 14 * dpr;
-        const boxX = x + 9 * lr * dpr, boxY = y - bh / 2, boxW = w + pad * 2, boxH = bh;
-        // étiquette « pastille » arrondie (style capsule) : fond = couleur du point, texte foncé
-        const rr = boxH / 2;
-        ctx.lineJoin = "round";
-        ctx.beginPath();
-        if (ctx.roundRect) ctx.roundRect(boxX, boxY, boxW, boxH, rr);
-        else { ctx.moveTo(boxX + rr, boxY); ctx.arcTo(boxX + boxW, boxY, boxX + boxW, boxY + boxH, rr); ctx.arcTo(boxX + boxW, boxY + boxH, boxX, boxY + boxH, rr); ctx.arcTo(boxX, boxY + boxH, boxX, boxY, rr); ctx.arcTo(boxX, boxY, boxX + boxW, boxY, rr); }
-        // capsule transparente, liseré = couleur du point (vert=téléchargé, rouge=non)
-        ctx.lineWidth = 1.4 * lr * dpr; ctx.strokeStyle = col; ctx.stroke();
-        ctx.fillStyle = C.txt;
-        ctx.textAlign = "left"; ctx.fillText(a.icao, boxX + pad, y); ctx.textAlign = "start";
+        let boxX = x, boxY = y, boxW = 0, boxH = 0;
+        if (showRouteLabels) {
+          // taille FIXE, alignée sur les plus petites capsules (couche mondiale, 11px)
+          const labelPx = 11;
+          const lr = labelPx / 12;                      // ratio par rapport à la taille de référence (12px)
+          ctx.font = (depArr ? "700 " : "600 ") + (labelPx * dpr) + "px 'IBM Plex Mono',monospace";
+          const w = ctx.measureText(a.icao).width;
+          const pad = 6 * dpr, bh = 14 * dpr;
+          boxX = x + 9 * lr * dpr; boxY = y - bh / 2; boxW = w + pad * 2; boxH = bh;
+          // étiquette « pastille » arrondie (style capsule) : fond = couleur du point, texte foncé
+          const rr = boxH / 2;
+          ctx.lineJoin = "round";
+          ctx.beginPath();
+          if (ctx.roundRect) ctx.roundRect(boxX, boxY, boxW, boxH, rr);
+          else { ctx.moveTo(boxX + rr, boxY); ctx.arcTo(boxX + boxW, boxY, boxX + boxW, boxY + boxH, rr); ctx.arcTo(boxX + boxW, boxY + boxH, boxX, boxY + boxH, rr); ctx.arcTo(boxX, boxY + boxH, boxX, boxY, rr); ctx.arcTo(boxX, boxY, boxX + boxW, boxY, rr); }
+          // capsule transparente, liseré = couleur du point (vert=téléchargé, rouge=non)
+          ctx.lineWidth = 1.4 * lr * dpr; ctx.strokeStyle = col; ctx.stroke();
+          ctx.fillStyle = C.txt;
+          ctx.textAlign = "left"; ctx.fillText(a.icao, boxX + pad, y); ctx.textAlign = "start";
+        }
         // zone cliquable : pastille (rayon élargi pour le tactile) + rectangle d'étiquette,
         // dans l'ordre de dessin (le dernier poussé = dessiné au-dessus, donc prioritaire au clic)
         mapHitboxes.push({
