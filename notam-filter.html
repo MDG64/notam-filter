@@ -10316,9 +10316,11 @@ E) ${e}`;
           const old = unprot.pop();
           idx = idx.filter(c => c !== old);
           localStorage.removeItem("notam_data:" + old);
+          dropLayoutOffline(old);              // le plan part avec ses NOTAM
         }
         localStorage.setItem("notam_data_idx", JSON.stringify(idx));
         rebuildSavedSet();
+        cacheLayoutOffline(icao);              // ce terrain est vert : son plan suit
       } catch (e) {
         try { offlineIdx().slice(5).forEach(c => localStorage.removeItem("notam_data:" + c)); } catch (_) { }
         rebuildSavedSet();
@@ -10326,6 +10328,42 @@ E) ${e}`;
     }
     function loadOffline(icao) {
       try { const s = localStorage.getItem("notam_data:" + icao); return s ? JSON.parse(s) : null; } catch (e) { return null; }
+    }
+
+    /* ---- PLANS hors-ligne : même cycle de vie que les NOTAM ----
+       Un terrain « vert » (NOTAM en cache) doit aussi avoir son PLAN consultable
+       en vol : consulté OU intégré à une route, c'est la même promesse. On
+       provoque donc le téléchargement du layout au moment où le terrain devient
+       hors-ligne, et on le supprime quand la rotation l'éjecte — les plans ne
+       survivent jamais aux NOTAM qu'ils accompagnent.
+       Le service worker (v3) intercepte le fetch et garde la copie ; ici on ne
+       fait que déclencher la requête. File séquentielle : un préchargement de
+       route ne doit pas lancer 30 téléchargements d'un coup. */
+    const _layoutQ = [];
+    let _layoutBusy = false;
+    async function _layoutDrain() {
+      if (_layoutBusy) return;
+      _layoutBusy = true;
+      while (_layoutQ.length) {
+        const icao = _layoutQ.shift();
+        try { await fetch(LAYOUT_URL + encodeURIComponent(icao) + ".json"); }
+        catch (_) { /* hors ligne : retenté à la prochaine consultation */ }
+        await new Promise(r => setTimeout(r, 120));
+      }
+      _layoutBusy = false;
+    }
+    function cacheLayoutOffline(icao) {
+      if (!icao || _layoutQ.includes(icao)) return;
+      _layoutQ.push(icao); _layoutDrain();
+    }
+    async function dropLayoutOffline(icao) {
+      try {
+        // le cache mémoire de la session doit partir aussi, sinon le plan reste
+        // lisible jusqu'au prochain rechargement alors qu'on vient de l'éjecter
+        try { layoutCache.delete(icao); } catch (_) { }
+        const url = new URL(LAYOUT_URL + encodeURIComponent(icao) + ".json", location.href).href;
+        for (const n of await caches.keys()) (await caches.open(n)).delete(url);
+      } catch (_) { }
     }
     function stampZ(ts) {
       const d = new Date(ts);
