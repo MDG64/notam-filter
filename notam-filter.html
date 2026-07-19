@@ -13163,12 +13163,34 @@ window.addEventListener("scroll", hidePop, true);
       }
       return best;
     }
+    /* Étiquette d'un taxiway/piste : elle SUIT la portion visible. On échantillonne
+       tous les tronçons en espace ÉCRAN (points denses), on ne garde que ceux
+       dans le cadre, et on pose le nom sur cette portion visible. Ainsi, quand
+       l'utilisateur déplace ou zoome, le libellé se replace tout seul sur ce
+       qu'il voit — au lieu de rester collé au milieu géographique et de sortir
+       du cadre. Rien de visible => pas d'étiquette (inutile hors cadre). */
     function planLabel(ctx, text, segs, col, mode) {
-      const g = planLongest(segs); if (!g) return;
-      const pts = [0.5, 0.4, 0.6, 0.3, 0.7, 0.2, 0.8, 0.12, 0.88].map(t =>
-        planSC(g[Math.min(g.length - 1, Math.round(t * (g.length - 1)))]));
-      for (const [x, y] of pts) if (planPlace(ctx, text, x, y, col, mode, false)) return;
-      if (mode !== "off" && pts.length) planPlace(ctx, text, pts[0][0], pts[0][1], col, mode, true);
+      const cv = ctx.canvas, W = cv.width, H = cv.height, M = 8 * planDPR;
+      const inView = p => p[0] >= M && p[0] <= W - M && p[1] >= M && p[1] <= H - M;
+      const cand = [];
+      for (const g of segs) {
+        const scr = g.map(planSC);
+        for (let i = 1; i < scr.length; i++) {
+          const a = scr[i - 1], b = scr[i], d = Math.hypot(b[0] - a[0], b[1] - a[1]);
+          const steps = Math.max(1, Math.min(40, Math.round(d / (36 * planDPR))));
+          for (let s = 0; s < steps; s++) cand.push([a[0] + (b[0] - a[0]) * s / steps, a[1] + (b[1] - a[1]) * s / steps]);
+        }
+        if (scr.length) cand.push(scr[scr.length - 1]);
+      }
+      const vis = cand.filter(inView);
+      if (!vis.length) return;                          // hors cadre : rien à étiqueter
+      // positions réparties le long de la portion visible (milieu d'abord)
+      const fr = [0.5, 0.4, 0.6, 0.3, 0.7, 0.2, 0.8, 0.12, 0.88];
+      for (const t of fr) {
+        const p = vis[Math.min(vis.length - 1, Math.round(t * (vis.length - 1)))];
+        if (planPlace(ctx, text, p[0], p[1], col, mode, false)) return;
+      }
+      if (mode !== "off") { const p = vis[Math.floor(vis.length / 2)]; planPlace(ctx, text, p[0], p[1], col, mode, true); }
     }
     // planSC travaille en lat/lon ; les découpes sont en projeté. planSCp fait
     // le même écran-mapping en partant du projeté.
