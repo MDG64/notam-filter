@@ -726,26 +726,35 @@
     }
 
     /* ---------- filters ---------- */
+    .filters-wrap {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      border: 2px solid var(--cyan);
+      border-radius: var(--radius);
+      padding: 14px;
+      margin-top: 8px;
+      box-shadow: var(--elev);
+      background: var(--panel)
+    }
+
+    .filters-wrap-title {
+      font: 600 13px/1 var(--mono);
+      color: var(--cyan);
+      letter-spacing: .18em;
+      text-transform: uppercase
+    }
+
     .filters {
       display: flex;
       flex-direction: column;
       gap: 10px;
-      padding: 14px 0 4px;
-      border-top: 1px solid var(--line);
-      margin-top: 8px
-    }
-
-    .filters-head {
-      display: flex;
-      align-items: center;
-      gap: 10px
-    }
-
-    .filters .title {
-      font: 500 10px/1 var(--mono);
-      color: var(--muted);
-      letter-spacing: .18em;
-      text-transform: uppercase
+      padding: 14px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      margin-top: 8px;
+      box-shadow: var(--elev);
+      background: var(--panel)
     }
 
     .seg {
@@ -790,8 +799,12 @@
     }
 
     .cat .cnt {
-      font: 600 11px/1 var(--mono);
-      opacity: .75
+      font: 600 16px/1 var(--mono);
+      color: #29b6f6
+    }
+
+    .cat.on .cnt {
+      color: var(--bg)
     }
 
     /* ---------- icônes de phase de vol (décollage / croisière / atterrissage) ---------- */
@@ -864,6 +877,11 @@
       align-items: center;
       gap: 8px;
       flex-wrap: wrap
+    }
+
+    .tmodes .btn {
+      font-size: 14px;
+      padding: 10px 20px
     }
 
     .scratch.time input[type=time] {
@@ -2638,27 +2656,28 @@ m10970 -3289 c90 -8 172 -14 182 -14 15 0 19 -9 22 -37 l3 -38 69 -3 69 -3 -6
 
     <div class="offline-banner" id="offlineBanner" hidden></div>
 
-    <div class="summary" id="summary"></div>
+    <div class="filters-wrap">
+      <div class="filters-wrap-title">Filters</div>
 
-    <div class="timebar">
-      <div class="scratch time">
-        <label for="htime">Z·UTC</label>
-        <input id="htime" type="time" aria-label="Flight time (UTC) for the time filter">
-      </div>
-      <button class="clearTime" id="clearTime" hidden>× Clear</button>
-      <div class="tmodes">
-        <button class="btn ghost" id="now">Now</button>
-        <button class="btn ghost" id="todayBtn">Today</button>
-        <button class="btn ghost" id="tomBtn">Tomorrow</button>
-      </div>
-      <span class="winreadout" id="winreadout">Time filter off — showing all NOTAMs</span>
-    </div>
+      <div class="summary" id="summary"></div>
 
-    <div class="filters">
-      <div class="filters-head">
-        <span class="title"></span>
+      <div class="timebar">
+        <div class="scratch time">
+          <label for="htime">Z·UTC</label>
+          <input id="htime" type="time" aria-label="Flight time (UTC) for the time filter">
+        </div>
+        <button class="clearTime" id="clearTime" hidden>× Clear</button>
+        <div class="tmodes">
+          <button class="btn ghost" id="now">Now</button>
+          <button class="btn ghost" id="todayBtn">Today</button>
+          <button class="btn ghost" id="tomBtn">Tomorrow</button>
+        </div>
+        <span class="winreadout" id="winreadout">Time filter off — showing all NOTAMs</span>
       </div>
-      <div class="seg" id="seg"></div>
+
+      <div class="filters">
+        <div class="seg" id="seg"></div>
+      </div>
     </div>
 
     <div class="list" id="list"></div>
