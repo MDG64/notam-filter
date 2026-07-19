@@ -13109,10 +13109,12 @@ window.addEventListener("scroll", hidePop, true);
     function planPlace(ctx, text, x, y, col, mode, force) {
       const on = mode === "instant", pend = mode === "span";
       const P = planPal();
-      // Échelle selon le zoom : lisible à l'ouverture (k=1), grossit en zoomant,
-      // plafonnée pour ne pas envahir. Les puces ET les boîtes de collision
-      // suivent la même échelle, donc l'anti-chevauchement reste cohérent.
-      const LS = Math.min(Math.max(plan.view.k, 1), 2.4);
+      // Échelle SOUS-LINÉAIRE selon le zoom : les étiquettes grossissent, mais
+      // moins vite que la carte ne s'étale. Ainsi, en zoomant, les noms se
+      // SÉPARENT et l'anti-chevauchement en révèle de plus en plus — jusqu'à
+      // tous les voir. Une échelle linéaire (=k) gardait une densité constante
+      // et cachait à jamais les mêmes étiquettes.
+      const LS = Math.min(1 + (plan.view.k - 1) * 0.4, 2.2);
       const fs = (on ? 12.5 : 11.5) * LS;
       ctx.font = (on ? "600 " : "500 ") + fs * planDPR + "px 'IBM Plex Mono',monospace";
       const w = ctx.measureText(text).width + 9 * LS * planDPR, h = 15 * LS * planDPR;
@@ -13158,7 +13160,7 @@ window.addEventListener("scroll", hidePop, true);
     }
     function planLabel(ctx, text, segs, col, mode) {
       const g = planLongest(segs); if (!g) return;
-      const pts = [0.5, 0.35, 0.65, 0.2, 0.8].map(t =>
+      const pts = [0.5, 0.4, 0.6, 0.3, 0.7, 0.2, 0.8, 0.12, 0.88].map(t =>
         planSC(g[Math.min(g.length - 1, Math.round(t * (g.length - 1)))]));
       for (const [x, y] of pts) if (planPlace(ctx, text, x, y, col, mode, false)) return;
       if (mode !== "off" && pts.length) planPlace(ctx, text, pts[0][0], pts[0][1], col, mode, true);
@@ -13274,20 +13276,24 @@ window.addEventListener("scroll", hidePop, true);
       for (const s of lab) if (!st_.get(s) && (s.t === "rwy" || plan.view.k > 1.15))
         planLabel(ctx, s.r, s.segs, planPal().off, "off");
 
-      /* Postes : 130 à LFBO, 519 à LFPG. Les étiqueter tous à l'échelle d'ouverture
-         donnerait une bouillie. Un poste touché reçoit son nom dès k>=2,2 ; les
-         autres attendent k>=3,5, où ils servent de repères. Pas de forçage : deux
-         postes voisins sont à ~30 m, s'écraser l'un l'autre ne dirait rien de plus
-         — sous le seuil, le point coloré et le clic suffisent. */
+      /* Postes : 130 à LFBO, 519 à LFPG. À l'échelle d'ouverture, tout étiqueter
+         serait une bouillie — mais l'utilisateur doit pouvoir TOUS les voir en
+         zoomant. Un poste touché reçoit son nom dès k>=2 ; les autres dès k>=2,6.
+         L'anti-chevauchement + l'échelle sous-linéaire font qu'en zoomant sur une
+         zone, ses postes se révèlent un à un. On essaie au-dessus PUIS en dessous
+         du point : deux fois plus de chances qu'un nom trouve sa place. */
       const P_ = planPal();
-      if (plan.view.k >= 2.2) {
+      if (plan.view.k >= 2.0) {
+        const LSs = Math.min(1 + (plan.view.k - 1) * 0.4, 2.2);
+        const dy = 11 * LSs * planDPR;
         for (const s of S) {
           if (s.t !== "std" || !s.r) continue;
           const st = st_.get(s);
-          if (!st && plan.view.k < 3.5) continue;
+          if (!st && plan.view.k < 2.6) continue;
           const pt = planSC(s.segs[0][0]);
-          planPlace(ctx, s.r, pt[0], pt[1] - 11 * planDPR,
-                    st ? st.col : P_.off, st ? st.state : "off", false);
+          const col = st ? st.col : P_.off, mode = st ? st.state : "off";
+          if (!planPlace(ctx, s.r, pt[0], pt[1] - dy, col, mode, false))
+            planPlace(ctx, s.r, pt[0], pt[1] + dy, col, mode, false);
         }
       }
     }
