@@ -1,7 +1,9 @@
 // Service Worker — NOTAM Filter PWA
-// v2 : "réseau d'abord" pour l'app (les MAJ s'affichent au prochain lancement),
-//       "cache d'abord" pour les icônes, et les appels API toujours en réseau.
-const CACHE = "notam-filter-v2";
+// v3 : "réseau d'abord" pour l'app (les MAJ s'affichent au prochain lancement),
+//       "cache d'abord" pour les icônes, les appels API toujours en réseau,
+//       et les PLANS (layouts/*.json) mis en cache à l'usage -> consultables
+//       en vol, sans connexion.
+const CACHE = "notam-filter-v3";
 const ASSETS = [
   "./notam-filter.html", "./index.html", "./manifest.json",
   "./icon-192.png", "./icon-512.png"
@@ -44,6 +46,23 @@ self.addEventListener("fetch", e => {
     return;
   }
 
-  // 3) Autres ressources (icônes, manifest) : cache d'abord, réseau en repli.
+  // 3) Plans de plateforme (layouts/*.json) : réseau d'abord ET mise en cache.
+  //    Un terrain consulté une fois reste consultable EN VOL, sans connexion —
+  //    tout en se rafraîchissant dès qu'on est en ligne (les layouts sont
+  //    régénérés depuis OSM, il ne faut donc pas figer une version périmée).
+  if (url.includes("/layouts/")) {
+    e.respondWith(
+      fetch(e.request).then(r => {
+        if (r && r.ok) {
+          const copy = r.clone();
+          caches.open(CACHE).then(c => c.put(e.request, copy)).catch(() => {});
+        }
+        return r;
+      }).catch(() => caches.match(e.request))    // hors ligne : la copie gardée
+    );
+    return;
+  }
+
+  // 4) Autres ressources (icônes, manifest) : cache d'abord, réseau en repli.
   e.respondWith(caches.match(e.request).then(r => r || fetch(e.request)));
 });
