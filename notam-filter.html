@@ -12986,7 +12986,12 @@ window.addEventListener("scroll", hidePop, true);
       plan.view.ty = cl(plan.view.ty, cv.height - y1, -y0);
     }
 
-    const PLAN_KMAX = 9;
+    // Plafond de zoom. À k=9, des postes espacés de ~30 m ne sont séparés que
+    // de ~47 px — à peine une largeur de puce, donc les clusters denses se
+    // chevauchaient encore. On monte le plafond pour pouvoir « fouiller » un
+    // parking serré et voir chaque nom. Les traits/étiquettes restent bornés
+    // (échelles plafonnées ailleurs), seul l'étalement géographique augmente.
+    const PLAN_KMAX = 24;
     // zoom en gardant un point fixe sous le doigt (ou le curseur)
     function planZoomAt(mx, my, k) {
       const k0 = plan.view.k;
