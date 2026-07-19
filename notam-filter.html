@@ -1407,6 +1407,39 @@
       margin-bottom: 10px
     }
 
+    /* Plan : en-tête FIXE (titre + Now/Today/Tomorrow) toujours visible, seul le
+       canvas défile. La modale devient une colonne flex : topbar figée en haut,
+       .hd-scroll prend le reste et défile. */
+    .modal.plan {
+      display: flex;
+      flex-direction: column
+    }
+
+    .modal.plan .plan-topbar {
+      flex: 0 0 auto;
+      padding: 18px 48px 10px 20px;
+      background: var(--panel);
+      border-bottom: 1px solid var(--line)
+    }
+
+    .modal.plan .plan-topbar .plan-head {
+      margin-bottom: 0
+    }
+
+    .modal.plan .plan-topbar .plan-time {
+      margin: 10px 0 0
+    }
+
+    .modal.plan .hd-scroll {
+      flex: 1 1 auto;
+      min-height: 0;
+      max-height: none
+    }
+
+    .modal.plan .plan-wrap {
+      padding-top: 12px
+    }
+
     .plan-head .hd-title {
       margin: 0
     }
@@ -1561,11 +1594,15 @@
       }
 
       .modal.plan .hd-scroll {
-        max-height: 100dvh;
+        max-height: none;
         padding: 0
       }
 
-      .plan-wrap {
+      .modal.plan .plan-topbar {
+        padding: 10px 46px 8px 12px
+      }
+
+      .modal.plan .plan-wrap {
         padding: 10px 10px 16px
       }
 
@@ -2738,12 +2775,17 @@ m10970 -3289 c90 -8 172 -14 182 -14 15 0 19 -9 22 -37 l3 -38 69 -3 69 -3 -6
   <div class="modal-ov" id="planOv" hidden>
     <div class="modal plan" role="dialog" aria-modal="true" aria-label="Aerodrome layout">
       <button class="modal-x" id="planClose" aria-label="Close">×</button>
+      <!-- En-tête FIXE : nom du terrain + Now/Today/Tomorrow restent toujours
+           visibles, seul le canvas (plus bas) défile. -->
+      <div class="plan-topbar">
+        <div class="plan-head">
+          <h2 class="hd-title">Layout — <span id="planIcao">—</span></h2>
+          <span class="plan-sub" id="planSub"></span>
+        </div>
+        <div id="planTimeSlot"></div>
+      </div>
       <div class="hd-scroll">
         <div class="plan-wrap">
-          <div class="plan-head">
-            <h2 class="hd-title">Layout — <span id="planIcao">—</span></h2>
-            <span class="plan-sub" id="planSub"></span>
-          </div>
           <div id="planBody"></div>
         </div>
       </div>
@@ -13520,6 +13562,7 @@ window.addEventListener("scroll", hidePop, true);
       const ov = $("#planOv"), body = $("#planBody");
       $("#planIcao").textContent = icao || "—";
       $("#planSub").textContent = "";
+      $("#planTimeSlot").innerHTML = "";
       ov.hidden = false;
       body.innerHTML = `<div class="plan-msg"><div class="spinner"></div>Loading layout…</div>`;
       if (!icao) { body.innerHTML = `<div class="plan-msg">Load an aerodrome first.</div>`; return; }
@@ -13535,13 +13578,13 @@ window.addEventListener("scroll", hidePop, true);
       const nTwy = plan.SURF.filter(s => s.t === "twy" && s.r).length;
       const nRwy = plan.SURF.filter(s => s.t === "rwy" && s.r).length;
       $("#planSub").textContent = `${nRwy} runway${nRwy === 1 ? "" : "s"} · ${nTwy} named taxiway${nTwy === 1 ? "" : "s"}`;
-      body.innerHTML = `<div class="plan-time">
+      $("#planTimeSlot").innerHTML = `<div class="plan-time">
           <button class="btn ghost" id="planT-now">Now</button>
           <button class="btn ghost" id="planT-today">Today</button>
           <button class="btn ghost" id="planT-tomorrow">Tomorrow</button>
           <span class="plan-time-note" id="planTNote"></span>
-        </div>
-        <div class="plan-cvwrap">
+        </div>`;
+      body.innerHTML = `<div class="plan-cvwrap">
           <canvas id="planCv"></canvas>
           <div class="plan-zoom">
             <button id="planZin"  aria-label="Zoom in"  title="Zoom in">+</button>
