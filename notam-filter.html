@@ -12414,8 +12414,8 @@ window.addEventListener("scroll", hidePop, true);
           if(kw.has(t)){ expectRef=true; j++; continue; }
           if(!expectRef) break;                    // pas de séparateur -> on arrête
           if(NATO[t]) t=NATO[t];
-          // plage "X TO Y"
-          if(w[j+1]==="TO" && ok(t) && ok(w[j+2])){
+          // plage "X TO Y" / "X THRU Y" / "X THROUGH Y"
+          if((w[j+1]==="TO"||w[j+1]==="THRU"||w[j+1]==="THROUGH") && ok(t) && ok(w[j+2])){
             const r=range(t,w[j+2]);
             if(r){ r.forEach(x=>out.push(x)); j+=3; expectRef=false; continue; }
           }
@@ -12467,6 +12467,18 @@ window.addEventListener("scroll", hidePop, true);
             let j=a.at+1; while(j<w.length&&w[j]!=="TO")j++; if(j>=w.length)continue;
             const b=firstRef(j+1); if(b) partial.push([a.ref,b.ref]); }
         }
+        /* Une ref qui n'apparaît QUE comme borne d'une portion « BTN X AND Y »
+           (ou « FM X TO Y ») n'est pas un taxiway fermé : c'est une limite. Sans
+           ce nettoyage, « TWY P BTN TWY Z AND TWY M2 CLSD » peindrait Z et M2 en
+           entier alors qu'ils ne bornent que le segment fermé de P. On ne retire
+           une borne que s'il existe un taxiway hôte (le même find que planBuild)
+           et que la borne ne sert pas elle-même d'hôte à une autre portion. */
+        const boundary=new Set(), hostsUsed=new Set();
+        for(const [rx,ry] of partial){
+          const host=[...twy].find(r=>r!==rx&&r!==ry);
+          if(host){ boundary.add(rx); boundary.add(ry); hostsUsed.add(host); }
+        }
+        for(const b of boundary) if(!hostsUsed.has(b)) twy.delete(b);
         const hit=twy.size||rwy.size||stand.size||apron.size;
         return {twy:[...twy],rwy:[...rwy],stand:[...stand],apron:[...apron],partial,hit:!!hit};
       }
@@ -12612,8 +12624,11 @@ window.addEventListener("scroll", hidePop, true);
       }
       return best;
     }
-    // position (0..1) le long de gA du croisement avec une autre surface — ou d'un point
-    function posAlong(gA, other) {
+    // TOUTES les positions (0..1) le long de gA où une autre surface la rencontre.
+    // Un taxiway-borne peut croiser l'hôte en plusieurs points ; on les rend tous
+    // pour pouvoir apparier ensuite le couple de bornes le plus resserré (la
+    // portion réelle), au lieu de choisir chaque borne isolément.
+    function posAll(gA, other) {
       const cum = polyCum(gA), total = cum[cum.length - 1] || 1;
       if (other.point) {
         // projection d'un point (centre d'un poste) sur gA : le plus proche
@@ -12627,21 +12642,59 @@ window.addEventListener("scroll", hidePop, true);
           const d = Math.hypot(other.point[0] - qx, other.point[1] - qy);
           if (d < bd) { bd = d; bp = (cum[i - 1] + t * (cum[i] - cum[i - 1])) / total; }
         }
-        return bd < 0.9 / 111.32 ? { pos: bp, p: other.point } : null;   // 900 m max sinon hors sujet
+        return bd < 0.9 / 111.32 ? [{ pos: bp, p: other.point }] : [];   // 900 m max sinon hors sujet
       }
-      // croisement avec les segments d'un autre taxiway
-      let res = [];
+      // croisements avec les segments d'un autre taxiway
+      const res = [];
       for (let i = 1; i < gA.length; i++)
         for (const gB of other.segs) for (let j = 1; j < gB.length; j++) {
           const r = segCross(gA[i - 1], gA[i], gB[j - 1], gB[j]);
           if (r) res.push({ pos: (cum[i - 1] + r.t * (cum[i] - cum[i - 1])) / total, p: r.p });
         }
-      return res.length ? res.sort((a, b) => Math.abs(a.pos - 0.5) - Math.abs(b.pos - 0.5))[0] : null;
+      return res;
+    }
+    // position unique la plus « centrale » — conservée pour les usages simples
+    function posAlong(gA, other) {
+      const all = posAll(gA, other);
+      return all.length ? all.sort((a, b) => Math.abs(a.pos - 0.5) - Math.abs(b.pos - 0.5))[0] : null;
+    }
+    // le couple (borne X, borne Y) le plus resserré le long de gA : c'est la
+    // portion que « BTN X AND Y » désigne. Retourne aussi le cas dégradé (une
+    // seule borne trouvée) pour que l'appelant pose un marqueur.
+    function tightestPair(gA, ox, oy) {
+      const xs = ox ? posAll(gA, ox) : [], ys = oy ? posAll(gA, oy) : [];
+      if (xs.length && ys.length) {
+        let best = null;
+        for (const a of xs) for (const b of ys) {
+          const d = Math.abs(a.pos - b.pos);
+          if (!best || d < best.d) best = { d, a, b };
+        }
+        return { a: best.a, b: best.b, d: best.d, n: 2 };
+      }
+      if (xs.length) return { a: xs[0], b: null, d: Infinity, n: 1 };
+      if (ys.length) return { a: ys[0], b: null, d: Infinity, n: 1 };
+      return { a: null, b: null, d: Infinity, n: 0 };
     }
     function sliceLine(gA, p0, p1) {
       const [lo, hi] = [Math.min(p0, p1), Math.max(p0, p1)];
-      const cum = polyCum(gA), total = cum[cum.length - 1] || 1, out = [];
-      for (let i = 0; i < gA.length; i++) { const f = cum[i] / total; if (f >= lo && f <= hi) out.push(gA[i]); }
+      if (hi - lo < 1e-6) return null;
+      const cum = polyCum(gA), total = cum[cum.length - 1] || 1;
+      // point interpolé à la fraction f (0..1) de la longueur cumulée : on borne
+      // le trait EXACTEMENT sur les deux bornes, sans dépendre de la densité de
+      // sommets (une polyligne à 3 points ne doit pas retomber en marqueurs).
+      const at = f => {
+        const target = f * total;
+        for (let i = 1; i < gA.length; i++) {
+          if (cum[i] >= target) {
+            const seg = cum[i] - cum[i - 1] || 1e-12, u = (target - cum[i - 1]) / seg;
+            return [gA[i - 1][0] + u * (gA[i][0] - gA[i - 1][0]), gA[i - 1][1] + u * (gA[i][1] - gA[i - 1][1])];
+          }
+        }
+        return gA[gA.length - 1];
+      };
+      const out = [at(lo)];
+      for (let i = 0; i < gA.length; i++) { const f = cum[i] / total; if (f > lo && f < hi) out.push(gA[i]); }
+      out.push(at(hi));
       return out.length >= 2 ? out : null;
     }
 
@@ -12714,11 +12767,34 @@ window.addEventListener("scroll", hidePop, true);
           const hostHits = INDEX.get("twy:" + hostRef);
           const host = hostHits && hostHits[0];
           if (!host) continue;
-          const gA = mainLine(host); if (!gA) continue;
-          const gAp = gA.map(px);
           const bx = REF.get(rx), by = REF.get(ry);
-          const pax = bx ? posAlong(gAp, bx) : null;
-          const pay = by ? posAlong(gAp, by) : null;
+
+          /* Un taxiway peut être découpé en plusieurs tronçons disjoints portant
+             la même ref (P à MIA…). La portion « BTN X AND Y » ne vit que sur
+             CELUI qui porte réellement les deux bornes ; se rabattre sur le plus
+             long tronçon (mainLine) surligne à côté. On évalue donc chaque
+             tronçon et on retient le meilleur : deux bornes placées et distinctes
+             > deux bornes confondues > une borne > (à défaut) le plus long.
+             Sur un tronçon donné, une borne peut le croiser plusieurs fois : on
+             retient le COUPLE de bornes le plus resserré (tightestPair), pas
+             chaque borne « au milieu » de son côté — sinon on apparie deux
+             croisements éloignés et le segment déborde. */
+          let gAp = null, pax = null, pay = null, bestScore = -1;
+          let longest = null, longL = -1;
+          for (const g of host.segs) {
+            const gp = g.map(px);
+            let l = 0; for (let i = 1; i < gp.length; i++) l += Math.hypot(gp[i][0] - gp[i - 1][0], gp[i][1] - gp[i - 1][1]);
+            if (l > longL) { longL = l; longest = gp; }
+            const tp = tightestPair(gp, bx, by);
+            let score;
+            if (tp.n === 2 && tp.d > 0.04) score = 3 + (1 - Math.min(tp.d, 1));  // vrai segment : plus resserré = plus sûr
+            else if (tp.n === 2) score = 2;          // bornes confondues sur ce tronçon
+            else if (tp.n === 1) score = 1;          // une seule borne placée
+            else score = 0;
+            if (score > bestScore) { bestScore = score; gAp = gp; pax = tp.a; pay = tp.b; }
+          }
+          if (bestScore <= 0) { gAp = longest; pax = null; pay = null; }  // aucune borne : marqueur sur le plus long
+          if (!gAp) continue;
 
           let cut;
           if (pax && pay && Math.abs(pax.pos - pay.pos) > 0.04) {
@@ -12732,6 +12808,40 @@ window.addEventListener("scroll", hidePop, true);
           }
           if (!CUTS.has(host)) CUTS.set(host, []);
           CUTS.get(host).push({ n, cut });
+        }
+      }
+
+      /* ---------- garde-fou : invariants de coloriage ----------
+         Ces règles doivent tenir sur TOUT terrain. Si l'une casse (données OSM
+         inattendues, formulation non gérée), on le signale en console plutôt que
+         de mal colorier en silence. Coût négligeable (quelques dizaines de NOTAMs) ;
+         retirer ce bloc ne change pas le rendu. Voir le harnais tests/plan-invariants. */
+      const segLen = gp => { let l = 0; for (let i = 1; i < gp.length; i++) l += Math.hypot(gp[i][0] - gp[i - 1][0], gp[i][1] - gp[i - 1][1]); return l; };
+      for (const n of ground) {
+        const rf = refsFromNotam(n.e || "");
+        if (!rf.partial.length) continue;
+        for (const [rx, ry] of rf.partial) {
+          const hostRef = (rf.twy || []).find(r => r !== rx && r !== ry);
+          if (!hostRef) continue;                                   // pas d'hôte : rien à garantir
+          const host = (INDEX.get("twy:" + hostRef) || [])[0];
+          if (!host) continue;
+          // INV1 — une borne pure ne doit jamais être peinte en entier
+          for (const br of [rx, ry]) {
+            const bs = (INDEX.get("twy:" + br) || [])[0];
+            if (bs && bs !== host && (TOUCH.get(bs) || []).includes(n))
+              console.warn(`[plan] INV1 borne « ${br} » peinte en entier — ${n.id || "?"} : « ${n.e} »`);
+          }
+          // INV2 — une portion dont l'hôte est placé doit produire une découpe
+          const mine = (CUTS.get(host) || []).filter(c => c.n === n);
+          if (!mine.length) { console.warn(`[plan] INV2 portion sans découpe — ${n.id || "?"} hôte ${hostRef} : « ${n.e} »`); continue; }
+          // INV3 — le segment colorié ne doit pas couvrir la quasi-totalité de l'hôte
+          const hostL = Math.max(...host.segs.map(g => segLen(g.map(px))));
+          for (const c of mine) {
+            if (!c.cut.seg) continue;
+            const l = segLen(c.cut.seg);
+            if (hostL > 0 && l > 0.92 * hostL)
+              console.warn(`[plan] INV3 segment ≈ taxiway entier (${Math.round(100 * l / hostL)}%) — ${n.id || "?"} hôte ${hostRef} : « ${n.e} »`);
+          }
         }
       }
 
