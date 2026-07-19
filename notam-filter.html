@@ -12575,6 +12575,9 @@ window.addEventListener("scroll", hidePop, true);
         restricted: "#f6b23e",
         base: { rwy: "#606e7f", twy: "#485563", apr: "#2e3944", std: "#53616f" },
         chip: "rgba(14,17,20,.93)", chipDim: "rgba(14,17,20,.8)", off: "#828a91",
+        // étiquettes éteintes : texte franc + puce opaque + halo sombre, sinon
+        // le gris se noyait dans le fond nuit et les noms disparaissaient.
+        offLabel: "#d4dce2", chipOff: "rgba(17,21,25,.96)", halo: "rgba(0,0,0,.85)",
         glow: true
       },
       light: {
@@ -12582,6 +12585,7 @@ window.addEventListener("scroll", hidePop, true);
         restricted: "#cf7a12",
         base: { rwy: "#7d8f9f", twy: "#a3b2bf", apr: "#e6ecf1", std: "#b0bdc8" },
         chip: "rgba(255,255,255,.94)", chipDim: "rgba(255,255,255,.86)", off: "#69737d",
+        offLabel: "#2b333b", chipOff: "rgba(255,255,255,.96)", halo: "rgba(255,255,255,.85)",
         glow: false
       }
     };
@@ -13104,24 +13108,39 @@ window.addEventListener("scroll", hidePop, true);
     let planBoxes = [];
     function planPlace(ctx, text, x, y, col, mode, force) {
       const on = mode === "instant", pend = mode === "span";
-      ctx.font = (on ? "600 " : "500 ") + (on ? 11.5 : 10.5) * planDPR + "px 'IBM Plex Mono',monospace";
-      const w = ctx.measureText(text).width + 9 * planDPR, h = 15 * planDPR;
+      const P = planPal();
+      // Échelle selon le zoom : lisible à l'ouverture (k=1), grossit en zoomant,
+      // plafonnée pour ne pas envahir. Les puces ET les boîtes de collision
+      // suivent la même échelle, donc l'anti-chevauchement reste cohérent.
+      const LS = Math.min(Math.max(plan.view.k, 1), 2.4);
+      const fs = (on ? 12.5 : 11.5) * LS;
+      ctx.font = (on ? "600 " : "500 ") + fs * planDPR + "px 'IBM Plex Mono',monospace";
+      const w = ctx.measureText(text).width + 9 * LS * planDPR, h = 15 * LS * planDPR;
       const bx = x - w / 2, by = y - h / 2;
       if (!force) for (const b of planBoxes)
         if (!(bx > b.x + b.w || bx + w < b.x || by > b.y + b.h || by + h < b.y)) return false;
       planBoxes.push({ x: bx, y: by, w, h });
       ctx.save();
       if (pend) ctx.globalAlpha = .72;
-      const P = planPal();
-      ctx.fillStyle = on ? P.chip : P.chipDim;
-      ctx.beginPath(); ctx.roundRect(bx, by, w, h, 4 * planDPR); ctx.fill();
-      if (on) { ctx.strokeStyle = col; ctx.lineWidth = 1 * planDPR; ctx.stroke(); }
+      // Fond : puce OPAQUE (chipOff pour l'état éteint) pour détacher le nom du
+      // terrain — c'est ce qui manquait en nuit.
+      ctx.fillStyle = on ? P.chip : pend ? P.chipDim : P.chipOff;
+      ctx.beginPath(); ctx.roundRect(bx, by, w, h, 4 * LS * planDPR); ctx.fill();
+      if (on) { ctx.strokeStyle = col; ctx.lineWidth = 1 * LS * planDPR; ctx.stroke(); }
       else if (pend) {
-        ctx.setLineDash([3 * planDPR, 2.5 * planDPR]); ctx.strokeStyle = col;
-        ctx.lineWidth = 1 * planDPR; ctx.stroke(); ctx.setLineDash([]);
+        ctx.setLineDash([3 * LS * planDPR, 2.5 * LS * planDPR]); ctx.strokeStyle = col;
+        ctx.lineWidth = 1 * LS * planDPR; ctx.stroke(); ctx.setLineDash([]);
+      } else {
+        // léger contour neutre pour que le bord de la puce se voie sur le fond
+        ctx.strokeStyle = planLight() ? "rgba(0,0,0,.16)" : "rgba(255,255,255,.18)";
+        ctx.lineWidth = 1 * planDPR; ctx.stroke();
       }
-      ctx.fillStyle = (on || pend) ? col : P.off;
-      ctx.textAlign = "center"; ctx.textBaseline = "middle";
+      // Texte : couleur franche + halo, pour ressortir même là où la puce est
+      // survolée par un trait de surlignage.
+      ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.lineJoin = "round";
+      ctx.strokeStyle = P.halo; ctx.lineWidth = 3 * planDPR;
+      ctx.strokeText(text, x, y + 0.5 * planDPR);
+      ctx.fillStyle = (on || pend) ? col : P.offLabel;
       ctx.fillText(text, x, y + 0.5 * planDPR);
       ctx.restore();
       return true;
@@ -13248,8 +13267,12 @@ window.addEventListener("scroll", hidePop, true);
       }
       const lab = S.filter(s => s.r && (s.t === "twy" || s.t === "rwy"));
       const st_ = new Map(drawn.map(x => [x.s, x.st]));
+      // touchés par un NOTAM : toujours étiquetés
       for (const s of lab) if (st_.get(s)) planLabel(ctx, s.r, s.segs, st_.get(s).col, st_.get(s).state);
-      if (plan.view.k > 1.15) for (const s of lab) if (!st_.get(s)) planLabel(ctx, s.r, s.segs, planPal().off, "off");
+      // éteints : PISTES toujours (peu nombreuses, repères clés) ; taxiways dès
+      // qu'on zoome un peu, sinon des dizaines d'étiquettes feraient une bouillie.
+      for (const s of lab) if (!st_.get(s) && (s.t === "rwy" || plan.view.k > 1.15))
+        planLabel(ctx, s.r, s.segs, planPal().off, "off");
 
       /* Postes : 130 à LFBO, 519 à LFPG. Les étiqueter tous à l'échelle d'ouverture
          donnerait une bouillie. Un poste touché reçoit son nom dès k>=2,2 ; les
