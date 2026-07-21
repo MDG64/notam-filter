@@ -1658,6 +1658,10 @@
       box-shadow: var(--elev-hi)
     }
 
+    .strip.ground {
+      cursor: pointer;
+    }
+
     @keyframes in {
       from {
         opacity: 0;
@@ -10777,7 +10781,8 @@ function renderInfo(icao) {
         const tags = n.categories.map(c => `<span class="tag ${c}" title="${CAT_LABEL[c]}">${catLabelHTML(c)}</span>`).join("");
         const srcTxt = n.source === "text" ? "identified via text" :
           n.source === "unclassified" ? "uncoded" : "";
-        return `<article class="strip ${n.severity}">
+        const ground = paintsGround(n);
+        return `<article class="strip ${n.severity}${ground ? " ground" : ""}" data-id="${esc(n.id)}"${ground ? ' title="Show on aerodrome layout"' : ""}>
       <div class="rail"></div>
       <div class="body">
         <div class="shead">
@@ -10806,6 +10811,18 @@ function renderInfo(icao) {
   </div>`;
     }
     function esc(s) { return (s || "").replace(/[&<>]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c])); }
+
+    /* Un NOTAM « sol » (.strip.ground) ouvre le plan CENTRÉ sur l'élément
+       concerné — pas besoin de connaître à l'avance si sa ref sera trouvée
+       sur le layout (openPlan gère l'absence de plan / de localisation) :
+       la délégation reste correcte même après un re-rendu de la liste,
+       puisqu'elle vit sur #list, jamais remplacé (seul son innerHTML l'est). */
+    list.addEventListener("click", e => {
+      const card = e.target.closest(".strip.ground[data-id]");
+      if (!card || card.querySelector(".qc")?.contains(e.target)) return;
+      const n = current.find(x => x.id === card.dataset.id);
+      if (n) openPlan(n);
+    });
 
     /* ---- événements ---- */
     $("#icao").addEventListener("input", e => { e.target.value = e.target.value.toUpperCase(); renderSuggest(e.target.value); });
@@ -13233,6 +13250,42 @@ window.addEventListener("scroll", hidePop, true);
     }
     function planFit() { plan.view.k = 1; plan.view.tx = 0; plan.view.ty = 0; planClamp(); planDraw(); }
 
+    // toutes les surfaces qu'un NOTAM donné touche (l'inverse de plan.TOUCH,
+    // qui va surface -> NOTAMs) : sert à centrer le plan sur ce qu'un clic
+    // dans la liste principale désigne.
+    function planSurfacesFor(notamId) {
+      const out = [];
+      for (const [s, ns] of plan.TOUCH) if (ns.some(x => x.id === notamId)) out.push(s);
+      return out;
+    }
+    // emprise (coords projetées) d'un lot de surfaces
+    function planBBoxOf(surfs) {
+      let a = 1e9, b = 1e9, c = -1e9, d = -1e9;
+      for (const s of surfs) for (const g of s.segs) for (const p of g) {
+        const [x, y] = plan.px(p);
+        if (x < a) a = x; if (x > c) c = x; if (y < b) b = y; if (y > d) d = y;
+      }
+      if (!(c > a)) { a -= 1e-4; c += 1e-4; }
+      if (!(d > b)) { b -= 1e-4; d += 1e-4; }
+      return { x0: a, y0: b, x1: c, y1: d };
+    }
+    // centre la vue sur un lot de surfaces (typiquement celles d'un NOTAM
+    // cliqué depuis la liste) — assez zoomé pour que ce soit lisible, jamais
+    // plus qu'il ne faut pour rester dans le cadre.
+    function planFocus(surfs) {
+      const cv = $("#planCv"); if (!cv || !plan || !surfs.length) return;
+      const bx = planBBoxOf(surfs), f = plan.fit;
+      const cx = (bx.x0 + bx.x1) / 2, cy = (bx.y0 + bx.y1) / 2;
+      const w = (bx.x1 - bx.x0) * f.s, h = (bx.y1 - bx.y0) * f.s;
+      const PAD = 2.6;
+      let k = Math.min(cv.width / (w * PAD), cv.height / (h * PAD));
+      k = Math.max(2.6, Math.min(PLAN_KMAX, k, 6));
+      plan.view.k = k;
+      plan.view.tx = cv.width / 2 - (cx * f.s + f.ox) * k;
+      plan.view.ty = cv.height / 2 - (cy * f.s + f.oy) * k;
+      planClamp(); planDraw();
+    }
+
     function planResize() {
       const cv = $("#planCv"); if (!cv || !plan) return;
       const wrap = cv.parentElement;
@@ -13913,7 +13966,7 @@ window.addEventListener("scroll", hidePop, true);
         : "Aerodrome layout";
     }
 
-    async function openPlan() {
+    async function openPlan(focusNotam) {
       const icao = currentIcao;
       const ov = $("#planOv"), body = $("#planBody");
       $("#planIcao").textContent = icao || "—";
@@ -13960,6 +14013,18 @@ window.addEventListener("scroll", hidePop, true);
       // hauteur pour savoir combien de place il reste au canvas.
       planSetTime("today");   // le plan repart toujours de Today, quoi que dise la liste
       planResize();
+      // Clic depuis la liste principale sur un NOTAM sol : on centre la vue
+      // sur l'élément qu'il touche, au lieu de laisser l'utilisateur le
+      // chercher sur tout le terrain. S'il ne se localise pas (ref absente
+      // du layout), on garde simplement la vue d'ensemble par défaut.
+      if (focusNotam) {
+        const surfs = planSurfacesFor(focusNotam.id);
+        if (surfs.length) {
+          plan.sel = surfs[0];
+          planShowPick(surfs[0]);
+          planFocus(surfs);
+        }
+      }
     }
     addEventListener("resize", () => { if (!$("#planOv").hidden && plan) planResize(); });
 
