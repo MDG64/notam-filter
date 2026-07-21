@@ -1417,9 +1417,21 @@
 
     .modal.plan .plan-topbar {
       flex: 0 0 auto;
-      padding: 18px 48px 10px 20px;
+      padding: 18px 64px 10px 20px;
       background: var(--panel);
       border-bottom: 1px solid var(--line)
+    }
+
+    /* La croix de fermeture du plan reste dans ce bandeau FIXE (jamais dans
+       .hd-scroll, qui seul défile) — on l'agrandit ici pour qu'elle reste
+       facile à repérer et à toucher, plus que la croix générique des autres
+       modales (aide, infos terrain). */
+    .modal.plan .modal-x {
+      width: 40px;
+      height: 40px;
+      top: 10px;
+      right: 10px;
+      font-size: 26px;
     }
 
     .modal.plan .plan-topbar .plan-head {
@@ -1606,7 +1618,7 @@
       }
 
       .modal.plan .plan-topbar {
-        padding: 10px 46px 8px 12px
+        padding: 10px 58px 8px 12px
       }
 
       .modal.plan .plan-wrap {
