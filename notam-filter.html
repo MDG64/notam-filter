@@ -12488,10 +12488,17 @@ window.addEventListener("scroll", hidePop, true);
       function lex(t){
         return (t||"").toUpperCase().replace(/([.,;:()])/g," $1 ").split(/\s+/).filter(Boolean);
       }
-      const SEP=new Set([",","AND"]);
+      const SEP=new Set([",","AND","OR"]);
       const HARD=new Set([".",":",";","(",")"]);
 
-      // lit une série de refs après un mot-clé, séparateur obligatoire entre deux
+      // lit une série de refs après un mot-clé. Séparateur explicite en
+      // temps normal (virgule, AND, OR) — mais certains NOTAMs bruts collent
+      // les refs sans ponctuation (« TWY P101 M11 OR W100 S11 » : aucune
+      // virgule entre P101 et M11, ni entre W100 et S11). Sans séparateur,
+      // on n'accepte la suite QUE si le jeton contient un CHIFFRE : un
+      // indicatif alphanumérique (P101, M11) est sans ambiguïté une
+      // référence, alors qu'un mot purement alphabétique glané au hasard
+      // (« ATE », reste de traduction) ne l'est pas.
       function series(w,i,kw,ok){
         const out=[]; let j=i+1, expectRef=true;
         while(j<w.length){
@@ -12499,8 +12506,9 @@ window.addEventListener("scroll", hidePop, true);
           if(HARD.has(t)) break;
           if(SEP.has(t)){ if(out.length){expectRef=true; j++; continue;} break; }
           if(kw.has(t)){ expectRef=true; j++; continue; }
-          if(!expectRef) break;                    // pas de séparateur -> on arrête
           if(NATO[t]) t=NATO[t];
+          const isRef = !STOP.has(t) && ok(t);
+          if(!expectRef && !(isRef && /\d/.test(t))) break;
           // plage "X TO Y" / "X THRU Y" / "X THROUGH Y"
           if((w[j+1]==="TO"||w[j+1]==="THRU"||w[j+1]==="THROUGH") && ok(t) && ok(w[j+2])){
             const r=range(t,w[j+2]);
@@ -12508,7 +12516,7 @@ window.addEventListener("scroll", hidePop, true);
           }
           const rg=range2(t);
           if(rg){ rg.forEach(x=>out.push(x)); j++; expectRef=false; continue; }
-          if(!STOP.has(t) && ok(t)){ out.push(t); j++; expectRef=false; continue; }
+          if(isRef){ out.push(t); j++; expectRef=false; continue; }
           break;
         }
         return out;
