@@ -13403,12 +13403,13 @@ window.addEventListener("scroll", hidePop, true);
       // et cachait à jamais les mêmes étiquettes.
       const LS = Math.min(1 + (plan.view.k - 1) * 0.4, 2.2);
       const fs = (on ? 12.5 : 11.5) * LS;
-      ctx.font = (on ? "600 " : "500 ") + fs * planDPR + "px 'IBM Plex Mono',monospace";
+      // Taxiway : texte italique posé à même la chaussée, comme sur une
+      // vraie carte de plateforme (AD 2 / Jeppesen) — plus de panneau noir.
+      const isTwy = kind === "twy";
+      ctx.font = (isTwy ? "italic " : "") + (on ? "700 " : "600 ") + fs * planDPR + "px 'IBM Plex Mono',monospace";
       // Boîte de collision seulement : plus de puce dessinée, mais on réserve
       // quand même l'espace pour que deux noms ne se chevauchent pas.
-      const isTwy = kind === "twy";
-      const padX = (isTwy ? 7.5 : 3) * LS * planDPR;
-      const padY = (isTwy ? 3.6 : 1.5) * LS * planDPR;
+      const padX = 3 * LS * planDPR, padY = 1.5 * LS * planDPR;
       const tw = ctx.measureText(text).width;
       const w = tw + padX * 2, h = fs * planDPR + padY * 2;
       const bx = x - w / 2, by = y - h / 2;
@@ -13417,31 +13418,15 @@ window.addEventListener("scroll", hidePop, true);
       planBoxes.push({ x: bx, y: by, w, h });
       ctx.save();
       ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.lineJoin = "round";
-      if (isTwy) {
-        // Panneau taxiway : fond noir, contour et texte jaunes. Lorsqu'un
-        // NOTAM affecte la voie, le contour et le texte reprennent le rouge ou
-        // l'ambre de l'état afin de conserver la hiérarchie opérationnelle.
-        const accent = (on || pend) ? col : "#E8C547";
-        const r = 3.2 * LS * planDPR;
-        ctx.beginPath();
-        ctx.roundRect(bx, by, w, h, r);
-        ctx.fillStyle = "rgba(12,14,16,.96)";
-        ctx.fill();
-        ctx.strokeStyle = accent;
-        ctx.lineWidth = 1.15 * planDPR;
-        ctx.stroke();
-        ctx.shadowColor = "rgba(0,0,0,.72)";
-        ctx.shadowBlur = 3.5 * planDPR;
-        ctx.fillStyle = accent;
-        ctx.fillText(text, x, y + 0.25 * planDPR);
-      } else {
-        /* Autres libellés : texte posé à même la carte avec halo. */
-        ctx.strokeStyle = P.halo; ctx.lineWidth = (3.6 + 0.8 * (LS - 1)) * planDPR;
-        ctx.miterLimit = 2;
-        ctx.strokeText(text, x, y + 0.5 * planDPR);
-        ctx.fillStyle = (on || pend) ? col : P.offLabel;
-        ctx.fillText(text, x, y + 0.5 * planDPR);
-      }
+      /* Texte posé à même la carte, avec halo — comme une vraie carte AD 2 :
+         noir (teinte neutre du thème) au repos, rouge/ambre dès qu'un NOTAM
+         touche l'élément. Même règle pour les taxiways que pour le reste. */
+      const accent = (on || pend) ? col : P.offLabel;
+      ctx.strokeStyle = P.halo; ctx.lineWidth = (3.6 + 0.8 * (LS - 1)) * planDPR;
+      ctx.miterLimit = 2;
+      ctx.strokeText(text, x, y + 0.5 * planDPR);
+      ctx.fillStyle = accent;
+      ctx.fillText(text, x, y + 0.5 * planDPR);
       ctx.restore();
       return true;
     }
