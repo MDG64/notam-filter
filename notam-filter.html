@@ -12660,17 +12660,20 @@ window.addEventListener("scroll", hidePop, true);
       dark: {
         closed: "#ff5d6c",
         restricted: "#f6b23e",
-        base: { rwy: "#78899a", twy: "#78848f", apr: "#2b343d", std: "#53616f" },
+        base: { rwy: "#78899a", twy: "#78848f", apr: "#2b343d", std: "#9c8330" },
         // Liserés : un trait « cerné » (contour sombre + remplissage clair) est
         // ce qui donne au rendu OSM son aspect de vraie carte. On garde des tons
         // désaturés pour que le rouge de fermeture reste le seul accent vif.
-        edge: { rwy: "#333d47", twy: "#2c343d", apr: "#3d4854" },
+        edge: { rwy: "#2a323b", twy: "#2a323b", apr: "#2b343d" },
+        // Décor : bâtiments et points d'attente. Réglables librement —
+        // les rendre discrets ou vifs ne demande aucune régénération.
+        bld: "#454f5a", bldEdge: "#59646f", hold: "#c9a227",
         // Axe jaune sur la chaussée : le repère visuel des cartes d'aérodrome.
-        center: "#96813a",
+        center: null,
         chip: "rgba(14,17,20,.93)", chipDim: "rgba(14,17,20,.8)", off: "#828a91",
         // étiquettes éteintes : texte franc + puce opaque + halo sombre, sinon
         // le gris se noyait dans le fond nuit et les noms disparaissaient.
-        offLabel: "#d4dce2", chipOff: "rgba(17,21,25,.96)", halo: "rgba(0,0,0,.85)",
+        offLabel: "#d4dce2", chipOff: "rgba(17,21,25,.96)", halo: "rgba(0,0,0,.92)",
         glow: true
       },
       light: {
@@ -12679,17 +12682,18 @@ window.addEventListener("scroll", hidePop, true);
         /* Carte claire : les surfaces doivent être PLUS SOMBRES que le fond
            (#f4f6f8), à l'inverse du mode nuit. Le jaune peut enfin être franc —
            c'est sur fond sombre qu'il fallait l'assourdir. */
-        base: { rwy: "#a9b2ba", twy: "#b6bec6", apr: "#e3e7ea", std: "#98a2aa" },
+        base: { rwy: "#96a0a9", twy: "#a7b0b9", apr: "#e6eaed", std: "#c49a2a" },
         edge: { rwy: "#7d878f", twy: "#8d979f", apr: "#cdd4d9" },
-        center: "#d8a419",
+        bld: "#2f363d", bldEdge: "#22282e", hold: "#b08900",
+        center: null,
         chip: "rgba(255,255,255,.94)", chipDim: "rgba(255,255,255,.86)", off: "#69737d",
-        offLabel: "#2b333b", chipOff: "rgba(255,255,255,.96)", halo: "rgba(255,255,255,.85)",
+        offLabel: "#2b333b", chipOff: "rgba(255,255,255,.96)", halo: "rgba(255,255,255,.92)",
         glow: false
       }
     };
     const planLight = () => document.body.classList.contains("light");
     const planPal = () => planLight() ? PLAN_THEME.light : PLAN_THEME.dark;
-    const PLAN_W = { rwy: 9, twy: 5, apr: 1, std: 0 };
+    const PLAN_W = { rwy: 7, twy: 2.1, apr: 1, std: 0 };
     // Les couleurs des surfaces non surlignées vivent dans PLAN_THEME.base,
     // par thème (voir plus bas). La trame doit rester lisible sans jamais
     // rivaliser avec le surlignage : c'est le décor, pas le message.
@@ -13050,10 +13054,16 @@ window.addEventListener("scroll", hidePop, true);
          fermeture prime : c'est l'information la plus grave, et une surface
          fermée n'est de toute façon plus utilisable même si un NOTAM la dit
          « restreinte » par ailleurs. */
-      const closed = act.filter(n => planKind(n) === "closed");
-      const kind = closed.length ? "closed" : "restricted";
-      const relevant = closed.length ? closed : act;
-      const full = !planTWin || relevant.some(n => planFullyCovers(n, planTWin));
+      /* UNE SEULE couleur à la fois, et c'est le TEMPS qui la choisit — pas le
+         libellé du NOTAM :
+           rouge plein — la surface est concernée sur TOUTE la période affichée
+           ambre rayé  — elle ne l'est qu'une PARTIE de la journée (Today/Tomorrow)
+         En mode « Now » il n'y a pas de plage : ce qui est actif l'est
+         pleinement, donc toujours rouge. Faire porter l'information par la
+         couleur évite d'avoir à lire les heures pour savoir si l'on est
+         concerné en permanence ou seulement par intermittence. */
+      const full = !planTWin || act.some(n => planFullyCovers(n, planTWin));
+      const kind = full ? "closed" : "restricted";
       return { state: full ? "instant" : "span", kind, col: planPal()[kind], ns: act };
     }
 
@@ -13220,30 +13230,20 @@ window.addEventListener("scroll", hidePop, true);
       const LS = Math.min(1 + (plan.view.k - 1) * 0.4, 2.2);
       const fs = (on ? 12.5 : 11.5) * LS;
       ctx.font = (on ? "600 " : "500 ") + fs * planDPR + "px 'IBM Plex Mono',monospace";
-      const w = ctx.measureText(text).width + 9 * LS * planDPR, h = 15 * LS * planDPR;
+      // Boîte de collision seulement : plus de puce dessinée, mais on réserve
+      // quand même l'espace pour que deux noms ne se chevauchent pas.
+      const w = ctx.measureText(text).width + 6 * LS * planDPR, h = 13 * LS * planDPR;
       const bx = x - w / 2, by = y - h / 2;
       if (!force) for (const b of planBoxes)
         if (!(bx > b.x + b.w || bx + w < b.x || by > b.y + b.h || by + h < b.y)) return false;
       planBoxes.push({ x: bx, y: by, w, h });
       ctx.save();
-      if (pend) ctx.globalAlpha = .72;
-      // Fond : puce OPAQUE (chipOff pour l'état éteint) pour détacher le nom du
-      // terrain — c'est ce qui manquait en nuit.
-      ctx.fillStyle = on ? P.chip : pend ? P.chipDim : P.chipOff;
-      ctx.beginPath(); ctx.roundRect(bx, by, w, h, 4 * LS * planDPR); ctx.fill();
-      if (on) { ctx.strokeStyle = col; ctx.lineWidth = 1 * LS * planDPR; ctx.stroke(); }
-      else if (pend) {
-        ctx.setLineDash([3 * LS * planDPR, 2.5 * LS * planDPR]); ctx.strokeStyle = col;
-        ctx.lineWidth = 1 * LS * planDPR; ctx.stroke(); ctx.setLineDash([]);
-      } else {
-        // léger contour neutre pour que le bord de la puce se voie sur le fond
-        ctx.strokeStyle = planLight() ? "rgba(0,0,0,.16)" : "rgba(255,255,255,.18)";
-        ctx.lineWidth = 1 * planDPR; ctx.stroke();
-      }
-      // Texte : couleur franche + halo, pour ressortir même là où la puce est
-      // survolée par un trait de surlignage.
+      /* Libellés SANS FOND : le texte est posé à même la carte. Le halo n'est
+         donc plus un confort mais la seule chose qui garantit la lisibilité
+         par-dessus un trait ou une hachure — on l'épaissit en conséquence. */
       ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.lineJoin = "round";
-      ctx.strokeStyle = P.halo; ctx.lineWidth = 3 * planDPR;
+      ctx.strokeStyle = P.halo; ctx.lineWidth = (3.6 + 0.8 * (LS - 1)) * planDPR;
+      ctx.miterLimit = 2;
       ctx.strokeText(text, x, y + 0.5 * planDPR);
       ctx.fillStyle = (on || pend) ? col : P.offLabel;
       ctx.fillText(text, x, y + 0.5 * planDPR);
@@ -13321,9 +13321,16 @@ window.addEventListener("scroll", hidePop, true);
          le voisin à chaque jonction et le réseau paraîtrait haché. */
       const EDGE = planPal().edge;
       const cased = (t, w) => {
-        for (const s of S) if (s.t === t) for (const g of s.segs) planStroke(ctx, g, w + 1.8, EDGE[t], false);
+        for (const s of S) if (s.t === t) for (const g of s.segs) planStroke(ctx, g, w + 0.9, EDGE[t], false);
         for (const s of S) if (s.t === t) for (const g of s.segs) planStroke(ctx, g, w, BASE[t], false);
       };
+      /* Bâtiments : pur décor, jamais cités par un NOTAM. Dessinés EN PREMIER
+         pour rester sous tout le reste. Leur ton est volontairement neutre : ils
+         situent le terrain sans concurrencer le rouge d'une fermeture. */
+      const BLD = planPal().bld, BLDE = planPal().bldEdge;
+      for (const s of S) if (s.t === "bld") for (const g of s.segs) {
+        planFill(ctx, g, BLD); planStroke(ctx, g, 0.8, BLDE, false);
+      }
       for (const s of S) if (s.t === "apr") for (const g of s.segs) planFill(ctx, g, BASE.apr);
       for (const s of S) if (s.t === "apr") for (const g of s.segs) planStroke(ctx, g, 1, EDGE.apr, false);
       cased("rwy", PLAN_W.rwy);
@@ -13332,9 +13339,22 @@ window.addEventListener("scroll", hidePop, true);
          cartes d'aérodrome. Tracé en dernier pour rester visible aux jonctions,
          et volontairement fin — il guide l'œil sans concurrencer le surlignage
          rouge d'une fermeture, qui sera peint par-dessus. */
-      for (const s of S) if (s.t === "twy") for (const g of s.segs)
+      if (planPal().center) for (const s of S) if (s.t === "twy") for (const g of s.segs)
         planStroke(ctx, g, 0.7, planPal().center, false);
+      /* Postes : OSM les cartographie le plus souvent en LIGNE de guidage (125
+         sur 125 à LFBO). On trace cette ligne — c'est elle qui rattache le nom
+         au sol ; réduite à un point, l'étiquette semblait posée au hasard sur
+         l'aire de trafic. Les rares postes en simple nœud gardent leur point. */
+      /* Points d'attente : ils marquent les entrées de piste et apparaissent
+         réellement dans les NOTAMs sol. Un petit carré suffit — assez visible
+         pour servir de repère, assez discret pour ne rien voler au surlignage. */
+      for (const s of S) if (s.t === "hld") for (const g of s.segs) {
+        const p = planSC(g[0]), r = 1.9 * planDPR * Math.min(plan.view.k, 2);
+        ctx.beginPath(); ctx.rect(p[0] - r, p[1] - r, 2 * r, 2 * r);
+        ctx.fillStyle = planPal().hold; ctx.fill();
+      }
       for (const s of S) if (s.t === "std") for (const g of s.segs) {
+        if (g.length >= 2) { planStroke(ctx, g, 1.3, BASE.std, false); continue; }
         const p = planSC(g[0]); ctx.beginPath();
         ctx.arc(p[0], p[1], 1.8 * planDPR * Math.min(plan.view.k, 2), 0, 7);
         ctx.fillStyle = BASE.std; ctx.fill();
@@ -13342,15 +13362,19 @@ window.addEventListener("scroll", hidePop, true);
       const drawn = S.map(s => ({ s, st: planState(s) })).filter(x => x.st);
       for (const { s, st } of drawn) {
         const dim = st.state === "span", col = st.col;
-        /* Une restriction (envergure, type d'appareil) ne concerne qu'une
-           poignée de vols : la peindre comme une fermeture — trait, hachure ou
-           point plein — sur-alerte tout le monde pour presque personne. Seul
-           le NOM (piste ou taxiway) passe en ambre ; la géométrie reste dans
-           ses couleurs de fond habituelles. La fermeture, elle, continue de
-           peindre toute la surface : c'est elle qui concerne chaque vol. */
-        if (st.kind === "restricted") continue;
+        /* « restricted » ne veut plus dire « restriction d'envergure » mais
+           « concerné une PARTIE de la journée seulement ». Ces surfaces doivent
+           donc bien être peintes — en ambre rayé — et non ignorées comme avant :
+           un taxiway fermé trois heures dans la journée doit se voir. */
         if (s.t === "std") {
           for (const g of s.segs) {
+            // poste en ligne de guidage : on colore la LIGNE entière, sinon un
+            // poste fermé ne se signalait que par un point isolé
+            if (g.length >= 2) {
+              if (st.kind === "restricted") planHatch(ctx, g, 3.2, col, false);
+              else planStroke(ctx, g, 3.2, col, true, false);
+              continue;
+            }
             const p = planSC(g[0]); ctx.save();
             ctx.beginPath(); ctx.arc(p[0], p[1], 3.4 * planDPR * Math.min(plan.view.k, 2), 0, 7);
             if (dim) { ctx.globalAlpha = .7; ctx.strokeStyle = col; ctx.lineWidth = 1.5 * planDPR; ctx.stroke(); }
@@ -13373,13 +13397,15 @@ window.addEventListener("scroll", hidePop, true);
         if (cuts.length && !wholeN.length) {
           // uniquement des portions : segments + marqueurs, jamais l'entier
           for (const c of cuts) {
-            // Chaque portion garde la couleur/nature de SON propre NOTAM, pas celle
-            // du reste de la surface : un segment restreint sur un taxiway par
-            // ailleurs fermé ailleurs s'affiche bien en ambre, pas en rouge.
-            const ck = planKind(c.n);
-            const ccol = planPal()[ck];
+            /* Chaque portion est jugée sur SA propre couverture temporelle, pas
+               sur celle du reste de la surface : un segment fermé toute la
+               journée reste rouge même si un autre NOTAM du même taxiway n'est
+               actif que par intermittence. La hachure suffit à dire « une partie
+               de la journée » — on n'atténue donc pas en plus. */
             const cfull = !planTWin || planFullyCovers(c.n, planTWin);
-            const cdim = !cfull;
+            const ck = cfull ? "closed" : "restricted";
+            const ccol = planPal()[ck];
+            const cdim = false;
             if (c.cut.seg) {
               const pts = c.cut.seg.map(planSCp);
               if (ck === "restricted") planHatchPts(ctx, pts, PLAN_W.twy, ccol, cdim);
@@ -13402,8 +13428,10 @@ window.addEventListener("scroll", hidePop, true);
         // au moins un NOTAM ferme l'entier -> comportement classique
         const wRef = s.t === "rwy" ? PLAN_W.rwy : PLAN_W.twy;
         for (const g of s.segs) {
-          if (st.kind === "restricted") planHatch(ctx, g, wRef, col, dim);
-          else planStroke(ctx, g, wRef, col, !dim, dim);
+          // hachuré = « une partie de la journée » : le motif porte déjà le
+          // message, l'atténuer en plus le rendrait illisible.
+          if (st.kind === "restricted") planHatch(ctx, g, wRef, col, false);
+          else planStroke(ctx, g, wRef, col, true, false);
         }
         // et si en plus il y a des portions, leurs marqueurs restent utiles
         for (const c of cuts) for (const m of c.cut.marks) planMark(ctx, m, col, dim);
@@ -13431,7 +13459,10 @@ window.addEventListener("scroll", hidePop, true);
           if (s.t !== "std" || !s.r) continue;
           const st = st_.get(s);
           if (!st && plan.view.k < 2.6) continue;
-          const pt = planSC(s.segs[0][0]);
+          // le nom se pose au MILIEU de la ligne de guidage : sur une extrémité
+          // il paraîtrait rattaché au taxiway voisin plutôt qu'au poste
+          const g0 = s.segs[0];
+          const pt = planSC(g0[Math.floor(g0.length / 2)]);
           const col = st ? st.col : P_.off, mode = st ? st.state : "off";
           if (!planPlace(ctx, s.r, pt[0], pt[1] - dy, col, mode, false))
             planPlace(ctx, s.r, pt[0], pt[1] + dy, col, mode, false);
