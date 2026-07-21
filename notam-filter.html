@@ -12757,7 +12757,30 @@ window.addEventListener("scroll", hidePop, true);
           const r = segCross(gA[i - 1], gA[i], gB[j - 1], gB[j]);
           if (r) res.push({ pos: (cum[i - 1] + r.t * (cum[i] - cum[i - 1])) / total, p: r.p });
         }
-      return res;
+      if (res.length) return res;
+      /* Repli : aucun croisement EXACT trouvé. Deux taxiways réellement
+         connectés ne se rejoignent pas toujours au mètre près dans OSM — écart
+         de cartographie entre contributeurs, à une jonction. Exemple mesuré :
+         « TWY M CLSD FROM EM3 TO EM5 » à LFPG, où EM3 ne croisait jamais M
+         alors qu'elle n'en est qu'à 42 m ; l'app se rabattait sur un simple
+         marqueur au lieu du segment attendu. On cherche donc le point de gA le
+         plus proche de N'IMPORTE quel sommet de l'autre taxiway, et on
+         l'accepte comme jonction sous 80 m — une marge confortable au-dessus
+         d'un écart de cartographie réel (mesuré à 42 m), mais bien en-deçà de
+         la distance qui séparerait deux taxiways sans rapport (>1 km ici). */
+      let best = null, bd = Infinity;
+      for (let i = 1; i < gA.length; i++) {
+        const ax = gA[i - 1][0], ay = gA[i - 1][1], bx = gA[i][0], by = gA[i][1];
+        const dx = bx - ax, dy = by - ay, L2 = dx * dx + dy * dy || 1e-12;
+        for (const gB of other.segs) for (const q of gB) {
+          let t = ((q[0] - ax) * dx + (q[1] - ay) * dy) / L2;
+          t = Math.max(0, Math.min(1, t));
+          const qx = ax + t * dx, qy = ay + t * dy;
+          const d = Math.hypot(q[0] - qx, q[1] - qy);
+          if (d < bd) { bd = d; best = { pos: (cum[i - 1] + t * (cum[i] - cum[i - 1])) / total, p: [qx, qy] }; }
+        }
+      }
+      return (best && bd < 0.08 / 111.32) ? [best] : [];   // 80 m max
     }
     // position unique la plus « centrale » — conservée pour les usages simples
     function posAlong(gA, other) {
