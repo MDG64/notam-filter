@@ -13050,19 +13050,23 @@ window.addEventListener("scroll", hidePop, true);
       if (!ns || !ns.length) return null;
       const act = ns.filter(planShown);
       if (!act.length) return null;
-      /* Si une fermeture ET une restriction touchent la même surface, la
-         fermeture prime : c'est l'information la plus grave, et une surface
-         fermée n'est de toute façon plus utilisable même si un NOTAM la dit
-         « restreinte » par ailleurs. */
-      /* UNE SEULE couleur à la fois, et c'est le TEMPS qui la choisit — pas le
-         libellé du NOTAM :
-           rouge plein — la surface est concernée sur TOUTE la période affichée
-           ambre rayé  — elle ne l'est qu'une PARTIE de la journée (Today/Tomorrow)
-         En mode « Now » il n'y a pas de plage : ce qui est actif l'est
-         pleinement, donc toujours rouge. Faire porter l'information par la
-         couleur évite d'avoir à lire les heures pour savoir si l'on est
-         concerné en permanence ou seulement par intermittence. */
-      const full = !planTWin || act.some(n => planFullyCovers(n, planTWin));
+      /* UNE SEULE couleur à la fois. Deux conditions doivent être réunies pour
+         le rouge plein :
+           1) le NOTAM est une VRAIE fermeture par son TEXTE (planKind) — un
+              NOTAM sol sans mot de fermeture ni de restriction (marquage
+              obscurci, panneau manquant, obstacle à proximité…) n'est ni
+              l'un ni l'autre et ne doit JAMAIS peindre une piste en rouge,
+              même actif en permanence. Exemple réel qui a révélé le bug :
+              « RWY 12/30 CL MARKINGS OBSC », actif un mois entier — sans ce
+              filtre, sa couverture horaire totale le faisait passer pour une
+              fermeture alors que la piste n'est pas fermée.
+           2) cette fermeture couvre TOUTE la période affichée (Today/Tomorrow).
+         Tout le reste — restriction de texte, fermeture partielle dans la
+         journée, simple avis — n'est qu'un NOM en ambre (voir planDraw) :
+         c'est le temps qui choisit entre rouge et ambre, mais seulement parmi
+         ce que le texte reconnaît déjà comme une fermeture. */
+      const closures = act.filter(n => planKind(n) === "closed");
+      const full = closures.length > 0 && (!planTWin || closures.some(n => planFullyCovers(n, planTWin)));
       const kind = full ? "closed" : "restricted";
       return { state: full ? "instant" : "span", kind, col: planPal()[kind], ns: act };
     }
@@ -13400,10 +13404,11 @@ window.addEventListener("scroll", hidePop, true);
             /* Chaque portion est jugée sur SA propre couverture temporelle, pas
                sur celle du reste de la surface : un segment fermé toute la
                journée reste rouge même si un autre NOTAM du même taxiway n'est
-               actif que par intermittence. Une portion seulement restreinte ne
-               trace RIEN — le nom de l'hôte (peint par la boucle d'étiquettes,
-               plus bas) passe en ambre, ce qui suffit à dire « à surveiller ». */
-            const cfull = !planTWin || planFullyCovers(c.n, planTWin);
+               actif que par intermittence. Deux conditions, comme dans
+               planState : le NOTAM doit être une vraie fermeture par le texte
+               (pas un simple avis) ET couvrir toute la période affichée —
+               sinon rien n'est tracé, seul le nom de l'hôte passe en ambre. */
+            const cfull = planKind(c.n) === "closed" && (!planTWin || planFullyCovers(c.n, planTWin));
             if (!cfull) continue;
             const ccol = planPal().closed;
             if (c.cut.seg) {
