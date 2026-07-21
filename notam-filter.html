@@ -12660,11 +12660,11 @@ window.addEventListener("scroll", hidePop, true);
       dark: {
         closed: "#ff5d6c",
         restricted: "#f6b23e",
-        base: { rwy: "#78899a", twy: "#78848f", apr: "#2b343d", std: "#9c8330" },
+        base: { rwy: "#78899a", twy: "#E8C547", apr: "#2b343d", std: "#9c8330" },
         // Liserés : un trait « cerné » (contour sombre + remplissage clair) est
         // ce qui donne au rendu OSM son aspect de vraie carte. On garde des tons
         // désaturés pour que le rouge de fermeture reste le seul accent vif.
-        edge: { rwy: "#2a323b", twy: "#2a323b", apr: "#2b343d" },
+        edge: { rwy: "#2a323b", twy: "#59440f", apr: "#2b343d" },
         // Décor : bâtiments et points d'attente. Réglables librement —
         // les rendre discrets ou vifs ne demande aucune régénération.
         bld: "#454f5a", bldEdge: "#59646f", hold: "#c9a227",
@@ -12682,8 +12682,8 @@ window.addEventListener("scroll", hidePop, true);
         /* Carte claire : les surfaces doivent être PLUS SOMBRES que le fond
            (#f4f6f8), à l'inverse du mode nuit. Le jaune peut enfin être franc —
            c'est sur fond sombre qu'il fallait l'assourdir. */
-        base: { rwy: "#96a0a9", twy: "#a7b0b9", apr: "#e6eaed", std: "#c49a2a" },
-        edge: { rwy: "#7d878f", twy: "#8d979f", apr: "#cdd4d9" },
+        base: { rwy: "#96a0a9", twy: "#E8C547", apr: "#e6eaed", std: "#c49a2a" },
+        edge: { rwy: "#7d878f", twy: "#6f5614", apr: "#cdd4d9" },
         bld: "#2f363d", bldEdge: "#22282e", hold: "#b08900",
         center: null,
         chip: "rgba(255,255,255,.94)", chipDim: "rgba(255,255,255,.86)", off: "#69737d",
@@ -12693,7 +12693,7 @@ window.addEventListener("scroll", hidePop, true);
     };
     const planLight = () => document.body.classList.contains("light");
     const planPal = () => planLight() ? PLAN_THEME.light : PLAN_THEME.dark;
-    const PLAN_W = { rwy: 7, twy: 2.1, apr: 1, std: 0 };
+    const PLAN_W = { rwy: 7, twy: 1.6, apr: 1, std: 0 };
     // Les couleurs des surfaces non surlignées vivent dans PLAN_THEME.base,
     // par thème (voir plus bas). La trame doit rester lisible sans jamais
     // rivaliser avec le surlignage : c'est le décor, pas le message.
@@ -13246,7 +13246,7 @@ window.addEventListener("scroll", hidePop, true);
        son nom — plusieurs points sont tentés le long du tracé, puis on force.
        Un taxiway coloré sans nom attire l'œil sans rien dire. */
     let planBoxes = [];
-    function planPlace(ctx, text, x, y, col, mode, force) {
+    function planPlace(ctx, text, x, y, col, mode, force, kind = null) {
       const on = mode === "instant", pend = mode === "span";
       const P = planPal();
       // Échelle SOUS-LINÉAIRE selon le zoom : les étiquettes grossissent, mais
@@ -13259,21 +13259,42 @@ window.addEventListener("scroll", hidePop, true);
       ctx.font = (on ? "600 " : "500 ") + fs * planDPR + "px 'IBM Plex Mono',monospace";
       // Boîte de collision seulement : plus de puce dessinée, mais on réserve
       // quand même l'espace pour que deux noms ne se chevauchent pas.
-      const w = ctx.measureText(text).width + 6 * LS * planDPR, h = 13 * LS * planDPR;
+      const isTwy = kind === "twy";
+      const padX = (isTwy ? 7.5 : 3) * LS * planDPR;
+      const padY = (isTwy ? 3.6 : 1.5) * LS * planDPR;
+      const tw = ctx.measureText(text).width;
+      const w = tw + padX * 2, h = fs * planDPR + padY * 2;
       const bx = x - w / 2, by = y - h / 2;
       if (!force) for (const b of planBoxes)
         if (!(bx > b.x + b.w || bx + w < b.x || by > b.y + b.h || by + h < b.y)) return false;
       planBoxes.push({ x: bx, y: by, w, h });
       ctx.save();
-      /* Libellés SANS FOND : le texte est posé à même la carte. Le halo n'est
-         donc plus un confort mais la seule chose qui garantit la lisibilité
-         par-dessus un trait ou une hachure — on l'épaissit en conséquence. */
       ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.lineJoin = "round";
-      ctx.strokeStyle = P.halo; ctx.lineWidth = (3.6 + 0.8 * (LS - 1)) * planDPR;
-      ctx.miterLimit = 2;
-      ctx.strokeText(text, x, y + 0.5 * planDPR);
-      ctx.fillStyle = (on || pend) ? col : P.offLabel;
-      ctx.fillText(text, x, y + 0.5 * planDPR);
+      if (isTwy) {
+        // Panneau taxiway : fond noir, contour et texte jaunes. Lorsqu'un
+        // NOTAM affecte la voie, le contour et le texte reprennent le rouge ou
+        // l'ambre de l'état afin de conserver la hiérarchie opérationnelle.
+        const accent = (on || pend) ? col : "#E8C547";
+        const r = 3.2 * LS * planDPR;
+        ctx.beginPath();
+        ctx.roundRect(bx, by, w, h, r);
+        ctx.fillStyle = "rgba(12,14,16,.96)";
+        ctx.fill();
+        ctx.strokeStyle = accent;
+        ctx.lineWidth = 1.15 * planDPR;
+        ctx.stroke();
+        ctx.shadowColor = "rgba(0,0,0,.72)";
+        ctx.shadowBlur = 3.5 * planDPR;
+        ctx.fillStyle = accent;
+        ctx.fillText(text, x, y + 0.25 * planDPR);
+      } else {
+        /* Autres libellés : texte posé à même la carte avec halo. */
+        ctx.strokeStyle = P.halo; ctx.lineWidth = (3.6 + 0.8 * (LS - 1)) * planDPR;
+        ctx.miterLimit = 2;
+        ctx.strokeText(text, x, y + 0.5 * planDPR);
+        ctx.fillStyle = (on || pend) ? col : P.offLabel;
+        ctx.fillText(text, x, y + 0.5 * planDPR);
+      }
       ctx.restore();
       return true;
     }
@@ -13294,7 +13315,7 @@ window.addEventListener("scroll", hidePop, true);
        l'utilisateur déplace ou zoome, le libellé se replace tout seul sur ce
        qu'il voit — au lieu de rester collé au milieu géographique et de sortir
        du cadre. Rien de visible => pas d'étiquette (inutile hors cadre). */
-    function planLabel(ctx, text, segs, col, mode) {
+    function planLabel(ctx, text, segs, col, mode, kind = null) {
       const cv = ctx.canvas, W = cv.width, H = cv.height, M = 8 * planDPR;
       const inView = p => p[0] >= M && p[0] <= W - M && p[1] >= M && p[1] <= H - M;
       const cand = [];
@@ -13313,9 +13334,9 @@ window.addEventListener("scroll", hidePop, true);
       const fr = [0.5, 0.4, 0.6, 0.3, 0.7, 0.2, 0.8, 0.12, 0.88];
       for (const t of fr) {
         const p = vis[Math.min(vis.length - 1, Math.round(t * (vis.length - 1)))];
-        if (planPlace(ctx, text, p[0], p[1], col, mode, false)) return;
+        if (planPlace(ctx, text, p[0], p[1], col, mode, false, kind)) return;
       }
-      if (mode !== "off") { const p = vis[Math.floor(vis.length / 2)]; planPlace(ctx, text, p[0], p[1], col, mode, true); }
+      if (mode !== "off") { const p = vis[Math.floor(vis.length / 2)]; planPlace(ctx, text, p[0], p[1], col, mode, true, kind); }
     }
     // planSC travaille en lat/lon ; les découpes sont en projeté. planSCp fait
     // le même écran-mapping en partant du projeté.
@@ -13348,7 +13369,11 @@ window.addEventListener("scroll", hidePop, true);
          le voisin à chaque jonction et le réseau paraîtrait haché. */
       const EDGE = planPal().edge;
       const cased = (t, w) => {
-        for (const s of S) if (s.t === t) for (const g of s.segs) planStroke(ctx, g, w + 0.9, EDGE[t], false);
+        // Taxiways : deux couches nettement séparées, halo sombre de 3 px puis
+        // axe jaune de 1,6 px. Les largeurs suivent le zoom et le DPR via
+        // planStroke. Les pistes conservent leur traitement historique.
+        const outer = t === "twy" ? 3.0 : w + 0.9;
+        for (const s of S) if (s.t === t) for (const g of s.segs) planStroke(ctx, g, outer, EDGE[t], false);
         for (const s of S) if (s.t === t) for (const g of s.segs) planStroke(ctx, g, w, BASE[t], false);
       };
       /* Bâtiments : pur décor, jamais cités par un NOTAM. Dessinés EN PREMIER
@@ -13461,11 +13486,11 @@ window.addEventListener("scroll", hidePop, true);
       const lab = S.filter(s => s.r && (s.t === "twy" || s.t === "rwy"));
       const st_ = new Map(drawn.map(x => [x.s, x.st]));
       // touchés par un NOTAM : toujours étiquetés
-      for (const s of lab) if (st_.get(s)) planLabel(ctx, s.r, s.segs, st_.get(s).col, st_.get(s).state);
+      for (const s of lab) if (st_.get(s)) planLabel(ctx, s.r, s.segs, st_.get(s).col, st_.get(s).state, s.t);
       // éteints : PISTES toujours (peu nombreuses, repères clés) ; taxiways dès
       // qu'on zoome un peu, sinon des dizaines d'étiquettes feraient une bouillie.
       for (const s of lab) if (!st_.get(s) && (s.t === "rwy" || plan.view.k > 1.15))
-        planLabel(ctx, s.r, s.segs, planPal().off, "off");
+        planLabel(ctx, s.r, s.segs, planPal().off, "off", s.t);
 
       /* Postes : 130 à LFBO, 519 à LFPG. À l'échelle d'ouverture, tout étiqueter
          serait une bouillie — mais l'utilisateur doit pouvoir TOUS les voir en
