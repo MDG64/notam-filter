@@ -12660,40 +12660,81 @@ window.addEventListener("scroll", hidePop, true);
       dark: {
         closed: "#ff5d6c",
         restricted: "#f6b23e",
-        base: { rwy: "#78899a", twy: "#E8C547", apr: "#2b343d", std: "#9c8330" },
-        // Liserés : un trait « cerné » (contour sombre + remplissage clair) est
-        // ce qui donne au rendu OSM son aspect de vraie carte. On garde des tons
-        // désaturés pour que le rouge de fermeture reste le seul accent vif.
-        edge: { rwy: "#2a323b", twy: "#59440f", apr: "#2b343d" },
-        // Décor : bâtiments et points d'attente. Réglables librement —
-        // les rendre discrets ou vifs ne demande aucune régénération.
-        bld: "#454f5a", bldEdge: "#59646f", hold: "#c9a227",
-        // Axe jaune sur la chaussée : le repère visuel des cartes d'aérodrome.
-        center: null,
-        chip: "rgba(14,17,20,.93)", chipDim: "rgba(14,17,20,.8)", off: "#828a91",
-        // étiquettes éteintes : texte franc + puce opaque + halo sombre, sinon
-        // le gris se noyait dans le fond nuit et les noms disparaissaient.
-        offLabel: "#d4dce2", chipOff: "rgba(17,21,25,.96)", halo: "rgba(0,0,0,.92)",
+
+        // Mode nuit : chaussées grises, suffisamment contrastées avec le fond.
+        base: {
+          rwy: "#585e64",
+          twy: "#777d82",
+          apr: "#4c5157",
+          std: "#c49a2a"
+        },
+
+        edge: {
+          rwy: "#34393e",
+          twy: "#555b60",
+          apr: "#3d4247"
+        },
+
+        bld: "#171b1e",
+        bldEdge: "#292e32",
+        hold: "#c9a227",
+
+        // Ligne axiale jaune des taxiways.
+        center: "#E5C13A",
+
+        chip: "rgba(14,17,20,.93)",
+        chipDim: "rgba(14,17,20,.8)",
+        off: "#828a91",
+        offLabel: "#d4dce2",
+        chipOff: "rgba(17,21,25,.96)",
+        halo: "rgba(0,0,0,.92)",
         glow: true
       },
+
       light: {
         closed: "#e5484d",
         restricted: "#cf7a12",
-        /* Carte claire : les surfaces doivent être PLUS SOMBRES que le fond
-           (#f4f6f8), à l'inverse du mode nuit. Le jaune peut enfin être franc —
-           c'est sur fond sombre qu'il fallait l'assourdir. */
-        base: { rwy: "#96a0a9", twy: "#E8C547", apr: "#e6eaed", std: "#c49a2a" },
-        edge: { rwy: "#7d878f", twy: "#6f5614", apr: "#cdd4d9" },
-        bld: "#2f363d", bldEdge: "#22282e", hold: "#b08900",
-        center: null,
-        chip: "rgba(255,255,255,.94)", chipDim: "rgba(255,255,255,.86)", off: "#69737d",
-        offLabel: "#2b333b", chipOff: "rgba(255,255,255,.96)", halo: "rgba(255,255,255,.92)",
+
+        // Mode jour : palette proche de la carte de référence.
+        base: {
+          rwy: "#595959",
+          twy: "#8C8C8C",
+          apr: "#A8A8A8",
+          std: "#c49a2a"
+        },
+
+        edge: {
+          rwy: "#3A3A3A",
+          twy: "#6F6F6F",
+          apr: "#929292"
+        },
+
+        bld: "#1A1A1A",
+        bldEdge: "#111111",
+        hold: "#b08900",
+
+        // Ligne axiale jaune.
+        center: "#E5C13A",
+
+        chip: "rgba(255,255,255,.94)",
+        chipDim: "rgba(255,255,255,.86)",
+        off: "#505050",
+        offLabel: "#202020",
+        chipOff: "rgba(255,255,255,.96)",
+        halo: "rgba(255,255,255,.92)",
         glow: false
       }
     };
     const planLight = () => document.body.classList.contains("light");
     const planPal = () => planLight() ? PLAN_THEME.light : PLAN_THEME.dark;
-    const PLAN_W = { rwy: 7, twy: 1.6, apr: 1, std: 0 };
+    const PLAN_W = {
+      rwy: 7,
+      twy: 5.2,
+      apr: 1,
+      std: 0
+    };
+
+    const PLAN_CENTER_W = 0.72;
     // Les couleurs des surfaces non surlignées vivent dans PLAN_THEME.base,
     // par thème (voir plus bas). La trame doit rester lisible sans jamais
     // rivaliser avec le surlignage : c'est le décor, pas le message.
@@ -13369,12 +13410,27 @@ window.addEventListener("scroll", hidePop, true);
          le voisin à chaque jonction et le réseau paraîtrait haché. */
       const EDGE = planPal().edge;
       const cased = (t, w) => {
-        // Taxiways : deux couches nettement séparées, halo sombre de 3 px puis
-        // axe jaune de 1,6 px. Les largeurs suivent le zoom et le DPR via
-        // planStroke. Les pistes conservent leur traitement historique.
-        const outer = t === "twy" ? 3.0 : w + 0.9;
-        for (const s of S) if (s.t === t) for (const g of s.segs) planStroke(ctx, g, outer, EDGE[t], false);
-        for (const s of S) if (s.t === t) for (const g of s.segs) planStroke(ctx, g, w, BASE[t], false);
+        /*
+         * Toutes les bordures d'abord, puis toutes les chaussées.
+         * Cette organisation évite les coupures visibles aux intersections.
+         */
+        const outerWidth = t === "twy" ? w + 1.5 : w + 0.9;
+
+        for (const s of S) {
+          if (s.t !== t) continue;
+
+          for (const g of s.segs) {
+            planStroke(ctx, g, outerWidth, EDGE[t], false);
+          }
+        }
+
+        for (const s of S) {
+          if (s.t !== t) continue;
+
+          for (const g of s.segs) {
+            planStroke(ctx, g, w, BASE[t], false);
+          }
+        }
       };
       /* Bâtiments : pur décor, jamais cités par un NOTAM. Dessinés EN PREMIER
          pour rester sous tout le reste. Leur ton est volontairement neutre : ils
@@ -13391,8 +13447,25 @@ window.addEventListener("scroll", hidePop, true);
          cartes d'aérodrome. Tracé en dernier pour rester visible aux jonctions,
          et volontairement fin — il guide l'œil sans concurrencer le surlignage
          rouge d'une fermeture, qui sera peint par-dessus. */
-      if (planPal().center) for (const s of S) if (s.t === "twy") for (const g of s.segs)
-        planStroke(ctx, g, 0.7, planPal().center, false);
+      if (planPal().center) {
+        /*
+         * Les lignes sont tracées après toutes les chaussées : elles restent
+         * continues dans les courbes et aux intersections.
+         */
+        for (const s of S) {
+          if (s.t !== "twy") continue;
+
+          for (const g of s.segs) {
+            planStroke(
+              ctx,
+              g,
+              PLAN_CENTER_W,
+              planPal().center,
+              false
+            );
+          }
+        }
+      }
       /* Postes : OSM les cartographie le plus souvent en LIGNE de guidage (125
          sur 125 à LFBO). On trace cette ligne — c'est elle qui rattache le nom
          au sol ; réduite à un point, l'étiquette semblait posée au hasard sur
