@@ -13513,9 +13513,9 @@ window.addEventListener("scroll", hidePop, true);
       const on = mode === "instant", pend = mode === "span";
       const P = planPal();
       const LS = Math.min(1 + (plan.view.k - 1) * 0.4, 2.2);
-      const fs = (on ? 12.5 : 11.5) * LS * planDPR;
+      const fs = (on ? 10 : 9) * LS * planDPR;
       ctx.font = (on ? "700 " : "600 ") + fs + "px 'IBM Plex Mono',monospace";
-      const padX = 6 * LS * planDPR, padY = 3 * LS * planDPR;
+      const padX = 4 * LS * planDPR, padY = 2 * LS * planDPR;
       const tw = ctx.measureText(txt).width;
       const w = tw + padX * 2, h = fs + padY * 2;
 
@@ -13735,7 +13735,9 @@ window.addEventListener("scroll", hidePop, true);
 
       /* Postes : 130 à LFBO, 519 à LFPG. À l'échelle d'ouverture, tout étiqueter
          serait une bouillie — mais l'utilisateur doit pouvoir TOUS les voir en
-         zoomant. Un poste touché reçoit son nom dès k>=2 ; les autres dès k>=2,6.
+         zoomant. Un poste touché reçoit son nom dès k>=2,6 ; les autres dès
+         k>=3,2 — plus tard que les taxiways, pour laisser d'abord voir
+         l'ensemble de l'aire de trafic sans une bouillie de petits noms.
          L'anti-chevauchement + l'échelle sous-linéaire font qu'en zoomant sur une
          zone, ses postes se révèlent un à un.
          Le nom se pose EN BOUT de la ligne de guidage, côté bâtiment (le plus
@@ -13743,11 +13745,11 @@ window.addEventListener("scroll", hidePop, true);
          et PARALLÈLE à cette ligne — pas une position arbitraire au-dessus
          du poste. */
       const P_ = planPal();
-      if (plan.view.k >= 2.0) {
+      if (plan.view.k >= 2.6) {
         for (const s of S) {
           if (s.t !== "std" || !s.r) continue;
           const st = st_.get(s);
-          if (!st && plan.view.k < 2.6) continue;
+          if (!st && plan.view.k < 3.2) continue;
           // Certains postes fusionnent DEUX géométries sous la même ref (un
           // nœud ET une way OSM, cf. commentaire dans buildSurfaces) : segs[0]
           // est alors parfois le simple point isolé, pas la vraie ligne de
