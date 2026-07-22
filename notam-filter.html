@@ -2527,28 +2527,32 @@
 <body>
 <svg aria-hidden="true" style="position:absolute;width:0;height:0;overflow:hidden" focusable="false">
   <defs>
-    <!-- Icônes Tabler Icons (MIT), reprises telles quelles — pas de redessin
-         maison : plane-departure / plane-arrival / plane / air-traffic-control. -->
-    <symbol id="icon-depart" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-      <path d="M14.639 10.258l4.83 -1.294a2 2 0 1 1 1.035 3.863l-14.489 3.883l-4.45 -5.02l2.897 -.776l2.45 1.414l2.897 -.776l-3.743 -6.244l2.898 -.777l5.675 5.727" />
-      <path d="M3 21h18" />
+    <!-- Icônes maison, en trait (stroke), un seul tracé continu par avion —
+         pas de sous-chemins, pas de remplissage à aplats : la pointe, les deux
+         ailes et la queue forment UNE seule ligne fermée (M…L…L…L…Z), donc le
+         contour ne peut pas paraître coupé quel que soit l'angle. */ -->
+    <symbol id="icon-depart" viewBox="0 0 24 24">
+      <g transform="rotate(-35 12 12)">
+        <path d="M21 12L3 5L10 12L3 19Z" fill="none" stroke="var(--green)" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round" />
+      </g>
+      <path d="M2 21L22 21" stroke="var(--green)" stroke-width="1.6" stroke-linecap="round" />
     </symbol>
-    <symbol id="icon-arrival" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-      <path d="M15.157 11.81l4.83 1.295a2 2 0 1 1 -1.036 3.863l-14.489 -3.882l-1.345 -6.572l2.898 .776l1.414 2.45l2.898 .776l-.12 -7.279l2.898 .777l2.052 7.797" />
-      <path d="M3 21h18" />
+    <symbol id="icon-arrival" viewBox="0 0 24 24">
+      <g transform="rotate(35 12 12)">
+        <path d="M21 12L3 5L10 12L3 19Z" fill="none" stroke="var(--cyan)" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round" />
+      </g>
+      <path d="M2 21L22 21" stroke="var(--cyan)" stroke-width="1.6" stroke-linecap="round" />
     </symbol>
-    <symbol id="icon-flight" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-      <circle cx="1.5" cy="12" r="1" fill="currentColor" stroke="none" />
-      <circle cx="4.5" cy="12" r="1" fill="currentColor" stroke="none" />
-      <circle cx="7.5" cy="12" r="1" fill="currentColor" stroke="none" />
-      <path d="M16 10h4a2 2 0 0 1 0 4h-4l-4 7h-3l2 -7h-4l-2 2h-3l1.5 -3.5" />
+    <symbol id="icon-flight" viewBox="0 0 28 24">
+      <circle cx="1.2" cy="12" r="1.1" fill="currentColor" />
+      <circle cx="3.8" cy="12" r="1.1" fill="currentColor" />
+      <circle cx="6.4" cy="12" r="1.1" fill="currentColor" />
+      <path d="M25 12L7 5L14 12L7 19Z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round" />
     </symbol>
-    <symbol id="icon-ground" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-      <path d="M11 3h2" />
-      <path d="M12 3v3" />
-      <path d="M5.998 6h12.004a2 2 0 0 1 1.916 2.575l-1.8 6a2 2 0 0 1 -1.916 1.425h-8.404a2 2 0 0 1 -1.916 -1.425l-1.8 -6a2 2 0 0 1 1.916 -2.575" />
-      <path d="M8.5 6l1.5 10v5" />
-      <path d="M15.5 6l-1.5 10v5" />
+    <symbol id="icon-ground" viewBox="0 0 32 24">
+      <path d="M11 3h2M12 3v3M5.998 6h12.004a2 2 0 0 1 1.916 2.575l-1.8 6a2 2 0 0 1 -1.916 1.425h-8.404a2 2 0 0 1 -1.916 -1.425l-1.8 -6a2 2 0 0 1 1.916 -2.575M8.5 6l1.5 10v5M15.5 6l-1.5 10v5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" />
+      <path d="M21 21v-6a1.5 1.5 0 0 1 1.5 -1.5h4a1.5 1.5 0 0 1 1.5 1.5v6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" />
+      <path d="M2 21h28" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" />
     </symbol>
 <symbol id="icon-plansign" viewBox="0 0 34 14">
   <rect x=".5" y=".5" width="33" height="13" rx="1.6" fill="#111417"/>
@@ -2794,19 +2798,19 @@
 
         <div class="hd-sec">Category filters</div>
         <div class="hd-seg">
-          <span class="hd-chip on"><svg class="cat-ico" viewBox="0 0 24 24" aria-label="Ground"><use href="#icon-ground"/></svg></span>
-          <span class="hd-chip"><svg class="cat-ico" viewBox="0 0 24 24" aria-label="Departure" style="color:var(--green)"><use href="#icon-depart"/></svg></span>
-          <span class="hd-chip"><svg class="cat-ico" viewBox="0 0 24 24" aria-label="Flight"><use href="#icon-flight"/></svg></span>
-          <span class="hd-chip"><svg class="cat-ico" viewBox="0 0 24 24" aria-label="Arrival" style="color:var(--cyan)"><use href="#icon-arrival"/></svg></span>
+          <span class="hd-chip on"><svg class="cat-ico" viewBox="0 0 32 24" aria-label="Ground"><use href="#icon-ground"/></svg></span>
+          <span class="hd-chip"><svg class="cat-ico" viewBox="0 0 24 24" aria-label="Departure"><use href="#icon-depart"/></svg></span>
+          <span class="hd-chip"><svg class="cat-ico" viewBox="0 0 28 24" aria-label="Flight"><use href="#icon-flight"/></svg></span>
+          <span class="hd-chip"><svg class="cat-ico" viewBox="0 0 24 24" aria-label="Arrival"><use href="#icon-arrival"/></svg></span>
         </div>
         <div class="hd-note" style="margin-bottom:10px">Tap to filter by phase of flight. Tap again to remove. Combine
           with a severity card.</div>
         <div class="hd-block">
           <div class="hd-note">
-            <svg class="cat-ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#icon-flight"/></svg><b>Flight</b> — en-route, airspace, aerodrome status<br>
-            <svg class="cat-ico" viewBox="0 0 24 24" aria-hidden="true" style="color:var(--green)"><use href="#icon-depart"/></svg><b>Departure</b> — take-off, SID<br>
-            <svg class="cat-ico" viewBox="0 0 24 24" aria-hidden="true" style="color:var(--cyan)"><use href="#icon-arrival"/></svg><b>Arrival</b> — approach, STAR, landing<br>
-            <svg class="cat-ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#icon-ground"/></svg><b>Ground</b> — taxiways, stands, aprons, services
+            <svg class="cat-ico" viewBox="0 0 28 24" aria-hidden="true"><use href="#icon-flight"/></svg><b>Flight</b> — en-route, airspace, aerodrome status<br>
+            <svg class="cat-ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#icon-depart"/></svg><b>Departure</b> — take-off, SID<br>
+            <svg class="cat-ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#icon-arrival"/></svg><b>Arrival</b> — approach, STAR, landing<br>
+            <svg class="cat-ico" viewBox="0 0 32 24" aria-hidden="true"><use href="#icon-ground"/></svg><b>Ground</b> — taxiways, stands, aprons, services
           </div>
         </div>
 
@@ -10187,22 +10191,21 @@ E) ${e}`;
        ============================================================ */
     const CAT_LABEL = { vol: "Flight", depart: "Departure", approche: "Arrival", sol: "Ground", non_classe: "Unclassified" };
     const CAT_ICON = {
-      vol: { id: "icon-flight", vb: "0 0 24 24" },
-      depart: { id: "icon-depart", vb: "0 0 24 24", tint: "var(--green)" },
-      approche: { id: "icon-arrival", vb: "0 0 24 24", tint: "var(--cyan)" },
-      sol: { id: "icon-ground", vb: "0 0 24 24" },
+      vol: { id: "icon-flight", vb: "0 0 28 24" },
+      depart: { id: "icon-depart", vb: "0 0 24 24" },
+      approche: { id: "icon-arrival", vb: "0 0 24 24" },
+      sol: { id: "icon-ground", vb: "0 0 32 24" },
     };
     // Rendu du libellé d'une catégorie : icône (avec texte accessible caché) si
     // disponible (vol/depart/approche), sinon texte brut (sol, non_classe).
     // Le viewBox est répété sur le <svg> d'usage (et pas seulement sur le <symbol>)
     // pour que le navigateur connaisse le ratio intrinsèque et que "width:auto" le respecte.
-    // Departure/Arrival reçoivent une teinte fixe (vert/bleu) : ces icônes à
-    // trait utilisent currentColor, donc la couleur passe par "color" en style.
+    // Les couleurs sont à même les tracés (aplats deux tons) : plus besoin de
+    // teinter via currentColor/style ici.
     function catLabelHTML(c) {
       const ico = CAT_ICON[c];
       if (ico) {
-        const style = ico.tint ? ` style="color:${ico.tint}"` : "";
-        return `<svg class="cat-ico" viewBox="${ico.vb}" aria-hidden="true"${style}><use href="#${ico.id}"/></svg><span class="visually-hidden">${CAT_LABEL[c]}</span>`;
+        return `<svg class="cat-ico" viewBox="${ico.vb}" aria-hidden="true"><use href="#${ico.id}"/></svg><span class="visually-hidden">${CAT_LABEL[c]}</span>`;
       }
       return CAT_LABEL[c];
     }
