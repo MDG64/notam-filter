@@ -766,9 +766,10 @@
 
     .cat {
       display: flex;
+      flex-direction: column;
       align-items: center;
       justify-content: center;
-      gap: 5px;
+      gap: 3px;
       min-width: 0;
       height: 46px;
       cursor: pointer;
@@ -796,6 +797,16 @@
       color: var(--bg);
       background: var(--cyan);
       border-color: var(--cyan)
+    }
+
+    .cat-label {
+      font: 600 12px/1 var(--sans);
+      letter-spacing: .04em;
+      text-transform: uppercase;
+    }
+
+    body.light .cat-label {
+      color: #111;
     }
 
     .cat .cnt {
@@ -10728,7 +10739,7 @@ function renderInfo(icao) {
         const b = document.createElement("button");
         b.className = "cat"; b.dataset.cat = c; b.setAttribute("aria-pressed", "false");
         b.title = CAT_LABEL[c];
-        b.innerHTML = `${catLabelHTML(c)}<span class="cnt" data-cnt="${c}">0</span>`;
+        b.innerHTML = `<span class="cat-label">${CAT_LABEL[c]}</span><span class="cnt" data-cnt="${c}">0</span>`;
         b.onclick = () => { activeCats.has(c) ? activeCats.delete(c) : activeCats.add(c); render(); };
         seg.appendChild(b);
       });
