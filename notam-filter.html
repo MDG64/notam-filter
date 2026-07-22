@@ -13748,7 +13748,13 @@ window.addEventListener("scroll", hidePop, true);
           if (s.t !== "std" || !s.r) continue;
           const st = st_.get(s);
           if (!st && plan.view.k < 2.6) continue;
-          const g0 = s.segs[0];
+          // Certains postes fusionnent DEUX géométries sous la même ref (un
+          // nœud ET une way OSM, cf. commentaire dans buildSurfaces) : segs[0]
+          // est alors parfois le simple point isolé, pas la vraie ligne de
+          // guidage. On prend le segment le plus riche en points — la ligne,
+          // quand elle existe — sinon l'étiquette retombait à plat (angle 0)
+          // alors que la ligne visible sur le plan part en diagonale.
+          const g0 = s.segs.reduce((best, g) => g.length > best.length ? g : best, s.segs[0]);
           const col = st ? st.col : P_.off, mode = st ? st.state : "off";
           if (g0.length >= 2) {
             const p1 = planSC(g0[g0.length - 2]), p2 = planSC(g0[g0.length - 1]);
