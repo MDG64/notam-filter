@@ -815,7 +815,7 @@
     }
 
     .cat.on .cnt {
-      color: var(--bg)
+      color: #29B6F6
     }
 
     /* ---------- icônes de phase de vol (décollage / croisière / atterrissage) ---------- */
@@ -860,6 +860,40 @@
     .allpill:focus-visible {
       outline: 2px solid var(--cyan);
       outline-offset: 2px
+    }
+
+    
+    /* ===== Compact filters on mobile ===== */
+    @media (max-width: 640px) {
+
+      .seg {
+        gap: 4px;
+      }
+
+      .cat {
+        height: 36px;
+        gap: 1px;
+        border-radius: 8px;
+        padding: 0 2px;
+      }
+
+      .cat-label {
+        font-size: 9px;
+        letter-spacing: .02em;
+      }
+
+      .cat .cat-ico {
+        height: 20px;
+      }
+
+      .cat .cnt {
+        font-size: 13px;
+      }
+
+      .filters,
+      .filters-wrap {
+        padding: 10px;
+      }
     }
 
     /* ---------- time bar ---------- */
