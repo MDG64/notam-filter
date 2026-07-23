@@ -655,7 +655,8 @@
       padding: 14px 16px;
       cursor: pointer;
       transition: border-color .15s, box-shadow .15s;
-      box-shadow: var(--elev)
+      box-shadow: var(--elev);
+      text-align: center
     }
 
     .stat:hover {
@@ -699,7 +700,8 @@
 
     .stat .row {
       display: flex;
-      align-items: baseline;
+      align-items: center;
+      justify-content: center;
       gap: 8px
     }
 
@@ -723,6 +725,31 @@
     .info .led {
       background: var(--green);
       box-shadow: 0 0 8px var(--green)
+    }
+
+    /* Fonds très légèrement teintés selon la sévérité */
+    .stat.tot {
+      background: color-mix(in srgb, var(--cyan) 7%, var(--panel));
+    }
+
+    .stat.crit {
+      background: color-mix(in srgb, var(--red) 7%, var(--panel));
+    }
+
+    .stat.caut {
+      background: color-mix(in srgb, var(--amber) 7%, var(--panel));
+    }
+
+    .stat.info {
+      background: color-mix(in srgb, var(--green) 7%, var(--panel));
+    }
+
+    /* Repli pour les navigateurs ne prenant pas encore color-mix en charge */
+    @supports not (background: color-mix(in srgb, red 10%, white)) {
+      .stat.tot  { background: rgba(159, 193, 216, .07); }
+      .stat.crit { background: rgba(255, 93, 108, .07); }
+      .stat.caut { background: rgba(246, 178, 62, .07); }
+      .stat.info { background: rgba(52, 211, 154, .07); }
     }
 
     /* ---------- filters ---------- */
