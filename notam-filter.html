@@ -795,8 +795,9 @@
 
     .cat.on {
       color: var(--bg);
-      background: var(--cyan);
-      border-color: var(--cyan)
+      background: #6fa7c3;
+      border-color: var(--green);
+      box-shadow: 0 0 0 1px var(--green), var(--elev);
     }
 
     .cat-label {
@@ -905,6 +906,32 @@
       .filters-wrap {
         gap: 8px;
       }
+
+      /* Time selector */
+      .scratch.time{
+        flex:0 0 auto;
+        width:auto;
+        display:inline-flex;
+      }
+
+      .scratch.time input[type=time]{
+        width:72px !important;
+        min-width:72px;
+        padding:8px 4px;
+        letter-spacing:0;
+      }
+
+      .timebar{
+        gap:6px;
+        align-items:center;
+      }
+
+      .clearTime{
+        margin:0;
+        white-space:nowrap;
+        flex:0 0 auto;
+      }
+
     }
 
       .cat {
@@ -931,6 +958,32 @@
       .filters-wrap {
         padding: 10px;
       }
+    }
+
+    
+    /* ---------- compact time selector: all screen sizes ---------- */
+    .scratch.time {
+      flex: 0 0 auto;
+      width: auto;
+      display: inline-flex;
+    }
+
+    .scratch.time input[type=time] {
+      width: 72px;
+      min-width: 72px;
+      padding: 8px 4px;
+      letter-spacing: 0;
+    }
+
+    .timebar {
+      gap: 6px;
+      align-items: center;
+    }
+
+    .clearTime {
+      margin: 0;
+      white-space: nowrap;
+      flex: 0 0 auto;
     }
 
     /* ---------- time bar ---------- */
