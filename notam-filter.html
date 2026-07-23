@@ -867,29 +867,62 @@
     /* ===== Compact filters on mobile ===== */
     @media (max-width: 640px) {
 
+      .summary {
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 5px;
+        margin: 12px 0;
+      }
+
+      .stat {
+        min-width: 0;
+        padding: 8px 6px;
+        border-radius: 8px;
+      }
+
+      .stat .n {
+        font-size: 19px;
+        line-height: 1;
+      }
+
+      .stat .k {
+        font-size: 7px;
+        line-height: 1.05;
+        letter-spacing: .08em;
+        margin-top: 4px;
+      }
+
+      .stat .row {
+        gap: 5px;
+      }
+
+      .stat .led {
+        width: 6px;
+        height: 6px;
+      }
+
       .seg {
         gap: 3px;
       }
 
       .cat {
-        height: 32px;
+        height: 27px;
         gap: 0;
-        border-radius: 7px;
+        border-radius: 6px;
         padding: 0 2px;
       }
 
       .cat-label {
-        font-size: 8px;
+        font-size: 7px;
         line-height: 1;
         letter-spacing: 0;
       }
 
       .cat .cat-ico {
-        height: 18px;
+        height: 15px;
       }
 
       .cat .cnt {
-        font-size: 12px;
+        font-size: 10px;
         line-height: 1;
       }
 
