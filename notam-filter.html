@@ -10792,11 +10792,7 @@ E) ${e}`;
     // Les couleurs sont à même les tracés (aplats deux tons) : plus besoin de
     // teinter via currentColor/style ici.
     function catLabelHTML(c) {
-      const ico = CAT_ICON[c];
-      if (ico) {
-        return `<svg class="cat-ico" viewBox="${ico.vb}" aria-hidden="true"><use href="#${ico.id}"/></svg><span class="visually-hidden">${CAT_LABEL[c]}</span>`;
-      }
-      return CAT_LABEL[c];
+      return CAT_LABEL[c] || c;
     }
     const SEV_RANK = { critical: 0, caution: 1, info: 2 };
     let activeCats = new Set();   // vide = "Tous"
