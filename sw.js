@@ -34,10 +34,15 @@ self.addEventListener("fetch", e => {
 
   // 2) Pages HTML / navigation : réseau d'abord -> les mises à jour apparaissent
   //    dès qu'on est en ligne ; repli sur le cache si hors-ligne.
+  //    fetch(url, {cache:"no-store"}) plutôt que fetch(e.request) : sinon, en
+  //    mode "navigate", le navigateur peut servir sa propre copie HTTP en
+  //    cache (Cache-Control: max-age=600 côté GitHub Pages) sans même
+  //    toucher le réseau — une réouverture d'app dans les 10 minutes suivant
+  //    un déploiement resterait alors bloquée sur l'ancienne version.
   const isHTML = e.request.mode === "navigate" || url.endsWith(".html") || url.endsWith("/");
   if (isHTML) {
     e.respondWith(
-      fetch(e.request).then(r => {
+      fetch(url, { cache: "no-store" }).then(r => {
         const copy = r.clone();
         caches.open(CACHE).then(c => c.put(e.request, copy)).catch(() => {});
         return r;
