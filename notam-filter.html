@@ -175,51 +175,8 @@
     }
 
     body {
-      background-color: #080a0c;
-      background-image:
-        /* léger éclairage global pour donner du volume au carbone */
-        radial-gradient(ellipse at 50% -18%, rgba(255,255,255,.08) 0%, rgba(255,255,255,0) 48%),
-        radial-gradient(ellipse at 50% 115%, rgba(0,0,0,.62) 0%, rgba(0,0,0,0) 54%),
-
-        /* tissage carbone 2x2 : fibres montantes */
-        repeating-linear-gradient(135deg,
-          rgba(255,255,255,.16) 0px,
-          rgba(255,255,255,.16) 1px,
-          rgba(84,88,92,.22) 1px,
-          rgba(84,88,92,.22) 3px,
-          rgba(12,14,16,.92) 3px,
-          rgba(12,14,16,.92) 6px,
-          rgba(0,0,0,.98) 6px,
-          rgba(0,0,0,.98) 9px,
-          rgba(46,49,52,.42) 9px,
-          rgba(46,49,52,.42) 11px,
-          rgba(5,6,7,.98) 11px,
-          rgba(5,6,7,.98) 14px),
-
-        /* fibres croisées, décalées pour l'effet tressé */
-        repeating-linear-gradient(45deg,
-          rgba(255,255,255,.07) 0px,
-          rgba(255,255,255,.07) 1px,
-          rgba(0,0,0,.34) 1px,
-          rgba(0,0,0,.34) 4px,
-          rgba(44,47,50,.24) 4px,
-          rgba(44,47,50,.24) 7px,
-          rgba(0,0,0,.58) 7px,
-          rgba(0,0,0,.58) 10px,
-          transparent 10px,
-          transparent 14px),
-
-        /* micro-reflets longitudinaux des fibres */
-        repeating-linear-gradient(135deg,
-          transparent 0px,
-          transparent 5px,
-          rgba(255,255,255,.10) 5px,
-          rgba(255,255,255,.10) 6px,
-          transparent 6px,
-          transparent 14px);
-      background-size: 100% 100%, 100% 100%, 28px 28px, 28px 28px, 28px 28px;
-      background-position: 0 0, 0 0, 0 0, 14px 14px, 0 0;
-      background-attachment: fixed;
+      /* le fond carbone lui-même est défini plus bas (règle finale, seule
+         source pour éviter tout conflit de cascade) */
       color: var(--text);
       font-family: var(--sans);
       -webkit-font-smoothing: antialiased;
@@ -275,8 +232,12 @@
     .hdr-actions {
       display: flex;
       align-items: center;
-      gap: 3px;
+      gap: 12px;
       flex: none
+    }
+
+    .hdr-actions .help-btn {
+      margin-left: 0
     }
 
     .brand-title {
@@ -503,7 +464,6 @@
       height: 34px;
       flex: none;
       margin-left: auto;
-      margin-right: -6px;
       border-radius: 50%;
       border: 1px solid var(--line2);
       background: #1a242c;
@@ -794,23 +754,35 @@
     }
 
     /* ---------- filters ---------- */
+    .filters-tabbar {
+      display: flex;
+      margin-top: 8px;
+      margin-bottom: -2px;
+      position: relative;
+      z-index: 1
+    }
+
+    .filters-tab {
+      font: 600 13px/1 var(--mono);
+      color: var(--cyan);
+      letter-spacing: .18em;
+      text-transform: uppercase;
+      background: var(--panel);
+      border: 2px solid var(--cyan);
+      border-bottom: none;
+      border-radius: var(--radius) var(--radius) 0 0;
+      padding: 9px 15px
+    }
+
     .filters-wrap {
       display: flex;
       flex-direction: column;
       gap: 10px;
       border: 2px solid var(--cyan);
-      border-radius: var(--radius);
+      border-radius: 0 var(--radius) var(--radius) var(--radius);
       padding: 14px;
-      margin-top: 8px;
       box-shadow: var(--elev);
       background: var(--panel)
-    }
-
-    .filters-wrap-title {
-      font: 600 13px/1 var(--mono);
-      color: var(--cyan);
-      letter-spacing: .18em;
-      text-transform: uppercase
     }
 
     .filters {
@@ -1887,7 +1859,8 @@
     .list {
       display: flex;
       flex-direction: column;
-      gap: 11px
+      gap: 11px;
+      margin-top: 18px
     }
 
     .strip {
@@ -2708,8 +2681,7 @@
       .stationmapbtn {
         width: 30px;
         height: 30px;
-        font-size: 17px;
-        margin-right: -3px
+        font-size: 17px
       }
 
       .help-btn {
@@ -2724,7 +2696,7 @@
       }
 
       .hdr-actions {
-        gap: 2px
+        gap: 5px
       }
 
       .routebtn {
@@ -2924,23 +2896,27 @@ body.light .stat.on {
 
 
 
-    /* ===== Texture carbone du fond général — aucune autre modification ===== */
+    /* ===== Texture carbone du fond général — contraste accentué ===== */
     body {
-      background-color: #090b0d;
+      background-color: #040506;
       background-image:
-        radial-gradient(ellipse at 50% -15%, rgba(70, 84, 96, .22) 0%, rgba(9, 11, 13, 0) 48%),
+        radial-gradient(ellipse at 50% -15%, rgba(100, 124, 140, .40) 0%, rgba(4, 5, 6, 0) 50%),
         repeating-linear-gradient(135deg,
-          rgba(255,255,255,.050) 0px,
-          rgba(255,255,255,.050) 1px,
-          transparent 1px,
+          rgba(255,255,255,.20) 0px,
+          rgba(255,255,255,.20) 1px,
+          rgba(0,0,0,.55) 1px,
+          rgba(0,0,0,.55) 3px,
+          transparent 3px,
           transparent 4px),
         repeating-linear-gradient(45deg,
-          rgba(0,0,0,.55) 0px,
-          rgba(0,0,0,.55) 2px,
-          transparent 2px,
+          rgba(0,0,0,.90) 0px,
+          rgba(0,0,0,.90) 2px,
+          rgba(255,255,255,.08) 2px,
+          rgba(255,255,255,.08) 3px,
+          transparent 3px,
           transparent 6px),
-        linear-gradient(135deg, #171b1f 0%, #090b0d 52%, #111519 100%);
-      background-size: auto, 8px 8px, 8px 8px, auto;
+        linear-gradient(135deg, #20262c 0%, #040506 52%, #0a0e13 100%);
+      background-size: auto, 6px 6px, 6px 6px, auto;
       background-attachment: fixed;
     }
 
@@ -3202,9 +3178,10 @@ body .stat .k{
 
     <div class="offline-banner" id="offlineBanner" hidden></div>
 
+    <div class="filters-tabbar">
+      <div class="filters-tab">Filters</div>
+    </div>
     <div class="filters-wrap">
-      <div class="filters-wrap-title">Filters</div>
-
       <div class="summary" id="summary"></div>
 
       <div class="timebar">
