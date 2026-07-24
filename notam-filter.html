@@ -2157,7 +2157,6 @@
       position: fixed;
       inset: 0;
       z-index: 45;
-      background: var(--bg);
       overflow-y: auto;
       -webkit-overflow-scrolling: touch
     }
@@ -2603,7 +2602,6 @@
       position: fixed;
       inset: 0;
       z-index: 60;
-      background: var(--bg);
       display: flex;
       flex-direction: column
     }
@@ -2897,7 +2895,9 @@ body.light .stat.on {
 
 
     /* ===== Texture carbone du fond général — contraste accentué ===== */
-    body {
+    body,
+    .route-screen,
+    .map-ov {
       background-color: #040506;
       background-image:
         radial-gradient(ellipse at 50% -15%, rgba(100, 124, 140, .40) 0%, rgba(4, 5, 6, 0) 50%),
@@ -2920,7 +2920,9 @@ body.light .stat.on {
       background-attachment: fixed;
     }
 
-    body.light {
+    body.light,
+    body.light .route-screen,
+    body.light .map-ov {
       background-color: #c9ced2;
       background-image:
         radial-gradient(ellipse at 50% -12%, rgba(255,255,255,.68) 0%, rgba(255,255,255,0) 52%),
