@@ -2962,6 +2962,118 @@ body.light .stat.on {
       background-size: auto, 8px 8px, 8px 8px, auto;
       background-attachment: fixed;
     }
+
+    /* ===== PRIORITÉ FINALE : boutons unis teintés, sans carbone ===== */
+    body .summary .stat,
+    body.light .summary .stat {
+      background-image: none !important;
+      background-blend-mode: normal !important;
+      background-attachment: scroll !important;
+    }
+
+    /* Mode nuit */
+    body:not(.light) .summary .stat.tot {
+      background-color: color-mix(in srgb, var(--cyan) 16%, #11161b) !important;
+      border-color: color-mix(in srgb, var(--cyan) 42%, #2a3138) !important;
+    }
+
+    body:not(.light) .summary .stat.crit {
+      background-color: color-mix(in srgb, var(--red) 16%, #161214) !important;
+      border-color: color-mix(in srgb, var(--red) 42%, #332326) !important;
+    }
+
+    body:not(.light) .summary .stat.caut {
+      background-color: color-mix(in srgb, var(--amber) 16%, #17140f) !important;
+      border-color: color-mix(in srgb, var(--amber) 42%, #352d1d) !important;
+    }
+
+    body:not(.light) .summary .stat.info {
+      background-color: color-mix(in srgb, var(--green) 16%, #101713) !important;
+      border-color: color-mix(in srgb, var(--green) 42%, #20332b) !important;
+    }
+
+    /* Mode jour */
+    body.light .summary .stat.tot {
+      background-color: color-mix(in srgb, var(--cyan) 11%, #ffffff) !important;
+      border-color: color-mix(in srgb, var(--cyan) 34%, #d7e0e6) !important;
+    }
+
+    body.light .summary .stat.crit {
+      background-color: color-mix(in srgb, var(--red) 11%, #ffffff) !important;
+      border-color: color-mix(in srgb, var(--red) 34%, #eadbdd) !important;
+    }
+
+    body.light .summary .stat.caut {
+      background-color: color-mix(in srgb, var(--amber) 11%, #ffffff) !important;
+      border-color: color-mix(in srgb, var(--amber) 34%, #eadfca) !important;
+    }
+
+    body.light .summary .stat.info {
+      background-color: color-mix(in srgb, var(--green) 11%, #ffffff) !important;
+      border-color: color-mix(in srgb, var(--green) 34%, #d7e8e0) !important;
+    }
+
+    /* Repli navigateurs sans color-mix */
+    @supports not (background-color: color-mix(in srgb, red 10%, white)) {
+      body:not(.light) .summary .stat.tot  { background-color:#1e2a31 !important; border-color:#46606f !important; }
+      body:not(.light) .summary .stat.crit { background-color:#2b1b1e !important; border-color:#71404a !important; }
+      body:not(.light) .summary .stat.caut { background-color:#2c2517 !important; border-color:#71572a !important; }
+      body:not(.light) .summary .stat.info { background-color:#172b23 !important; border-color:#2f6e57 !important; }
+
+      body.light .summary .stat.tot  { background-color:#edf6fa !important; border-color:#b6d9e6 !important; }
+      body.light .summary .stat.crit { background-color:#fdf0f1 !important; border-color:#efc7cb !important; }
+      body.light .summary .stat.caut { background-color:#fdf7ec !important; border-color:#ead7ae !important; }
+      body.light .summary .stat.info { background-color:#edf8f4 !important; border-color:#bfe1d3 !important; }
+    }
+
+    /* L'état actif reste visible sans masquer la couleur de sévérité */
+    body .summary .stat.on {
+      box-shadow: 0 0 0 1px var(--green), var(--elev) !important;
+    }
+
+
+    /* ===== Active NOTAM : fond gris prioritaire =====
+       Le bouton "Active NOTAMs" est .stat.tot, pas .stat.on. */
+    body:not(.light) .summary .stat.tot,
+    body:not(.light) .summary .stat.tot:hover {
+      background-image: none !important;
+      background-color: #252a2f !important;
+      border-color: #454d55 !important;
+    }
+
+    body.light .summary .stat.tot,
+    body.light .summary .stat.tot:hover {
+      background-image: none !important;
+      background-color: #eef1f3 !important;
+      border-color: #cfd6dc !important;
+    }
+
+
+/* ===== Agrandissement boutons Ground / Departure / Flight / Arrival ===== */
+body .cat{
+  height:58px !important;
+}
+body .cat-label{
+  font-size:14px !important;
+  font-weight:700 !important;
+  letter-spacing:.04em !important;
+}
+body .cat .cnt{
+  font-size:20px !important;
+  font-weight:700 !important;
+}
+body .cat .cat-ico{
+  height:26px !important;
+}
+
+/* Mobile */
+@media (max-width:640px){
+  body .cat{height:40px !important;}
+  body .cat-label{font-size:10px !important;}
+  body .cat .cnt{font-size:15px !important;}
+  body .cat .cat-ico{height:18px !important;}
+}
+
 </style>
 </head>
 
