@@ -29,6 +29,8 @@
       --muted2: #5e656c;
       --cyan: #9fc1d8;
       --cyan-dim: #46606f;
+      --steel: #8a97a3;
+      --steel-dim: #4d565e;
       --red: #ff5d6c;
       --amber: #f6b23e;
       --green: #34d39a;
@@ -57,6 +59,8 @@
       --muted2: #9aa6b0;
       --cyan: #0e9bc4;
       --cyan-dim: #9fd6e6;
+      --steel: #5c6670;
+      --steel-dim: #aab3ba;
       --red: #e5484d;
       --amber: #cf7a12;
       --green: #12936a;
@@ -382,17 +386,20 @@
     .tabs {
       display: flex;
       gap: 6px;
-      margin-top: 4px
+      margin-top: 4px;
+      margin-bottom: -2px;
+      position: relative;
+      z-index: 1
     }
 
     .tab {
       font: 600 11px/1 var(--sans);
       letter-spacing: .07em;
       color: var(--muted);
-      background: transparent;
-      border: 1px solid var(--line);
+      background: var(--panel);
+      border: 2px solid var(--steel);
       border-bottom: none;
-      border-radius: 8px 8px 0 0;
+      border-radius: var(--radius) var(--radius) 0 0;
       padding: 9px 15px;
       cursor: pointer
     }
@@ -400,7 +407,7 @@
     .tab.on {
       color: var(--text);
       background: var(--panel);
-      border-color: var(--line2)
+      border-color: var(--steel)
     }
 
     .tab .star {
@@ -413,8 +420,8 @@
       flex-wrap: wrap;
       padding: 12px;
       background: var(--panel);
-      border: 1px solid var(--line);
-      border-radius: 0 8px 8px 8px;
+      border: 2px solid var(--steel);
+      border-radius: 0 var(--radius) var(--radius) var(--radius);
       min-height: 20px;
       box-shadow: var(--elev)
     }
@@ -768,7 +775,7 @@
       letter-spacing: .18em;
       text-transform: uppercase;
       background: var(--panel);
-      border: 2px solid var(--cyan);
+      border: 2px solid var(--steel);
       border-bottom: none;
       border-radius: var(--radius) var(--radius) 0 0;
       padding: 9px 15px
@@ -778,7 +785,7 @@
       display: flex;
       flex-direction: column;
       gap: 10px;
-      border: 2px solid var(--cyan);
+      border: 2px solid var(--steel);
       border-radius: 0 var(--radius) var(--radius) var(--radius);
       padding: 14px;
       box-shadow: var(--elev);
