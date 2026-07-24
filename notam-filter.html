@@ -175,13 +175,51 @@
     }
 
     body {
-      background-color: var(--bg);
+      background-color: #080a0c;
       background-image:
-        linear-gradient(135deg, rgba(255,255,255,.055) 25%, transparent 25%, transparent 50%, rgba(255,255,255,.055) 50%, rgba(255,255,255,.055) 75%, transparent 75%, transparent),
-        linear-gradient(135deg, rgba(0,0,0,.18) 25%, transparent 25%, transparent 50%, rgba(0,0,0,.18) 50%, rgba(0,0,0,.18) 75%, transparent 75%, transparent),
-        linear-gradient(45deg, rgba(255,255,255,.025) 25%, transparent 25%, transparent 50%, rgba(255,255,255,.025) 50%, rgba(255,255,255,.025) 75%, transparent 75%, transparent);
-      background-size: 14px 14px,14px 14px,7px 7px;
-      background-position: 0 0,7px 7px,0 0;
+        /* léger éclairage global pour donner du volume au carbone */
+        radial-gradient(ellipse at 50% -18%, rgba(255,255,255,.08) 0%, rgba(255,255,255,0) 48%),
+        radial-gradient(ellipse at 50% 115%, rgba(0,0,0,.62) 0%, rgba(0,0,0,0) 54%),
+
+        /* tissage carbone 2x2 : fibres montantes */
+        repeating-linear-gradient(135deg,
+          rgba(255,255,255,.16) 0px,
+          rgba(255,255,255,.16) 1px,
+          rgba(84,88,92,.22) 1px,
+          rgba(84,88,92,.22) 3px,
+          rgba(12,14,16,.92) 3px,
+          rgba(12,14,16,.92) 6px,
+          rgba(0,0,0,.98) 6px,
+          rgba(0,0,0,.98) 9px,
+          rgba(46,49,52,.42) 9px,
+          rgba(46,49,52,.42) 11px,
+          rgba(5,6,7,.98) 11px,
+          rgba(5,6,7,.98) 14px),
+
+        /* fibres croisées, décalées pour l'effet tressé */
+        repeating-linear-gradient(45deg,
+          rgba(255,255,255,.07) 0px,
+          rgba(255,255,255,.07) 1px,
+          rgba(0,0,0,.34) 1px,
+          rgba(0,0,0,.34) 4px,
+          rgba(44,47,50,.24) 4px,
+          rgba(44,47,50,.24) 7px,
+          rgba(0,0,0,.58) 7px,
+          rgba(0,0,0,.58) 10px,
+          transparent 10px,
+          transparent 14px),
+
+        /* micro-reflets longitudinaux des fibres */
+        repeating-linear-gradient(135deg,
+          transparent 0px,
+          transparent 5px,
+          rgba(255,255,255,.10) 5px,
+          rgba(255,255,255,.10) 6px,
+          transparent 6px,
+          transparent 14px);
+      background-size: 100% 100%, 100% 100%, 28px 28px, 28px 28px, 28px 28px;
+      background-position: 0 0, 0 0, 0 0, 14px 14px, 0 0;
+      background-attachment: fixed;
       color: var(--text);
       font-family: var(--sans);
       -webkit-font-smoothing: antialiased;
