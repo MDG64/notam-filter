@@ -13002,6 +13002,9 @@ window.addEventListener("scroll", hidePop, true);
       // indicatif alphanumérique (P101, M11) est sans ambiguïté une
       // référence, alors qu'un mot purement alphabétique glané au hasard
       // (« ATE », reste de traduction) ne l'est pas.
+      // Chaque ref sort avec sa position token (`at`) : refsFromNotam en a besoin
+      // pour savoir si une ref citée comme borne d'un « BTN X AND Y » a ou non
+      // une AUTRE mention, indépendante, ailleurs dans le texte.
       function series(w,i,kw,ok){
         const out=[]; let j=i+1, expectRef=true;
         while(j<w.length){
@@ -13015,11 +13018,11 @@ window.addEventListener("scroll", hidePop, true);
           // plage "X TO Y" / "X THRU Y" / "X THROUGH Y"
           if((w[j+1]==="TO"||w[j+1]==="THRU"||w[j+1]==="THROUGH") && ok(t) && ok(w[j+2])){
             const r=range(t,w[j+2]);
-            if(r){ r.forEach(x=>out.push(x)); j+=3; expectRef=false; continue; }
+            if(r){ r.forEach(x=>out.push({ref:x,at:j})); j+=3; expectRef=false; continue; }
           }
           const rg=range2(t);
-          if(rg){ rg.forEach(x=>out.push(x)); j++; expectRef=false; continue; }
-          if(isRef){ out.push(t); j++; expectRef=false; continue; }
+          if(rg){ rg.forEach(x=>out.push({ref:x,at:j})); j++; expectRef=false; continue; }
+          if(isRef){ out.push({ref:t,at:j}); j++; expectRef=false; continue; }
           break;
         }
         return out;
@@ -13035,12 +13038,12 @@ window.addEventListener("scroll", hidePop, true);
 
       function refsFromNotam(e){
         const w=lex(e), T=" "+(e||"").toUpperCase()+" ";
-        const twy=new Set(),rwy=new Set(),stand=new Set(),apron=new Set(),partial=[];
+        const twy=new Set(),twyHits=[],rwy=new Set(),stand=new Set(),apron=new Set(),partial=[];
         const okT=t=>TWY_REF.test(t), okS=t=>/^[A-Z]{0,2}\d{1,3}$/.test(t);
         for(let i=0;i<w.length;i++){
           const k=w[i];
-          if(TWY_KW.has(k))  series(w,i,TWY_KW,okT).forEach(x=>twy.add(x));
-          if(STD_KW.has(k))  series(w,i,STD_KW,okS).forEach(x=>stand.add(x));
+          if(TWY_KW.has(k))  series(w,i,TWY_KW,okT).forEach(h=>{ twy.add(h.ref); twyHits.push(h); });
+          if(STD_KW.has(k))  series(w,i,STD_KW,okS).forEach(h=>stand.add(h.ref));
           if(APR_KW.has(k)){ let t=w[i+1]; if(t&&!STOP.has(t)){ if(NATO[t])apron.add(NATO[t]);
             else if(/^[A-Z]{1,2}\d{0,2}$/.test(t))apron.add(t); } }
         }
@@ -13057,26 +13060,38 @@ window.addEventListener("scroll", hidePop, true);
         const isRef=t=>/^[A-Z]{0,3}\d{0,3}$/.test(t)&&/[A-Z0-9]/.test(t)&&t.length<=4&&!STOP.has(t);
         const firstRef=(from)=>{ for(let i=from;i<w.length&&i<from+6;i++){ const t=w[i];
           if(PSKIP.has(t))continue; if(isRef(t))return{ref:t,at:i}; } return null; };
+        const partialPos=[];
         for(let i=0;i<w.length;i++){ const k=w[i];
           if(k==="BTN"||k==="BTWN"||k==="BETWEEN"){ const a=firstRef(i+1); if(!a)continue;
             let j=a.at+1; while(j<w.length&&w[j]!=="AND")j++; const b=firstRef(j+1);
-            if(b) partial.push([a.ref,b.ref]); }
+            if(b){ partial.push([a.ref,b.ref]); partialPos.push([a,b]); } }
           else if(k==="FM"||k==="FROM"){ const a=firstRef(i+1); if(!a)continue;
             let j=a.at+1; while(j<w.length&&w[j]!=="TO")j++; if(j>=w.length)continue;
-            const b=firstRef(j+1); if(b) partial.push([a.ref,b.ref]); }
+            const b=firstRef(j+1); if(b){ partial.push([a.ref,b.ref]); partialPos.push([a,b]); } }
         }
         /* Une ref qui n'apparaît QUE comme borne d'une portion « BTN X AND Y »
            (ou « FM X TO Y ») n'est pas un taxiway fermé : c'est une limite. Sans
            ce nettoyage, « TWY P BTN TWY Z AND TWY M2 CLSD » peindrait Z et M2 en
            entier alors qu'ils ne bornent que le segment fermé de P. On ne retire
            une borne que s'il existe un taxiway hôte (le même find que planBuild)
-           et que la borne ne sert pas elle-même d'hôte à une autre portion. */
-        const boundary=new Set(), hostsUsed=new Set();
-        for(const [rx,ry] of partial){
-          const host=[...twy].find(r=>r!==rx&&r!==ry);
-          if(host){ boundary.add(rx); boundary.add(ry); hostsUsed.add(host); }
+           et que la borne ne sert pas elle-même d'hôte à une autre portion.
+           Garde-fou : une borne qui a AUSSI une mention indépendante ailleurs
+           dans le texte (ex. « BTN TWY LP AND STAND P12 » PUIS, plus loin,
+           « - TWY LP » listée comme sa propre fermeture) n'est pas une simple
+           limite — elle reste peinte. On ne le sait qu'en comparant les
+           POSITIONS token consommées comme borne à TOUTES les occurrences
+           connues de cette ref (`twyHits`), pas juste son nom. */
+        const boundary=new Set(), hostsUsed=new Set(), consumedAt=new Set();
+        for(const [a,b] of partialPos){
+          const host=[...twy].find(r=>r!==a.ref&&r!==b.ref);
+          if(host){ boundary.add(a.ref); boundary.add(b.ref); hostsUsed.add(host);
+            consumedAt.add(a.at); consumedAt.add(b.at); }
         }
-        for(const b of boundary) if(!hostsUsed.has(b)) twy.delete(b);
+        for(const b of boundary){
+          if(hostsUsed.has(b)) continue;
+          const stillMentioned = twyHits.some(h=>h.ref===b && !consumedAt.has(h.at));
+          if(!stillMentioned) twy.delete(b);
+        }
         const hit=twy.size||rwy.size||stand.size||apron.size;
         return {twy:[...twy],rwy:[...rwy],stand:[...stand],apron:[...apron],partial,hit:!!hit};
       }
