@@ -10839,7 +10839,7 @@ E) ${e}`;
       _layoutBusy = true;
       while (_layoutQ.length) {
         const icao = _layoutQ.shift();
-        try { await fetch(LAYOUT_URL + encodeURIComponent(icao) + ".json"); }
+        try { await fetch(LAYOUT_URL + encodeURIComponent(icao) + ".json", { cache: "no-cache" }); }
         catch (_) { /* hors ligne : retenté à la prochaine consultation */ }
         await new Promise(r => setTimeout(r, 120));
       }
@@ -12953,17 +12953,21 @@ window.addEventListener("scroll", hidePop, true);
     function hasPlan(icao) { return !!(planIndex && planIndex[icao]); }
 
     async function fetchLayout(icao) {
-      if (layoutCache.has(icao)) return layoutCache.get(icao);
-      let out = null;
+      // Toujours revalider en réseau (no-cache force la requête conditionnelle
+      // même dans la fenêtre Cache-Control) : un plan corrigé sur OSM/GitHub
+      // doit apparaître au prochain rendu, pas seulement à la prochaine
+      // réouverture complète de l'appli. Le Map ne sert que de repli hors ligne.
       try {
-        const r = await fetch(LAYOUT_URL + encodeURIComponent(icao) + ".json");
+        const r = await fetch(LAYOUT_URL + encodeURIComponent(icao) + ".json", { cache: "no-cache" });
         if (r.ok) {
           const j = await r.json();
-          if (j && Array.isArray(j.f) && Array.isArray(j.arp)) out = j;
+          if (j && Array.isArray(j.f) && Array.isArray(j.arp)) {
+            layoutCache.set(icao, j);
+            return j;
+          }
         }
-      } catch (e) { out = null; }
-      layoutCache.set(icao, out);
-      return out;
+      } catch (e) { /* hors ligne : repli ci-dessous */ }
+      return layoutCache.has(icao) ? layoutCache.get(icao) : null;
     }
 
       /* refsFromNotam v2 — séparateurs obligatoires, pas de glanage */
