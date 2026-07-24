@@ -3,7 +3,7 @@
 //       "cache d'abord" pour les icônes, les appels API toujours en réseau,
 //       et les PLANS (layouts/*.json) mis en cache à l'usage -> consultables
 //       en vol, sans connexion.
-const CACHE = "notam-filter-v3";
+const CACHE = "notam-filter-v4";
 const ASSETS = [
   "./notam-filter.html", "./index.html", "./manifest.json",
   "./icon-192.png", "./icon-512.png"
