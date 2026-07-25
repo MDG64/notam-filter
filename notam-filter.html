@@ -12401,8 +12401,8 @@ function renderInfo(icao) {
       // Vue monde : seules les FIR rouge/ambre + le fond (terres/côtes) restent visibles —
       // sinon 1097 tracés (dont de nombreux sous-secteurs VATSIM) rendent la carte illisible.
       // Les FIR neutres apparaissent progressivement en zoomant, leurs étiquettes un cran plus tard.
-      const showNeutral = v.scale > 6;
-      const showLabels = v.scale > 9;
+      const showNeutral = v.scale > 27;    // ~9 crans de molette plus tard qu'avant (chaque cran = ×1.18)
+      const showLabels = v.scale > 40;
       ctx.font = "600 " + Math.round(10.5 * dpr) + "px 'IBM Plex Mono',monospace";
       ctx.textAlign = "center"; ctx.textBaseline = "middle";
       for (const f of FIR) {
