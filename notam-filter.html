@@ -11190,6 +11190,47 @@ function renderInfo(icao) {
       activeCats.clear();
       activeSev = null;
       render();
+      enrichUnclassified();   // en tâche de fond : n'attend rien, ne bloque rien
+    }
+
+    // Les NOTAM qu'aucune règle locale ne sait ranger restent affichés en
+    // « Unclassified » — comportement historique, y compris en vol sans réseau.
+    // Si on est en ligne, on demande en plus au proxy de les trancher (il
+    // interroge un LLM et journalise une proposition de règle à coder en dur,
+    // ce qui fait décroître ces appels avec le temps). Tout échec est ignoré :
+    // l'app reste dans son état actuel, jamais d'erreur visible.
+    const classifyCache = new Map();   // texte -> catégorie (évite de redemander)
+    let enrichSeq = 0;
+    async function enrichUnclassified() {
+      if (!navigator.onLine || !BACKEND_URL) return;
+      const seq = ++enrichSeq;
+      const todo = current.filter(n => n.source === "unclassified" && n.e);
+      if (!todo.length) return;
+
+      let changed = false;
+      for (const n of todo.slice(0, 12)) {          // borne : jamais de rafale
+        const key = n.e;
+        let cat = classifyCache.get(key);
+        if (cat === undefined) {
+          try {
+            const r = await fetch(BACKEND_URL + "/api/classify", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ icao: currentIcao, text: n.raw || n.e }),
+            });
+            if (!r.ok) return;
+            cat = (await r.json()).category || null;
+            classifyCache.set(key, cat);
+          } catch (e) { return; }                   // hors ligne / proxy muet : on s'arrête
+        }
+        if (seq !== enrichSeq) return;              // un autre terrain a été chargé entre-temps
+        if (cat && CAT_LABEL[cat]) {
+          n.categories = [cat];
+          n.source = "llm";
+          changed = true;
+        }
+      }
+      if (changed && seq === enrichSeq) render();
     }
 
     function renderLoading() {
@@ -11924,19 +11965,29 @@ function renderInfo(icao) {
       return FIR;
     }
     async function fetchFirClosures() {
-      // Snapshot généré manuellement depuis un pull amont existant (voir fir/closures.json,
-      // champ "source") — pas d'appel amont ici non plus, simple fichier statique.
-      try {
-        const r = await fetch(FIR_CLOSURES_URL, { cache: "no-cache" });
-        if (r.ok) {
+      // Deux sources, dans cet ordre :
+      //  1. le proxy (classification réactualisée en continu côté serveur) ;
+      //  2. fir/closures.json, l'instantané figé livré avec l'app — mis en cache
+      //     par le service worker, donc c'est LUI qui répond en vol sans réseau.
+      // Aucun appel amont depuis le navigateur dans les deux cas.
+      const sources = [
+        { url: BACKEND_URL ? BACKEND_URL + "/api/fir/closures" : null, live: true },
+        { url: FIR_CLOSURES_URL, live: false },
+      ];
+      for (const s of sources) {
+        if (!s.url) continue;
+        try {
+          const r = await fetch(s.url, { cache: "no-cache" });
+          if (!r.ok) continue;
           const j = await r.json();
           if (j && Array.isArray(j.closures)) {
             const m = new Map(); j.closures.forEach(c => m.set(c.id, c));
-            FIR_CLOSURES = m; return FIR_CLOSURES;
+            FIR_CLOSURES = m;
+            return FIR_CLOSURES;
           }
-        }
-      } catch (e) { /* hors ligne : repli ci-dessous */ }
-      return FIR_CLOSURES;
+        } catch (e) { /* source suivante */ }
+      }
+      return FIR_CLOSURES;   // hors ligne complet : ce qu'on avait déjà en mémoire
     }
     async function ensureFirReady() {
       if (FIR && FIR_CLOSURES) return true;
