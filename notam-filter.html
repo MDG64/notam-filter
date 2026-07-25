@@ -3526,8 +3526,8 @@ body .stat .k{
         if (FREETEXT_KEYWORDS[c].some(k => t.includes(k))) found.add(c);
       return found;
     }
-    // Mots-clés grues / mâts -> toujours Information
-    const INFO_TEXT_RE = /\b(CRANE|CRANES|MAST|MASTS|MASTING)\b/;
+    // Mots-clés grues / mâts / obstacles -> toujours Information
+    const INFO_TEXT_RE = /\b(CRANE|CRANES|MAST|MASTS|MASTING|OBST|OBSTACLE|OBSTACLES)\b/;
     // Mots-clés hélicoptères -> sévérité plafonnée à Caution
     const HELI_TEXT_RE = /\b(HEL|HELI|HELIPAD|HELIPADS|HELIPORT|HELIDECK|HELICOPTER|HELICOPTERS|HLS|FATO|TLOF)\b/;
     function severity(q, e) {
@@ -3538,6 +3538,10 @@ body .stat .k{
       // de stationnement (code Q « MP »). On ne se base PAS sur le mot « stand » dans
       // le texte : une fermeture de taxiway/piste qui cite un stand reste critique.
       if (subj === "MP") return "info";
+      // Obstacles (code Q « OB » obstacle, « OL » obstacle lights) -> toujours Information,
+      // même U/S, CLSD, withdrawn... (tour, mât, grue, bâtiment... l'obstacle reste
+      // signalé mais n'appelle pas d'action opérationnelle immédiate).
+      if (subj === "OB" || subj === "OL") return "info";
       let sev;
       if (CRITICAL_TEXT.some(k => t.includes(k))) sev = "critical";
       else sev = CONDITION_SEVERITY[cond] || "caution";
