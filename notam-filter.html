@@ -1822,6 +1822,7 @@
         max-width: 100%;
         width: 100%;
         max-height: 100%;
+        height: 100vh;
         height: 100dvh;
         border-radius: 0;
         border: 0
@@ -11378,12 +11379,12 @@ function renderInfo(icao) {
 
     /* ---- fenêtre d'aide (?) ---- */
     $("#planBtn").onclick = () => { openPlan(); };
-    $("#planClose").onclick = () => { $("#planOv").hidden = true; };
-    $("#planOv").onclick = e => { if (e.target === $("#planOv")) $("#planOv").hidden = true; };
+    $("#planClose").onclick = () => { $("#planOv").hidden = true; document.body.style.overflow = ""; };
+    $("#planOv").onclick = e => { if (e.target === $("#planOv")) { $("#planOv").hidden = true; document.body.style.overflow = ""; } };
     $("#helpBtn").onclick = () => { $("#helpOv").hidden = false; };
     $("#helpClose").onclick = () => { $("#helpOv").hidden = true; };
     $("#helpOv").onclick = e => { if (e.target === $("#helpOv")) $("#helpOv").hidden = true; };
-    document.addEventListener("keydown", e => { if (e.key === "Escape") { $("#helpOv").hidden = true; $("#infoOv").hidden = true; $("#planOv").hidden = true; } });
+    document.addEventListener("keydown", e => { if (e.key === "Escape") { $("#helpOv").hidden = true; $("#infoOv").hidden = true; $("#planOv").hidden = true; document.body.style.overflow = ""; } });
     $("#infoBtn").onclick = () => {
       if (!currentIcao) return;
       $("#infoTitle").textContent = currentIcao + " — Airport info";
@@ -14478,6 +14479,10 @@ window.addEventListener("scroll", hidePop, true);
       $("#planSub").textContent = "";
       $("#planTimeSlot").innerHTML = "";
       ov.hidden = false;
+      // Verrouille le défilement de la page en dessous : sur iPad/Chrome, un
+      // corps de page défilable derrière l'overlay fait dériver l'en-tête
+      // "figé" (position:fixed) avec la carte pendant le scroll tactile.
+      document.body.style.overflow = "hidden";
       body.innerHTML = `<div class="plan-msg"><div class="spinner"></div>Loading layout…</div>`;
       if (!icao) { body.innerHTML = `<div class="plan-msg">Load an aerodrome first.</div>`; return; }
 
