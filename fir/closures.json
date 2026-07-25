@@ -7,6 +7,10 @@
       "reason": "Zone réglementée HSR5 couvrant tout le territoire soudanais, plan de contingence FIR Khartoum obligatoire pour tout trafic (routes CR8/CR9/CR10 imposées)",
       "notams": ["A0050/26"] },
 
+    { "id": "OIIX", "level": "amber",
+      "reason": "Aviation générale et vols VFR suspendus dans toute la FIR Téhéran (sauf circuits d'entraînement sur une liste restreinte d'aérodromes) ; zone de conflit proche pouvant s'étendre au-dessus du Golfe Persique/mer d'Oman (avis de prudence). Le trafic IFR normal a repris depuis le 22/06/2026 (FIR non fermée à l'IFR).",
+      "notams": ["B0375/26", "B0392/26", "A1614/26", "A1306/26"] },
+
     { "id": "LGGG", "level": "amber",
       "reason": "Survol/atterrissage interdit aux aéronefs en provenance de Libye (sauf exemptions) ; aéronefs russes interdits d'entrée",
       "notams": ["A1482/26", "A1631/26"] },
