@@ -3154,6 +3154,7 @@ body .stat .k{
         title="Show route map">🌐</button>
       <button class="routebtn" id="routeBtn">Route ➔</button>
       <div class="hdr-actions">
+        <button class="help-btn" id="firMapBtn" aria-label="Carte mondiale des FIR" title="Carte mondiale des FIR">🗺</button>
         <button class="help-btn" id="themeBtn" aria-label="Basculer le thème" title="Mode jour">☀</button>
         <button class="help-btn" id="helpBtn" aria-label="Information" title="Information">?</button>
       </div>
@@ -3266,6 +3267,12 @@ body .stat .k{
   <div class="map-ov" id="mapOv" hidden>
     <button class="map-x" id="mapClose" aria-label="Back">←</button>
     <canvas id="routeMap"></canvas>
+  </div>
+
+  <!-- ================= OVERLAY CARTE FIR MONDIALE ================= -->
+  <div class="map-ov" id="firOv" hidden>
+    <button class="map-x" id="firClose" aria-label="Back">←</button>
+    <canvas id="firMap"></canvas>
   </div>
 
   <div class="modal-ov" id="planOv" hidden>
@@ -11902,6 +11909,41 @@ function renderInfo(icao) {
     }
     let _bgCanvas = null, _bg = null, _bgZoomTimer = null;   // cache du fond + méta
 
+    // --- Carte FIR mondiale (frontières ICAO) ------------------------------
+    const FIR_URL = "./fir/boundaries.json";
+    const FIR_CLOSURES_URL = "./fir/closures.json";
+    let FIR = null, FIR_CLOSURES = null, firView = null, _firBg = null, _firBgCanvas = null, _firBgZoomTimer = null, firHitboxes = [];
+    async function fetchFir() {
+      // Même règle que fetchLayout() : réseau d'abord (no-cache), repli mémoire
+      // seulement si le fetch échoue (hors ligne) — jamais de pull amont ici,
+      // ce fichier est un jeu de frontières statique servi depuis GitHub Pages.
+      try {
+        const r = await fetch(FIR_URL, { cache: "no-cache" });
+        if (r.ok) { const j = await r.json(); if (j && Array.isArray(j.fir)) { FIR = j.fir; return FIR; } }
+      } catch (e) { /* hors ligne : repli ci-dessous */ }
+      return FIR;
+    }
+    async function fetchFirClosures() {
+      // Snapshot généré manuellement depuis un pull amont existant (voir fir/closures.json,
+      // champ "source") — pas d'appel amont ici non plus, simple fichier statique.
+      try {
+        const r = await fetch(FIR_CLOSURES_URL, { cache: "no-cache" });
+        if (r.ok) {
+          const j = await r.json();
+          if (j && Array.isArray(j.closures)) {
+            const m = new Map(); j.closures.forEach(c => m.set(c.id, c));
+            FIR_CLOSURES = m; return FIR_CLOSURES;
+          }
+        }
+      } catch (e) { /* hors ligne : repli ci-dessous */ }
+      return FIR_CLOSURES;
+    }
+    async function ensureFirReady() {
+      if (FIR && FIR_CLOSURES) return true;
+      await Promise.all([fetchFir(), fetchFirClosures()]);
+      return !!FIR;
+    }
+
     // Dessine le fond (mer, terres, relief, côtes, lacs, villes) sur un canvas donné.
     // offX/offY : décalage en pixels pour rendre sur un canvas plus grand que la vue.
     function paintBackground(ctx, cv, v, C, offX, offY) {
@@ -12331,9 +12373,162 @@ function renderInfo(icao) {
       }, { passive: false });
       cv.addEventListener("touchend", () => pinch = null);
     })();
+
+    // --- Dessin + interactions carte FIR mondiale ---------------------------
+    let _firRafPending = false;
+    function scheduleFirDraw() {
+      if (_firRafPending) return;
+      _firRafPending = true;
+      requestAnimationFrame(() => { _firRafPending = false; drawFirMap(); });
+    }
+    function drawFirMap() {
+      if (!firView) return;
+      const cv = $("#firMap"), ctx = cv.getContext("2d"), v = firView;
+      const light = document.body.classList.contains("light");
+      const C = mapPalette(light);
+      const dpr = v.dpr, kx = Math.cos(v.cy * Math.PI / 180);
+      const X = lon => (cv.width / (2 * dpr) + (lon - v.cx) * kx * v.scale) * dpr;
+      const Y = lat => (cv.height / (2 * dpr) - (lat - v.cy) * v.scale) * dpr;
+      paintBackground(ctx, cv, v, C);         // même fond (mer/terres/côtes) que la carte route
+      firHitboxes = [];
+      if (!FIR) return;
+      const M = 40 * dpr;
+      const onScreen = (x, y) => x > -M && x < cv.width + M && y > -M && y < cv.height + M;
+      const step = v.scale > 3.2 ? 1 : 2;
+      // bleu neutre pour une FIR normale ; rouge/ambre réservés aux FIR fermées (fir/closures.json)
+      const neutralStroke = light ? "rgba(30,90,160,.65)" : "rgba(110,170,235,.65)";
+      const RED = light ? "#c93a3a" : "#ff5d6c", AMBER = light ? "#c98a08" : "#f6c945";
+      // Vue monde : seules les FIR rouge/ambre + le fond (terres/côtes) restent visibles —
+      // sinon 1097 tracés (dont de nombreux sous-secteurs VATSIM) rendent la carte illisible.
+      // Les FIR neutres apparaissent progressivement en zoomant, leurs étiquettes un cran plus tard.
+      const showNeutral = v.scale > 6;
+      const showLabels = v.scale > 9;
+      ctx.font = "600 " + Math.round(10.5 * dpr) + "px 'IBM Plex Mono',monospace";
+      ctx.textAlign = "center"; ctx.textBaseline = "middle";
+      for (const f of FIR) {
+        const closure = FIR_CLOSURES ? FIR_CLOSURES.get(f.id) : null;
+        const col = closure ? (closure.level === "red" ? RED : AMBER) : null;
+        if (!col && !showNeutral) continue;    // écrémage précoce : ni tracé ni coût de calcul
+        let anyOnScreen = false;
+        ctx.beginPath();
+        for (const ring of f.rings) {
+          let started = false;
+          for (let i = 0; i < ring.length; i += step) {
+            const x = X(ring[i][0]), y = Y(ring[i][1]);
+            if (onScreen(x, y)) anyOnScreen = true;
+            if (!started) { ctx.moveTo(x, y); started = true; } else ctx.lineTo(x, y);
+          }
+          ctx.closePath();
+        }
+        if (!anyOnScreen) continue;
+        if (col) {
+          ctx.fillStyle = col + "33";       // remplissage léger (alpha ~20%)
+          ctx.fill();
+          ctx.lineWidth = 1.6 * dpr; ctx.strokeStyle = col;
+        } else {
+          ctx.lineWidth = 1.1 * dpr; ctx.strokeStyle = neutralStroke;
+        }
+        ctx.stroke();
+        // FIR fermée : étiquette toujours visible (même dézoomé), sinon seulement au zoom
+        if ((closure || showLabels) && f.lx != null && f.ly != null) {
+          const lx = X(f.lx), ly = Y(f.ly);
+          if (onScreen(lx, ly)) {
+            if (closure) {
+              const w = ctx.measureText(f.id).width, pad = 5 * dpr, bw = w + pad * 2, bh = 14 * dpr;
+              ctx.fillStyle = col;
+              ctx.beginPath();
+              if (ctx.roundRect) ctx.roundRect(lx - bw / 2, ly - bh / 2, bw, bh, bh / 2);
+              else ctx.rect(lx - bw / 2, ly - bh / 2, bw, bh);
+              ctx.fill();
+              ctx.fillStyle = light ? "#1b1200" : "#170e00";
+              ctx.fillText(f.id, lx, ly);
+              firHitboxes.push({ id: f.id, x: lx, y: ly, r: Math.max(bw, bh) / 2, closure });
+            } else {
+              ctx.fillStyle = light ? "rgba(20,50,90,.9)" : "rgba(200,225,250,.92)";
+              ctx.fillText(f.id, lx, ly);
+              firHitboxes.push({ id: f.id, x: lx, y: ly, r: 12 * dpr, closure: null });
+            }
+          }
+        }
+      }
+    }
+    function openFirMap() {
+      $("#firOv").hidden = false;
+      const cv = $("#firMap"), r = cv.getBoundingClientRect(), dpr = window.devicePixelRatio || 1;
+      cv.width = Math.round(r.width * dpr); cv.height = Math.round(r.height * dpr);
+      if (!firView) {
+        // vue monde par défaut, même cadrage que la carte route sans itinéraire
+        const cy = 25, cx = 10, kx0 = Math.cos(cy * Math.PI / 180);
+        const scale = Math.max(1, Math.min((r.height * 0.9) / 150, (r.width * 0.9) / (330 * kx0)));
+        firView = { cx, cy, scale, dpr };
+      } else {
+        firView.dpr = dpr;                  // conserve position/zoom entre deux ouvertures
+      }
+      drawFirMap();
+    }
+    $("#firMapBtn").onclick = async () => { if (await ensureFirReady()) openFirMap(); };
+    $("#firClose").onclick = () => { $("#firOv").hidden = true; };
+    (() => {  // interactions carte FIR : molette / glisser / pincer / clic sur une FIR fermée
+      const cv = $("#firMap");
+      const kx = () => Math.cos(firView.cy * Math.PI / 180);
+      function firToast(msg) {
+        const ov = $("#firOv"); if (!ov) return;
+        let t = ov.querySelector(".map-toast");
+        if (!t) { t = document.createElement("div"); t.className = "map-toast"; ov.appendChild(t); }
+        t.textContent = msg; t.classList.add("show");
+        clearTimeout(t._h); t._h = setTimeout(() => t.classList.remove("show"), 4200);
+      }
+      function hitClosure(px, py) {
+        for (let i = firHitboxes.length - 1; i >= 0; i--) {
+          const h = firHitboxes[i];
+          if (h.closure && Math.hypot(px - h.x, py - h.y) <= h.r + 4 * firView.dpr) return h;
+        }
+        return null;
+      }
+      cv.addEventListener("wheel", e => {
+        if (!firView) return; e.preventDefault();
+        firView.scale = Math.max(1, firView.scale * (e.deltaY < 0 ? 1.18 : 1 / 1.18)); scheduleFirDraw();
+      }, { passive: false });
+      let drag = null, dragStart = null, pinch = null;
+      const pos = e => { const r = cv.getBoundingClientRect(); return [e.clientX - r.left, e.clientY - r.top]; };
+      const CLICK_TOL = 6;
+      cv.addEventListener("pointerdown", e => { drag = pos(e); dragStart = drag; cv.setPointerCapture(e.pointerId); });
+      cv.addEventListener("pointermove", e => {
+        if (!firView || !drag) return;
+        const p = pos(e);
+        firView.cx -= (p[0] - drag[0]) / (kx() * firView.scale); firView.cy += (p[1] - drag[1]) / firView.scale;
+        drag = p; scheduleFirDraw();
+      });
+      cv.addEventListener("pointerup", e => {
+        if (dragStart && firView) {
+          const p = pos(e), dist = Math.hypot(p[0] - dragStart[0], p[1] - dragStart[1]);
+          if (dist <= CLICK_TOL) {
+            const dpr = firView.dpr, h = hitClosure(p[0] * dpr, p[1] * dpr);
+            if (h) firToast(h.id + " (" + (h.closure.level === "red" ? "fermée" : "restreinte") + ") — " + h.closure.reason);
+          }
+        }
+        drag = null; dragStart = null;
+      });
+      cv.addEventListener("touchstart", e => {
+        if (e.touches.length === 2) {
+          drag = null;
+          pinch = Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY);
+        }
+      }, { passive: true });
+      cv.addEventListener("touchmove", e => {
+        if (pinch && e.touches.length === 2 && firView) {
+          e.preventDefault();
+          const d = Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY);
+          firView.scale = Math.max(1, firView.scale * d / pinch); pinch = d; scheduleFirDraw();
+        }
+      }, { passive: false });
+      cv.addEventListener("touchend", () => pinch = null);
+    })();
+
     document.addEventListener("keydown", e => {
       if (e.key === "Escape") {
         if (!$("#mapOv").hidden) $("#mapOv").hidden = true;
+        else if (!$("#firOv").hidden) $("#firOv").hidden = true;
         else if (!$("#routeScreen").hidden) $("#routeScreen").hidden = true;
       }
     });

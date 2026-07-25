@@ -3,7 +3,7 @@
 //       "cache d'abord" pour les icônes, les appels API toujours en réseau,
 //       et les PLANS (layouts/*.json) mis en cache à l'usage -> consultables
 //       en vol, sans connexion.
-const CACHE = "notam-filter-v4";
+const CACHE = "notam-filter-v5";
 const ASSETS = [
   "./notam-filter.html", "./index.html", "./manifest.json",
   "./icon-192.png", "./icon-512.png"
@@ -51,11 +51,10 @@ self.addEventListener("fetch", e => {
     return;
   }
 
-  // 3) Plans de plateforme (layouts/*.json) : réseau d'abord ET mise en cache.
-  //    Un terrain consulté une fois reste consultable EN VOL, sans connexion —
-  //    tout en se rafraîchissant dès qu'on est en ligne (les layouts sont
-  //    régénérés depuis OSM, il ne faut donc pas figer une version périmée).
-  if (url.includes("/layouts/")) {
+  // 3) Plans de plateforme (layouts/*.json) et frontières/fermetures FIR
+  //    (fir/*.json) : réseau d'abord ET mise en cache. Consultable EN VOL,
+  //    sans connexion — tout en se rafraîchissant dès qu'on est en ligne.
+  if (url.includes("/layouts/") || url.includes("/fir/")) {
     e.respondWith(
       fetch(e.request).then(r => {
         if (r && r.ok) {
