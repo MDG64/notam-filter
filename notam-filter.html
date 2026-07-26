@@ -1289,7 +1289,7 @@
       align-items: center;
       justify-content: center;
       padding: 20px;
-      z-index: 50
+      z-index: 70
     }
 
     .modal {
@@ -1861,6 +1861,36 @@
 
     .plan-msg .spinner {
       margin: 0 auto 12px
+    }
+
+    /* ---------- NOTAM detail modal ---------- */
+    .modal.notam-detail {
+      max-width: 680px;
+      padding: 40px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px
+    }
+
+    .notam-detail-content {
+      overflow-y: auto;
+      max-height: 70vh;
+      padding-right: 8px
+    }
+
+    .notam-detail-content h2 {
+      font: 600 16px/1.4 var(--sans);
+      margin: 0 0 12px;
+      color: var(--text)
+    }
+
+    .notam-detail-content pre {
+      margin: 0;
+      color: var(--muted);
+      background: var(--panel2);
+      padding: 12px;
+      border-radius: 6px;
+      border: 1px solid var(--line)
     }
 
     /* ---------- strips ---------- */
@@ -3441,6 +3471,17 @@ body .stat .k{
             <line x1="21" y1="21" x2="14" y2="14"/>
           </svg>
         </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= MODAL NOTAM DÉTAIL ================= -->
+  <div class="modal-ov" id="notamDetailOv" hidden>
+    <div class="modal notam-detail" role="dialog" aria-modal="true">
+      <button class="modal-x" id="notamDetailClose" aria-label="Close">×</button>
+      <div class="notam-detail-content">
+        <h2 id="notamDetailTitle">---</h2>
+        <pre id="notamDetailText" style="white-space:pre-wrap;word-wrap:break-word;font-family:'IBM Plex Mono',monospace;font-size:12px;line-height:1.5;"></pre>
       </div>
     </div>
   </div>
@@ -11619,6 +11660,8 @@ function renderInfo(icao) {
     };
     $("#infoClose").onclick = () => { $("#infoOv").hidden = true; };
     $("#infoOv").onclick = e => { if (e.target === $("#infoOv")) $("#infoOv").hidden = true; };
+    $("#notamDetailClose").onclick = closeNotamDetail;
+    $("#notamDetailOv").onclick = e => { if (e.target === $("#notamDetailOv")) closeNotamDetail(); };
 
     /* ---- DONNÉES EMBARQUÉES (OurAirports + Natural Earth, domaine public) ----
        Embarquées dans le HTML pour fonctionner en file:// et hors-ligne sans fetch. */
@@ -12752,11 +12795,27 @@ function renderInfo(icao) {
       } else {
         list.innerHTML = parsed.map((n, i) => {
           const sev = n.severity === "critical" ? "🔴" : n.severity === "caution" ? "🟡" : "🟢";
-          return `<div class="notam-card" style="font-size:12px;padding:8px;border:1px solid var(--line);border-radius:6px;background:var(--panel2);">
+          const fullText = n.raw || `${n.id} ${n.qcode}\n${n.e}`;
+          return `<div class="notam-card" style="font-size:12px;padding:8px;border:1px solid var(--line);border-radius:6px;background:var(--panel2);cursor:pointer;transition:background-color 150ms;" data-notam-full="${esc(fullText)}" data-notam-id="${esc(n.id)}">
             <div>${sev} <strong>${esc(n.id)}</strong> ${esc(n.qcode)} ${esc(n.categories[0] || "")}</div>
             <div style="margin-top:4px;color:var(--muted);">${esc((n.e || "").substring(0, 80))}</div>
           </div>`;
         }).join("");
+
+        // Ajouter les handlers de clic sur les cartes NOTAM
+        list.querySelectorAll(".notam-card").forEach(card => {
+          card.addEventListener("click", () => {
+            const fullText = card.dataset.notamFull;
+            const notamId = card.dataset.notamId;
+            openNotamDetail(notamId, fullText);
+          });
+          card.addEventListener("mouseenter", () => {
+            card.style.backgroundColor = "var(--panel)";
+          });
+          card.addEventListener("mouseleave", () => {
+            card.style.backgroundColor = "var(--panel2)";
+          });
+        });
       }
 
       // Zoom sur le FIR : cadre la totalité de son enveloppe dans la carte
@@ -12798,6 +12857,24 @@ function renderInfo(icao) {
       return { minLat, maxLat, minLon, maxLon };
     }
 
+    // Ouvre le modal de détail NOTAM avec le texte complet
+    function openNotamDetail(notamId, fullText) {
+      const titleEl = $("#notamDetailTitle");
+      const textEl = $("#notamDetailText");
+      const ov = $("#notamDetailOv");
+      if (!titleEl || !textEl || !ov) return;
+
+      titleEl.textContent = notamId;
+      textEl.textContent = fullText;
+      ov.hidden = false;
+    }
+
+    // Ferme le modal de détail NOTAM
+    function closeNotamDetail() {
+      const ov = $("#notamDetailOv");
+      if (ov) ov.hidden = true;
+    }
+
     // --- Dessin + interactions carte FIR mondiale ---------------------------
     let _firRafPending = false;
     function scheduleFirDraw() {
@@ -12831,7 +12908,7 @@ function renderInfo(icao) {
       // Volontairement très transparent et réservé au zoom : 74 FIR sont
       // concernées, les afficher en vue monde noierait le rouge et l'ambre,
       // qui sont le vrai signal.
-      const showGreen = v.scale > 27;
+      const showGreen = v.scale > 9.89;  // 6 niveaux de zoom plus tôt (÷ 1.18^6 ≈ ÷2.73)
       const GREEN = light ? "#1f8b5f" : "#34d39a";
       ctx.font = "600 " + Math.round(10.5 * dpr) + "px 'IBM Plex Mono',monospace";
       ctx.textAlign = "center"; ctx.textBaseline = "middle";
