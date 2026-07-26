@@ -11368,47 +11368,45 @@ function renderInfo(icao) {
       activeCats.clear();
       activeSev = null;
       render();
-      enrichUnclassified();   // en tâche de fond : n'attend rien, ne bloque rien
+      proposeUnclassified();  // en tâche de fond : n'attend rien, ne bloque rien
     }
 
     // Les NOTAM qu'aucune règle locale ne sait ranger restent affichés en
     // « Unclassified » — comportement historique, y compris en vol sans réseau.
-    // Si on est en ligne, on demande en plus au proxy de les trancher (il
-    // interroge un LLM et journalise une proposition de règle à coder en dur,
-    // ce qui fait décroître ces appels avec le temps). Tout échec est ignoré :
-    // l'app reste dans son état actuel, jamais d'erreur visible.
-    const classifyCache = new Map();   // texte -> catégorie (évite de redemander)
-    let enrichSeq = 0;
-    async function enrichUnclassified() {
+    // Si on est en ligne, on les SOUMET au proxy, qui interroge un LLM et
+    // journalise une proposition de règle à relire (Tools/build-review.mjs).
+    //
+    // La réponse ne change RIEN à l'affichage : le NOTAM reste « Unclassified »
+    // tant que la règle validée n'a pas été codée dans classifyNotam() plus
+    // haut. C'est le même contrat que côté FIR — le LLM propose, il ne décide
+    // pas. Auparavant sa catégorie était appliquée en direct ; la relecture des
+    // 48 premières propositions FIR a donné 20 corrections en confiance
+    // « high », et se tromper de phase de vol fait disparaître un NOTAM d'un
+    // filtre au lieu de simplement le laisser non rangé, donc visible.
+    //
+    // Tout échec est ignoré : jamais d'erreur visible, l'app est inchangée.
+    const classifySent = new Set();    // textes déjà soumis (évite de redemander)
+    let proposeSeq = 0;
+    async function proposeUnclassified() {
       if (!navigator.onLine || !BACKEND_URL) return;
-      const seq = ++enrichSeq;
+      const seq = ++proposeSeq;
       const todo = current.filter(n => n.source === "unclassified" && n.e);
       if (!todo.length) return;
 
-      let changed = false;
       for (const n of todo.slice(0, 12)) {          // borne : jamais de rafale
         const key = n.e;
-        let cat = classifyCache.get(key);
-        if (cat === undefined) {
-          try {
-            const r = await fetch(BACKEND_URL + "/api/classify", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ icao: currentIcao, text: n.raw || n.e }),
-            });
-            if (!r.ok) return;
-            cat = (await r.json()).category || null;
-            classifyCache.set(key, cat);
-          } catch (e) { return; }                   // hors ligne / proxy muet : on s'arrête
-        }
-        if (seq !== enrichSeq) return;              // un autre terrain a été chargé entre-temps
-        if (cat && CAT_LABEL[cat]) {
-          n.categories = [cat];
-          n.source = "llm";
-          changed = true;
-        }
+        if (classifySent.has(key)) continue;
+        if (seq !== proposeSeq) return;             // un autre terrain a été chargé entre-temps
+        try {
+          const r = await fetch(BACKEND_URL + "/api/classify", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ icao: currentIcao, text: n.raw || n.e }),
+          });
+          if (!r.ok) return;
+          classifySent.add(key);
+        } catch (e) { return; }                     // hors ligne / proxy muet : on s'arrête
       }
-      if (changed && seq === enrichSeq) render();
     }
 
     function renderLoading() {
