@@ -12103,6 +12103,7 @@ function renderInfo(icao) {
     const FIR_URL = "./fir/boundaries.json";
     const FIR_CLOSURES_URL = "./fir/closures.json";
     let FIR = null, FIR_CLOSURES = null, FIR_NOTAMS = null, firView = null, _firBg = null, _firBgCanvas = null, _firBgZoomTimer = null, firHitboxes = [];
+    let currentFirDetailId = null;   // FIR actuellement affichée dans le panneau, ou null (vue monde)
     async function fetchFir() {
       // Même règle que fetchLayout() : réseau d'abord (no-cache), repli mémoire
       // seulement si le fetch échoue (hors ligne) — jamais de pull amont ici,
@@ -12644,6 +12645,7 @@ function renderInfo(icao) {
     function closeFirPanel() {
       $("#firPanel").hidden = true;
       $("#firSplit").classList.remove("detail-open");
+      currentFirDetailId = null;
       resizeFirCanvas();
       scheduleFirDraw();
     }
@@ -12707,20 +12709,28 @@ function renderInfo(icao) {
 
       // Zoom sur le FIR : cadre la totalité de son enveloppe dans la carte
       // (au lieu d'un niveau de zoom fixe qui coupait les grandes FIR).
+      currentFirDetailId = firId;
+      fitFirView(firId);
+    }
+
+    // Cadre la totalité de l'enveloppe d'une FIR dans la carte visible.
+    // Extrait à part de openFirPanel() pour pouvoir re-cadrer après un
+    // redimensionnement/rotation (la taille du canvas peut changer sans que
+    // le centrage/zoom ne soit recalculé sinon — voir les écouteurs resize).
+    function fitFirView(firId) {
       const fir = FIR.find(f => f.id === firId);
-      if (fir && firView) {
-        const bounds = calculateFirBounds(fir);
-        const cv = $("#firMap"), r = cv.getBoundingClientRect();
-        if (bounds && r.width > 50 && r.height > 50) {
-          const cy = (bounds.minLat + bounds.maxLat) / 2;
-          const kx = Math.cos(cy * Math.PI / 180);
-          const latSpan = Math.max(0.5, bounds.maxLat - bounds.minLat);
-          const lonSpan = Math.max(0.5, bounds.maxLon - bounds.minLon);
-          firView.cx = (bounds.minLon + bounds.maxLon) / 2;
-          firView.cy = cy;
-          firView.scale = Math.max(1, Math.min((r.height * 0.85) / latSpan, (r.width * 0.85) / (lonSpan * kx)));
-          scheduleFirDraw();
-        }
+      if (!fir || !firView) return;
+      const bounds = calculateFirBounds(fir);
+      const cv = $("#firMap"), r = cv.getBoundingClientRect();
+      if (bounds && r.width > 50 && r.height > 50) {
+        const cy = (bounds.minLat + bounds.maxLat) / 2;
+        const kx = Math.cos(cy * Math.PI / 180);
+        const latSpan = Math.max(0.5, bounds.maxLat - bounds.minLat);
+        const lonSpan = Math.max(0.5, bounds.maxLon - bounds.minLon);
+        firView.cx = (bounds.minLon + bounds.maxLon) / 2;
+        firView.cy = cy;
+        firView.scale = Math.max(1, Math.min((r.height * 0.85) / latSpan, (r.width * 0.85) / (lonSpan * kx)));
+        scheduleFirDraw();
       }
     }
 
@@ -12848,6 +12858,7 @@ function renderInfo(icao) {
       $("#firOv").hidden = false;
       $("#firPanel").hidden = true;
       $("#firSplit").classList.remove("detail-open");
+      currentFirDetailId = null;
       const cv = $("#firMap"), r = cv.getBoundingClientRect(), dpr = window.devicePixelRatio || 1;
       cv.width = Math.round(r.width * dpr); cv.height = Math.round(r.height * dpr);
       if (!firView) {
@@ -12870,12 +12881,23 @@ function renderInfo(icao) {
         closeFirPanel();
       }
     };
-    window.addEventListener("resize", () => {
-      if (!$("#firOv").hidden) { resizeFirCanvas(); scheduleFirDraw(); }
-    });
+    // Redimensionner ne fait que retailler le buffer du canvas — sans
+    // recalcul, le cadrage (cx/cy/scale) reste celui de l'ANCIENNE taille et
+    // se retrouve décalé/mal ajusté par rapport à la nouvelle (constaté :
+    // une FIR bien cadrée qui se retrouve hors-champ après un simple
+    // redimensionnement de fenêtre). Si une FIR est affichée, on la recadre ;
+    // sinon on se contente de retailler le buffer (la vue monde reste celle
+    // pilotée manuellement par l'utilisateur).
+    function handleFirViewportChange() {
+      if ($("#firOv").hidden) return;
+      resizeFirCanvas();
+      if (currentFirDetailId) fitFirView(currentFirDetailId);
+      else scheduleFirDraw();
+    }
+    window.addEventListener("resize", handleFirViewportChange);
     window.addEventListener("orientationchange", () => {
       // rotation tablette/mobile : laisser le temps au reflow avant de mesurer
-      setTimeout(() => { if (!$("#firOv").hidden) { resizeFirCanvas(); scheduleFirDraw(); } }, 200);
+      setTimeout(handleFirViewportChange, 200);
     });
     (() => {  // interactions carte FIR : molette / glisser / pincer / clic sur une FIR fermée
       const cv = $("#firMap");
