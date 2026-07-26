@@ -2654,10 +2654,14 @@
     .fir-panel {
       display: flex;
       flex-direction: column;
-      flex: 0 0 40%;
+      flex: 0 0 50%;
       background: var(--bg);
       border-right: 1px solid var(--line);
       overflow: hidden
+    }
+
+    .fir-panel[hidden] {
+      display: none !important
     }
 
     .fir-header {
@@ -2673,6 +2677,21 @@
       margin: 0;
       font: 700 18px/1 var(--sans);
       color: var(--text)
+    }
+
+    .fir-header .btn-icon {
+      width: 32px;
+      height: 32px;
+      border-radius: 8px;
+      border: 1px solid var(--line2);
+      background: var(--panel2);
+      color: var(--text);
+      font-size: 16px;
+      line-height: 1;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center
     }
 
     .fir-summary {
@@ -2693,10 +2712,59 @@
       gap: 8px
     }
 
+    .fir-map-wrap {
+      position: relative;
+      flex: 1;
+      display: flex;
+      min-width: 0
+    }
+
     .fir-map {
       flex: 1;
       touch-action: none;
       cursor: grab
+    }
+
+    .fir-expand-btn {
+      position: absolute;
+      top: 14px;
+      right: 14px;
+      z-index: 3;
+      width: 36px;
+      height: 36px;
+      border-radius: 8px;
+      border: 1px solid rgba(255, 255, 255, .18);
+      background: rgba(20, 25, 30, .72);
+      color: #f2f5f8;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer
+    }
+
+    .fir-expand-btn:hover {
+      background: rgba(30, 36, 43, .88)
+    }
+
+    body.light .fir-expand-btn {
+      background: rgba(255, 255, 255, .85);
+      color: #1b2228;
+      border-color: var(--line2)
+    }
+
+    body.light .fir-expand-btn:hover {
+      background: rgba(255, 255, 255, .97)
+    }
+
+    @media (max-width: 640px) {
+      .fir-split.detail-open .fir-map-wrap {
+        display: none
+      }
+
+      .fir-split.detail-open .fir-panel {
+        flex: 1 1 100%;
+        border-right: none
+      }
     }
 
     .map-x {
@@ -3327,16 +3395,30 @@ body .stat .k{
   <!-- ================= OVERLAY CARTE FIR MONDIALE ================= -->
   <div class="map-ov" id="firOv" hidden>
     <button class="map-x" id="firClose" aria-label="Back">←</button>
-    <div class="fir-split">
-      <div class="fir-panel">
+    <div class="fir-split" id="firSplit">
+      <div class="fir-panel" id="firPanel" hidden>
         <div class="fir-header">
           <h2 id="firTitle">---</h2>
-          <button id="firUmbrella" class="btn-icon" title="Back to world map">☂</button>
+          <button id="firPanelClose" class="btn-icon" aria-label="Close" title="Close">✕</button>
         </div>
         <div class="fir-summary" id="firSummary"></div>
         <div class="fir-list" id="firList"></div>
       </div>
-      <canvas id="firMap" class="fir-map"></canvas>
+      <div class="fir-map-wrap">
+        <canvas id="firMap" class="fir-map"></canvas>
+        <button id="firExpandBtn" class="fir-expand-btn" aria-label="Reset to world view" title="Reset to world view">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="9 3 3 3 3 9"/>
+            <polyline points="15 3 21 3 21 9"/>
+            <polyline points="9 21 3 21 3 15"/>
+            <polyline points="15 21 21 21 21 15"/>
+            <line x1="3" y1="3" x2="10" y2="10"/>
+            <line x1="21" y1="3" x2="14" y2="10"/>
+            <line x1="3" y1="21" x2="10" y2="14"/>
+            <line x1="21" y1="21" x2="14" y2="14"/>
+          </svg>
+        </button>
+      </div>
     </div>
   </div>
 
@@ -12478,15 +12560,6 @@ function renderInfo(icao) {
         }
         return null;
       }
-      // zone FIR sous un point (rectangle autour du nom)
-      function hitFir(px, py) {
-        if (!firView) return null;
-        for (let i = firHitboxes.length - 1; i >= 0; i--) {
-          const h = firHitboxes[i];
-          if (px >= h.bx && px <= h.bx + h.bw && py >= h.by && py <= h.by + h.bh) return h;
-        }
-        return null;
-      }
       // Ajoute un terrain monde à la route active (rôle alt, marqué user) + persiste.
       function addWorldToRoute(code) {
         code = (code || "").toUpperCase();
@@ -12518,7 +12591,7 @@ function renderInfo(icao) {
           drag = p; scheduleDraw();
         } else {
           const dpr = mapView.dpr, px = p[0] * dpr, py = p[1] * dpr;
-          cv.style.cursor = (hitAirport(px, py) || hitWorld(px, py) || hitFir(px, py)) ? "pointer" : "grab";
+          cv.style.cursor = (hitAirport(px, py) || hitWorld(px, py)) ? "pointer" : "grab";
         }
       });
       cv.addEventListener("pointerup", e => {
@@ -12529,21 +12602,17 @@ function renderInfo(icao) {
             const a = hitAirport(px, py);
             if (a) { $("#mapOv").hidden = true; $("#routeScreen").hidden = true; load(a.icao); }
             else {
-              const f = hitFir(px, py);
-              if (f) { openFirPanel(f.id); }
-              else {
-                const w = hitWorld(px, py);
-                if (w) {
-                  if (w.saved) {
-                    // vert : on charge et on affiche les NOTAM sur la 1re page
-                    $("#mapOv").hidden = true; $("#routeScreen").hidden = true; load(w.icao);
-                  } else if (navigator.onLine) {
-                    // rouge + connecté : ajout à la route puis chargement (load -> fetch + saveOffline -> passe vert)
-                    addWorldToRoute(w.icao);
-                    $("#mapOv").hidden = true; $("#routeScreen").hidden = true; load(w.icao);
-                  } else {
-                    mapToast("Connexion requise pour charger " + w.icao);
-                  }
+              const w = hitWorld(px, py);
+              if (w) {
+                if (w.saved) {
+                  // vert : on charge et on affiche les NOTAM sur la 1re page
+                  $("#mapOv").hidden = true; $("#routeScreen").hidden = true; load(w.icao);
+                } else if (navigator.onLine) {
+                  // rouge + connecté : ajout à la route puis chargement (load -> fetch + saveOffline -> passe vert)
+                  addWorldToRoute(w.icao);
+                  $("#mapOv").hidden = true; $("#routeScreen").hidden = true; load(w.icao);
+                } else {
+                  mapToast("Connexion requise pour charger " + w.icao);
                 }
               }
             }
@@ -12568,6 +12637,18 @@ function renderInfo(icao) {
     })();
 
     // --- FIR panel (vue scindée NOTAM + map) --------------------------------
+    function resizeFirCanvas() {
+      const cv = $("#firMap"); if (!cv) return;
+      const r = cv.getBoundingClientRect(), dpr = window.devicePixelRatio || 1;
+      cv.width = Math.round(r.width * dpr); cv.height = Math.round(r.height * dpr);
+      if (firView) firView.dpr = dpr;
+    }
+    function closeFirPanel() {
+      $("#firPanel").hidden = true;
+      $("#firSplit").classList.remove("detail-open");
+      resizeFirCanvas();
+      scheduleFirDraw();
+    }
     async function openFirPanel(firId) {
       if (!FIR_NOTAMS || !FIR_NOTAMS[firId]) return;
       const title = $("#firTitle");
@@ -12579,6 +12660,9 @@ function renderInfo(icao) {
       list.innerHTML = `<div class="empty loading"><span class="spinner"></span>Loading NOTAMs for ${esc(firId)}…</div>`;
 
       $("#firOv").hidden = false;
+      $("#firPanel").hidden = false;
+      $("#firSplit").classList.add("detail-open");
+      resizeFirCanvas();
 
       // Charger les NOTAM du FIR
       let notams = [];
@@ -12748,15 +12832,20 @@ function renderInfo(icao) {
         }
       }
     }
+    function firWorldDefaultView(r) {
+      // vue monde par défaut, même cadrage que la carte route sans itinéraire
+      const cy = 25, cx = 10, kx0 = Math.cos(cy * Math.PI / 180);
+      const scale = Math.max(1, Math.min((r.height * 0.9) / 150, (r.width * 0.9) / (330 * kx0)));
+      return { cx, cy, scale };
+    }
     function openFirMap() {
       $("#firOv").hidden = false;
+      $("#firPanel").hidden = true;
+      $("#firSplit").classList.remove("detail-open");
       const cv = $("#firMap"), r = cv.getBoundingClientRect(), dpr = window.devicePixelRatio || 1;
       cv.width = Math.round(r.width * dpr); cv.height = Math.round(r.height * dpr);
       if (!firView) {
-        // vue monde par défaut, même cadrage que la carte route sans itinéraire
-        const cy = 25, cx = 10, kx0 = Math.cos(cy * Math.PI / 180);
-        const scale = Math.max(1, Math.min((r.height * 0.9) / 150, (r.width * 0.9) / (330 * kx0)));
-        firView = { cx, cy, scale, dpr };
+        firView = { ...firWorldDefaultView(r), dpr };
       } else {
         firView.dpr = dpr;                  // conserve position/zoom entre deux ouvertures
       }
@@ -12764,7 +12853,19 @@ function renderInfo(icao) {
     }
     $("#firMapBtn").onclick = async () => { if (await ensureFirReady()) openFirMap(); };
     $("#firClose").onclick = () => { $("#firOv").hidden = true; };
-    $("#firUmbrella").onclick = () => { $("#firOv").hidden = true; };
+    $("#firPanelClose").onclick = () => { closeFirPanel(); };
+    $("#firExpandBtn").onclick = () => {
+      const cv = $("#firMap"), r = cv.getBoundingClientRect();
+      if (firView) Object.assign(firView, firWorldDefaultView(r));
+      closeFirPanel();
+    };
+    window.addEventListener("resize", () => {
+      if (!$("#firOv").hidden) { resizeFirCanvas(); scheduleFirDraw(); }
+    });
+    window.addEventListener("orientationchange", () => {
+      // rotation tablette/mobile : laisser le temps au reflow avant de mesurer
+      setTimeout(() => { if (!$("#firOv").hidden) { resizeFirCanvas(); scheduleFirDraw(); } }, 200);
+    });
     (() => {  // interactions carte FIR : molette / glisser / pincer / clic sur une FIR fermée
       const cv = $("#firMap");
       const kx = () => Math.cos(firView.cy * Math.PI / 180);
@@ -12814,7 +12915,7 @@ function renderInfo(icao) {
           const p = pos(e), dist = Math.hypot(p[0] - dragStart[0], p[1] - dragStart[1]);
           if (dist <= CLICK_TOL) {
             const dpr = firView.dpr, h = hitFir(p[0] * dpr, p[1] * dpr);
-            if (h) openFirDetail(h.id);
+            if (h) openFirPanel(h.id);
           }
         }
         drag = null; dragStart = null;
