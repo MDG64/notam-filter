@@ -3769,7 +3769,11 @@ body .stat .k{
       const text = cleanHtml(raw);
       // ICAO (A1234/26) OU domestique US (07/211, MM/NNN) : les NOTAM US
       // domestiques ont un ID cycle/séquence, sans lettre de série ni année.
-      const id = (text.match(/^([A-Z]\d{4}\/\d{2}|\d{2}\/\d{3,4})/) || [])[1] || "(sans id)";
+      // Certains textes source américains encadrent tout le message d'une
+      // parenthèse ouvrante avant l'ID (format NOTAM standard) : la tolérer
+      // évite un faux "(sans id)" alors que l'ID existe (vu sur HSSS
+      // A0050/26, A0052/26 — absents sans ce correctif).
+      const id = (text.match(/^\(?([A-Z]\d{4}\/\d{2}|\d{2}\/\d{3,4})/) || [])[1] || "(sans id)";
       const qm = text.match(/Q\)\s*([^\n]+)/);
       let qcode = "", scope = "", traffic = "", purpose = "";
       if (qm) { const p = qm[1].split("/").map(s => s.trim()); qcode = p[1] || ""; traffic = p[2] || ""; purpose = p[3] || ""; scope = p[4] || ""; }
