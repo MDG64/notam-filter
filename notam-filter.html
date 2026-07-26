@@ -3394,12 +3394,10 @@ body .stat .k{
 
   <!-- ================= OVERLAY CARTE FIR MONDIALE ================= -->
   <div class="map-ov" id="firOv" hidden>
-    <button class="map-x" id="firClose" aria-label="Back">←</button>
     <div class="fir-split" id="firSplit">
       <div class="fir-panel" id="firPanel" hidden>
         <div class="fir-header">
           <h2 id="firTitle">---</h2>
-          <button id="firPanelClose" class="btn-icon" aria-label="Close" title="Close">✕</button>
         </div>
         <div class="fir-summary" id="firSummary"></div>
         <div class="fir-list" id="firList"></div>
@@ -12664,7 +12662,9 @@ function renderInfo(icao) {
       $("#firSplit").classList.add("detail-open");
       resizeFirCanvas();
 
-      // Charger les NOTAM du FIR
+      // Charger les NOTAM du FIR — l'API renvoie un tableau de textes NOTAM
+      // bruts (pas des objets), pour /api/fir/notams/:fir comme pour le
+      // sous-objet FIR_NOTAMS[firId].notams (cf. server.js).
       let notams = [];
       try {
         if (BACKEND_URL) {
@@ -12674,13 +12674,13 @@ function renderInfo(icao) {
       } catch (e) {}
 
       // Fallback: utiliser les NOTAM en mémoire
-      if (!notams.length && FIR_NOTAMS[firId]) {
-        notams = FIR_NOTAMS[firId].map(text => ({ raw: text, text }));
+      if (!notams.length && FIR_NOTAMS[firId] && FIR_NOTAMS[firId].notams) {
+        notams = FIR_NOTAMS[firId].notams;
       }
 
       // Parser et afficher
-      const parsed = notams.map(n => {
-        const p = parseNotam(n.raw || n.text);
+      const parsed = notams.map(raw => {
+        const p = parseNotam(raw);
         return { ...p, ...classifyNotam(p.qcode, p.e), schedule: parseSchedule(p.d) };
       });
 
@@ -12705,14 +12705,20 @@ function renderInfo(icao) {
         }).join("");
       }
 
-      // Zoom sur le FIR
+      // Zoom sur le FIR : cadre la totalité de son enveloppe dans la carte
+      // (au lieu d'un niveau de zoom fixe qui coupait les grandes FIR).
       const fir = FIR.find(f => f.id === firId);
       if (fir && firView) {
         const bounds = calculateFirBounds(fir);
-        if (bounds) {
+        const cv = $("#firMap"), r = cv.getBoundingClientRect();
+        if (bounds && r.width > 50 && r.height > 50) {
+          const cy = (bounds.minLat + bounds.maxLat) / 2;
+          const kx = Math.cos(cy * Math.PI / 180);
+          const latSpan = Math.max(0.5, bounds.maxLat - bounds.minLat);
+          const lonSpan = Math.max(0.5, bounds.maxLon - bounds.minLon);
           firView.cx = (bounds.minLon + bounds.maxLon) / 2;
-          firView.cy = (bounds.minLat + bounds.maxLat) / 2;
-          firView.scale = 80;  // zoom niveau moyen
+          firView.cy = cy;
+          firView.scale = Math.max(1, Math.min((r.height * 0.85) / latSpan, (r.width * 0.85) / (lonSpan * kx)));
           scheduleFirDraw();
         }
       }
@@ -12852,12 +12858,17 @@ function renderInfo(icao) {
       drawFirMap();
     }
     $("#firMapBtn").onclick = async () => { if (await ensureFirReady()) openFirMap(); };
-    $("#firClose").onclick = () => { $("#firOv").hidden = true; };
-    $("#firPanelClose").onclick = () => { closeFirPanel(); };
+    // Icône unique (coin haut-droit de la carte) : 1er clic depuis le détail
+    // d'une FIR -> referme le panneau et revient à la vue monde ; un 2e clic,
+    // déjà sur la vue monde, quitte entièrement la vue FIR.
     $("#firExpandBtn").onclick = () => {
-      const cv = $("#firMap"), r = cv.getBoundingClientRect();
-      if (firView) Object.assign(firView, firWorldDefaultView(r));
-      closeFirPanel();
+      if ($("#firPanel").hidden) {
+        $("#firOv").hidden = true;
+      } else {
+        const cv = $("#firMap"), r = cv.getBoundingClientRect();
+        if (firView) Object.assign(firView, firWorldDefaultView(r));
+        closeFirPanel();
+      }
     };
     window.addEventListener("resize", () => {
       if (!$("#firOv").hidden) { resizeFirCanvas(); scheduleFirDraw(); }
