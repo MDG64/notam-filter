@@ -1289,7 +1289,7 @@
       align-items: center;
       justify-content: center;
       padding: 20px;
-      z-index: 50
+      z-index: 70
     }
 
     .modal {
@@ -1861,6 +1861,36 @@
 
     .plan-msg .spinner {
       margin: 0 auto 12px
+    }
+
+    /* ---------- NOTAM detail modal ---------- */
+    .modal.notam-detail {
+      max-width: 680px;
+      padding: 40px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px
+    }
+
+    .notam-detail-content {
+      overflow-y: auto;
+      max-height: 70vh;
+      padding-right: 8px
+    }
+
+    .notam-detail-content h2 {
+      font: 600 16px/1.4 var(--sans);
+      margin: 0 0 12px;
+      color: var(--text)
+    }
+
+    .notam-detail-content pre {
+      margin: 0;
+      color: var(--muted);
+      background: var(--panel2);
+      padding: 12px;
+      border-radius: 6px;
+      border: 1px solid var(--line)
     }
 
     /* ---------- strips ---------- */
@@ -2780,6 +2810,73 @@
       background: rgba(255, 255, 255, .97)
     }
 
+    /* Bouton retour: visible UNIQUEMENT en vue mondiale (pas de détail) */
+    .fir-back-btn {
+      position: absolute;
+      top: 14px;
+      left: 14px;
+      z-index: 3;
+      width: 36px;
+      height: 36px;
+      border-radius: 8px;
+      border: 1px solid var(--line2);
+      background: rgba(30, 36, 43, .88);
+      color: var(--text);
+      font: 400 22px/1 var(--sans);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 2px 10px rgba(0, 0, 0, .25);
+      /* Masqué quand il y a un détail ouvert */
+      opacity: 0;
+      visibility: hidden;
+      transition: opacity 150ms, visibility 150ms
+    }
+
+    body.light .fir-back-btn {
+      background: rgba(255, 255, 255, .85);
+      color: #1b2228;
+      border-color: var(--line2)
+    }
+
+    body.light .fir-back-btn:hover {
+      background: rgba(255, 255, 255, .97)
+    }
+
+    /* État par défaut: bouton retour visible */
+    .fir-back-btn {
+      opacity: 1;
+      visibility: visible
+    }
+
+    /* État masqué (géré par JS) */
+    .fir-back-btn.hidden {
+      opacity: 0;
+      visibility: hidden
+    }
+
+    /* Le bouton expand n'est visible QUE quand le détail est ouvert (desktop) */
+    .fir-expand-desktop {
+      display: none !important
+    }
+
+    .fir-split.detail-open .fir-expand-desktop {
+      display: flex !important
+    }
+
+    /* Masquer le bouton fermer du panneau sur desktop */
+    .fir-panel-close-btn {
+      display: none
+    }
+
+    /* Afficher le bouton fermer du panneau sur mobile */
+    @media (max-width: 640px) {
+      .fir-split.detail-open .fir-panel-close-btn {
+        display: flex
+      }
+    }
+
     @media (max-width: 640px) {
       .fir-split.detail-open .fir-map-wrap {
         display: none
@@ -3418,18 +3515,22 @@ body .stat .k{
 
   <!-- ================= OVERLAY CARTE FIR MONDIALE ================= -->
   <div class="map-ov" id="firOv" hidden>
+    <!-- Bouton retour: visible UNIQUEMENT en vue mondiale -->
+    <button class="fir-back-btn" id="firBackBtn" aria-label="Retour à l'application" title="Retour à l'application">←</button>
     <div class="fir-split" id="firSplit">
       <div class="fir-panel" id="firPanel" hidden>
         <div class="fir-header">
           <h2 id="firTitle">---</h2>
-          <button class="btn-icon" id="firPanelClose" aria-label="Fermer et revenir à la mappemonde" title="Fermer et revenir à la mappemonde">✕</button>
+          <!-- Bouton fermer: visible en mode détail sur tous les écrans -->
+          <button class="btn-icon fir-panel-close-btn" id="firPanelClose" aria-label="Fermer et revenir à la mappemonde" title="Fermer et revenir à la mappemonde">✕</button>
         </div>
         <div class="fir-summary" id="firSummary"></div>
         <div class="fir-list" id="firList"></div>
       </div>
       <div class="fir-map-wrap">
         <canvas id="firMap" class="fir-map"></canvas>
-        <button id="firExpandBtn" class="fir-expand-btn" aria-label="Reset to world view" title="Reset to world view">
+        <!-- Bouton expand: visible UNIQUEMENT en mode détail sur desktop/tablet -->
+        <button id="firExpandBtn" class="fir-expand-btn fir-expand-desktop" aria-label="Reset to world view" title="Reset to world view">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <polyline points="9 3 3 3 3 9"/>
             <polyline points="15 3 21 3 21 9"/>
@@ -3441,6 +3542,17 @@ body .stat .k{
             <line x1="21" y1="21" x2="14" y2="14"/>
           </svg>
         </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= MODAL NOTAM DÉTAIL ================= -->
+  <div class="modal-ov" id="notamDetailOv" hidden>
+    <div class="modal notam-detail" role="dialog" aria-modal="true">
+      <button class="modal-x" id="notamDetailClose" aria-label="Close">×</button>
+      <div class="notam-detail-content">
+        <h2 id="notamDetailTitle">---</h2>
+        <pre id="notamDetailText" style="white-space:pre-wrap;word-wrap:break-word;font-family:'IBM Plex Mono',monospace;font-size:12px;line-height:1.5;"></pre>
       </div>
     </div>
   </div>
@@ -11617,6 +11729,8 @@ function renderInfo(icao) {
     };
     $("#infoClose").onclick = () => { $("#infoOv").hidden = true; };
     $("#infoOv").onclick = e => { if (e.target === $("#infoOv")) $("#infoOv").hidden = true; };
+    $("#notamDetailClose").onclick = closeNotamDetail;
+    $("#notamDetailOv").onclick = e => { if (e.target === $("#notamDetailOv")) closeNotamDetail(); };
 
     /* ---- DONNÉES EMBARQUÉES (OurAirports + Natural Earth, domaine public) ----
        Embarquées dans le HTML pour fonctionner en file:// et hors-ligne sans fetch. */
@@ -12675,6 +12789,7 @@ function renderInfo(icao) {
       currentFirDetailId = null;
       resizeFirCanvas();
       scheduleFirDraw();
+      updateFirBackButtonVisibility();
     }
     // Élargit CRITICAL_TEXT (severity(), plus haut) pour les seuls NOTAM de
     // FIR : capte « NO <mots> AVBL » (ex. HSSS A0052/26, « NO AIR TFC CONTROL
@@ -12750,17 +12865,34 @@ function renderInfo(icao) {
       } else {
         list.innerHTML = parsed.map((n, i) => {
           const sev = n.severity === "critical" ? "🔴" : n.severity === "caution" ? "🟡" : "🟢";
-          return `<div class="notam-card" style="font-size:12px;padding:8px;border:1px solid var(--line);border-radius:6px;background:var(--panel2);">
+          const fullText = n.raw || `${n.id} ${n.qcode}\n${n.e}`;
+          return `<div class="notam-card" style="font-size:12px;padding:8px;border:1px solid var(--line);border-radius:6px;background:var(--panel2);cursor:pointer;transition:background-color 150ms;" data-notam-full="${esc(fullText)}" data-notam-id="${esc(n.id)}">
             <div>${sev} <strong>${esc(n.id)}</strong> ${esc(n.qcode)} ${esc(n.categories[0] || "")}</div>
             <div style="margin-top:4px;color:var(--muted);">${esc((n.e || "").substring(0, 80))}</div>
           </div>`;
         }).join("");
+
+        // Ajouter les handlers de clic sur les cartes NOTAM
+        list.querySelectorAll(".notam-card").forEach(card => {
+          card.addEventListener("click", () => {
+            const fullText = card.dataset.notamFull;
+            const notamId = card.dataset.notamId;
+            openNotamDetail(notamId, fullText);
+          });
+          card.addEventListener("mouseenter", () => {
+            card.style.backgroundColor = "var(--panel)";
+          });
+          card.addEventListener("mouseleave", () => {
+            card.style.backgroundColor = "var(--panel2)";
+          });
+        });
       }
 
       // Zoom sur le FIR : cadre la totalité de son enveloppe dans la carte
       // (au lieu d'un niveau de zoom fixe qui coupait les grandes FIR).
       currentFirDetailId = firId;
       fitFirView(firId);
+      updateFirBackButtonVisibility();
     }
 
     // Cadre la totalité de l'enveloppe d'une FIR dans la carte visible.
@@ -12796,6 +12928,24 @@ function renderInfo(icao) {
       return { minLat, maxLat, minLon, maxLon };
     }
 
+    // Ouvre le modal de détail NOTAM avec le texte complet
+    function openNotamDetail(notamId, fullText) {
+      const titleEl = $("#notamDetailTitle");
+      const textEl = $("#notamDetailText");
+      const ov = $("#notamDetailOv");
+      if (!titleEl || !textEl || !ov) return;
+
+      titleEl.textContent = notamId;
+      textEl.textContent = fullText;
+      ov.hidden = false;
+    }
+
+    // Ferme le modal de détail NOTAM
+    function closeNotamDetail() {
+      const ov = $("#notamDetailOv");
+      if (ov) ov.hidden = true;
+    }
+
     // --- Dessin + interactions carte FIR mondiale ---------------------------
     let _firRafPending = false;
     function scheduleFirDraw() {
@@ -12829,7 +12979,7 @@ function renderInfo(icao) {
       // Volontairement très transparent et réservé au zoom : 74 FIR sont
       // concernées, les afficher en vue monde noierait le rouge et l'ambre,
       // qui sont le vrai signal.
-      const showGreen = v.scale > 27;
+      const showGreen = v.scale > 9.89;  // 6 niveaux de zoom plus tôt (÷ 1.18^6 ≈ ÷2.73)
       const GREEN = light ? "#1f8b5f" : "#34d39a";
       ctx.font = "600 " + Math.round(10.5 * dpr) + "px 'IBM Plex Mono',monospace";
       ctx.textAlign = "center"; ctx.textBaseline = "middle";
@@ -12948,6 +13098,22 @@ function renderInfo(icao) {
     // Croix du panneau : sur mobile la carte (et donc #firExpandBtn) est masquée
     // quand le détail est ouvert — c'est la seule sortie possible.
     $("#firPanelClose").onclick = backToFirWorld;
+    // Bouton retour : ferme complètement la vue FIR et revient à l'app principale
+    $("#firBackBtn").onclick = () => { $("#firOv").hidden = true; };
+    // Fonction helper pour mettre à jour la visibilité du bouton retour
+    function updateFirBackButtonVisibility() {
+      const backBtn = $("#firBackBtn");
+      const panel = $("#firPanel");
+      if (panel.hidden) {
+        // Vue mondiale : afficher le bouton retour
+        backBtn.classList.remove("hidden");
+      } else {
+        // Vue détail : masquer le bouton retour
+        backBtn.classList.add("hidden");
+      }
+    }
+    // Mettre à jour la visibilité au chargement initial
+    updateFirBackButtonVisibility();
     // Redimensionner ne fait que retailler le buffer du canvas — sans
     // recalcul, le cadrage (cx/cy/scale) reste celui de l'ANCIENNE taille et
     // se retrouve décalé/mal ajusté par rapport à la nouvelle (constaté :
