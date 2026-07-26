@@ -3778,8 +3778,11 @@ body .stat .k{
         "TACAN", "VORTAC", "MARKER", "RNAV", "RNP", "GLS", "LPV", "LNAV", "VNAV", "IAP", "APCH",
         "APPROACH", "STAR", "MISSED", "MINIMA", "MINIMUM", "RVR", "PAPI", "VASI",
         "APCH LGT", "RWY LGT", "RUNWAY LIGHT", "RCLL", "REDL", "HOLDING", "TRANSITION",
-        "OBST", "OBSTACLE", "CRANE"],
-      depart: ["SID", "DEPARTURE", "CLB GRADIENT", "CLIMB GRADIENT", "INITIAL CLIMB", "NADP"],
+        "OBST", "OBSTACLE", "CRANE", "BIRD"],
+      // BIRD (concentration/activité aviaire) : gêne décollage ET approche à la
+      // fois — validé le 2026-07-26 (revue LFPO, cas test), d'où le mot-clé
+      // dans les deux listes plutôt qu'une seule.
+      depart: ["SID", "DEPARTURE", "CLB GRADIENT", "CLIMB GRADIENT", "INITIAL CLIMB", "NADP", "BIRD"],
       sol: ["TWY", "TAXIWAY", "APRON", "STAND", "PARKING", "RAMP", "STOPWAY", "SWY", "SHOULDER",
         "MOVEMENT AREA", "STOP BAR", "STOPBAR", "WIP", "WORK IN PROGRESS", "CONSTRUCTION",
         "MAINT", "GRASS CUTTING", "DE-ICING", "DEICING", "PUSHBACK", "DOCKING",
