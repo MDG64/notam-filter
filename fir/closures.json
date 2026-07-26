@@ -1,11 +1,12 @@
 {
   "generated": "2026-07-25",
   "source": "il.dump.gz (pull du service officiel de distribution internationale des NOTAMs du 2026-07-25 13:11Z, flux INTL) — NOTAM ayant pour sujet Q-code AF (FIR/UIR), texte relu manuellement",
-  "criteria": "rouge = restriction générale sans condition de nationalité (zone à risque étendue / plan de contingence pour tout trafic) ; ambre = fermeture ou interdiction conditionnée (immatriculation/nationalité de l'exploitant, origine du vol...)",
+  "criteria": "rouge = FIR totalement fermée, aucun trafic ne passe ; ambre = restriction réelle mais FIR traversable (routage de contingence imposé, ATC absent/dégradé, exploitants ou catégories de vol interdits) ; vert = le reste, NOTAM actifs sans restriction d'accès",
+  "criteriaRevised": "2026-07-26 — rouge signifiait auparavant « restriction générale sans condition de nationalité », ce qui n'est pas une fermeture : HSSS était peint en rouge alors que son NOTAM impose des routes de contingence, donc décrit comment traverser. Repassé en ambre, en même temps que les règles correspondantes de notam-proxy/lib/fir-classifier.js.",
   "closures": [
-    { "id": "HSSS", "level": "red",
-      "reason": "Zone réglementée HSR5 couvrant tout le territoire soudanais, plan de contingence FIR Khartoum obligatoire pour tout trafic (routes CR8/CR9/CR10 imposées)",
-      "notams": ["A0050/26"] },
+    { "id": "HSSS", "level": "amber",
+      "reason": "Zone réglementée HSR5 couvrant tout le territoire soudanais, routage de contingence FIR Khartoum imposé à tout trafic (routes CR8/CR9/CR10) ; pas de service ATC au-dessus du Soudan du Sud au-dessus du FL245. FIR traversable sous ces conditions, non fermée.",
+      "notams": ["A0050/26", "A0052/26"] },
 
     { "id": "OIIX", "level": "amber",
       "reason": "Aviation générale et vols VFR suspendus dans toute la FIR Téhéran (sauf circuits d'entraînement sur une liste restreinte d'aérodromes) ; zone de conflit proche pouvant s'étendre au-dessus du Golfe Persique/mer d'Oman (avis de prudence). Le trafic IFR normal a repris depuis le 22/06/2026 (FIR non fermée à l'IFR).",

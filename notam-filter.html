@@ -2703,6 +2703,20 @@
       overflow-x: auto
     }
 
+    /* Les compteurs se partagent la largeur du panneau (étroit en vue scindée).
+       Non cliquables ici, contrairement au résumé de la page terrain. */
+    .fir-summary .stat {
+      flex: 1 1 0;
+      min-width: 0;
+      padding: 10px 8px;
+      cursor: default
+    }
+
+    .fir-summary .stat:hover {
+      border-color: var(--line);
+      box-shadow: var(--elev)
+    }
+
     .fir-list {
       flex: 1;
       overflow-y: auto;
@@ -2719,8 +2733,18 @@
       min-width: 0
     }
 
+    /* Sorti du flux flex (position:absolute) à dessein : en tant qu'item flex,
+       un <canvas> garde un ratio intrinsèque (ses attributs width/height) et un
+       min-width:auto. Sur une rangée flex, sa largeur minimale devient donc
+       hauteur × ratio — le canvas débordait de son conteneur, puis
+       resizeFirCanvas() réinjectait cette largeur gonflée dans le buffer :
+       carte déformée sur tablette, et centrée hors écran (vue « Amérique ») sur
+       mobile. En absolu, la taille CSS ne dépend plus que du conteneur. */
     .fir-map {
-      flex: 1;
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
       touch-action: none;
       cursor: grab
     }
@@ -3398,6 +3422,7 @@ body .stat .k{
       <div class="fir-panel" id="firPanel" hidden>
         <div class="fir-header">
           <h2 id="firTitle">---</h2>
+          <button class="btn-icon" id="firPanelClose" aria-label="Fermer et revenir à la mappemonde" title="Fermer et revenir à la mappemonde">✕</button>
         </div>
         <div class="fir-summary" id="firSummary"></div>
         <div class="fir-list" id="firList"></div>
@@ -3744,7 +3769,11 @@ body .stat .k{
       const text = cleanHtml(raw);
       // ICAO (A1234/26) OU domestique US (07/211, MM/NNN) : les NOTAM US
       // domestiques ont un ID cycle/séquence, sans lettre de série ni année.
-      const id = (text.match(/^([A-Z]\d{4}\/\d{2}|\d{2}\/\d{3,4})/) || [])[1] || "(sans id)";
+      // Certains textes source américains encadrent tout le message d'une
+      // parenthèse ouvrante avant l'ID (format NOTAM standard) : la tolérer
+      // évite un faux "(sans id)" alors que l'ID existe (vu sur HSSS
+      // A0050/26, A0052/26 — absents sans ce correctif).
+      const id = (text.match(/^\(?([A-Z]\d{4}\/\d{2}|\d{2}\/\d{3,4})/) || [])[1] || "(sans id)";
       const qm = text.match(/Q\)\s*([^\n]+)/);
       let qcode = "", scope = "", traffic = "", purpose = "";
       if (qm) { const p = qm[1].split("/").map(s => s.trim()); qcode = p[1] || ""; traffic = p[2] || ""; purpose = p[3] || ""; scope = p[4] || ""; }
@@ -12686,13 +12715,19 @@ function renderInfo(icao) {
         return { ...p, ...classifyNotam(p.qcode, p.e), schedule: parseSchedule(p.d) };
       });
 
+      // Tri par sévérité décroissante : rouge, puis ambre, puis vert. Tri
+      // stable (Array.prototype.sort l'est) — l'ordre d'origine de l'API est
+      // conservé à sévérité égale.
+      const SEV_RANK = { critical: 0, caution: 1, info: 2 };
+      parsed.sort((a, b) => (SEV_RANK[a.severity] ?? 3) - (SEV_RANK[b.severity] ?? 3));
+
       // Résumé
       const sev = { critical: 0, caution: 0, info: 0 };
       parsed.forEach(n => { if (sev[n.severity] !== undefined) sev[n.severity]++; });
       summary.innerHTML = `
-        <div class="stat crit"><div class="n">${sev.critical}</div></div>
-        <div class="stat caut"><div class="n">${sev.caution}</div></div>
-        <div class="stat info"><div class="n">${sev.info}</div></div>`;
+        <div class="stat crit"><div class="row"><span class="led"></span><span class="n">${sev.critical}</span></div><div class="k">Critical</div></div>
+        <div class="stat caut"><div class="row"><span class="led"></span><span class="n">${sev.caution}</span></div><div class="k">Caution</div></div>
+        <div class="stat info"><div class="row"><span class="led"></span><span class="n">${sev.info}</span></div><div class="k">Info</div></div>`;
 
       // Liste
       if (parsed.length === 0) {
@@ -12849,9 +12884,18 @@ function renderInfo(icao) {
       }
     }
     function firWorldDefaultView(r) {
-      // vue monde par défaut, même cadrage que la carte route sans itinéraire
-      const cy = 25, cx = 10, kx0 = Math.cos(cy * Math.PI / 180);
-      const scale = Math.max(1, Math.min((r.height * 0.9) / 150, (r.width * 0.9) / (330 * kx0)));
+      // vue monde par défaut, même cadrage que la carte route sans itinéraire.
+      // En portrait (mobile), l'échelle est contrainte par la largeur : viser
+      // les 330° de longitude du cadrage paysage réduit la carte à une bande
+      // minuscule, et le centrage sur l'Europe (lon 10) rejette les Amériques
+      // au bord. On recentre donc sur l'Atlantique avec une plage plus courte,
+      // pour avoir Amériques ET Europe lisibles à l'ouverture.
+      const portrait = r.height > r.width * 1.15;
+      const cy = portrait ? 20 : 25;
+      const cx = portrait ? -50 : 10;
+      const lonSpan = portrait ? 220 : 330;
+      const kx0 = Math.cos(cy * Math.PI / 180);
+      const scale = Math.max(1, Math.min((r.height * 0.9) / 150, (r.width * 0.9) / (lonSpan * kx0)));
       return { cx, cy, scale };
     }
     function openFirMap() {
@@ -12872,15 +12916,23 @@ function renderInfo(icao) {
     // Icône unique (coin haut-droit de la carte) : 1er clic depuis le détail
     // d'une FIR -> referme le panneau et revient à la vue monde ; un 2e clic,
     // déjà sur la vue monde, quitte entièrement la vue FIR.
+    // Referme le détail d'une FIR et remet la carte au cadrage monde.
+    // L'ordre compte : sur mobile la carte est en display:none tant que
+    // .detail-open est posée, elle mesurerait 0×0. On referme d'abord (ce qui
+    // la réaffiche et retaille son buffer), on cadre ensuite.
+    function backToFirWorld() {
+      closeFirPanel();
+      const r = $("#firMap").getBoundingClientRect();
+      if (firView && r.width > 0) Object.assign(firView, firWorldDefaultView(r));
+      scheduleFirDraw();
+    }
     $("#firExpandBtn").onclick = () => {
-      if ($("#firPanel").hidden) {
-        $("#firOv").hidden = true;
-      } else {
-        const cv = $("#firMap"), r = cv.getBoundingClientRect();
-        if (firView) Object.assign(firView, firWorldDefaultView(r));
-        closeFirPanel();
-      }
+      if ($("#firPanel").hidden) $("#firOv").hidden = true;
+      else backToFirWorld();
     };
+    // Croix du panneau : sur mobile la carte (et donc #firExpandBtn) est masquée
+    // quand le détail est ouvert — c'est la seule sortie possible.
+    $("#firPanelClose").onclick = backToFirWorld;
     // Redimensionner ne fait que retailler le buffer du canvas — sans
     // recalcul, le cadrage (cx/cy/scale) reste celui de l'ANCIENNE taille et
     // se retrouve décalé/mal ajusté par rapport à la nouvelle (constaté :
