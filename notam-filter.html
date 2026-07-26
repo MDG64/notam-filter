@@ -2644,6 +2644,61 @@
       transform: translateX(-50%) translateY(0)
     }
 
+    .fir-split {
+      display: flex;
+      flex: 1;
+      gap: 0;
+      min-height: 0
+    }
+
+    .fir-panel {
+      display: flex;
+      flex-direction: column;
+      flex: 0 0 40%;
+      background: var(--bg);
+      border-right: 1px solid var(--line);
+      overflow: hidden
+    }
+
+    .fir-header {
+      padding: 16px;
+      border-bottom: 1px solid var(--line);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-shrink: 0
+    }
+
+    .fir-header h2 {
+      margin: 0;
+      font: 700 18px/1 var(--sans);
+      color: var(--text)
+    }
+
+    .fir-summary {
+      padding: 12px 16px;
+      display: flex;
+      gap: 12px;
+      border-bottom: 1px solid var(--line);
+      flex-shrink: 0;
+      overflow-x: auto
+    }
+
+    .fir-list {
+      flex: 1;
+      overflow-y: auto;
+      padding: 12px 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px
+    }
+
+    .fir-map {
+      flex: 1;
+      touch-action: none;
+      cursor: grab
+    }
+
     .map-x {
       position: absolute;
       top: 14px;
@@ -3272,7 +3327,17 @@ body .stat .k{
   <!-- ================= OVERLAY CARTE FIR MONDIALE ================= -->
   <div class="map-ov" id="firOv" hidden>
     <button class="map-x" id="firClose" aria-label="Back">←</button>
-    <canvas id="firMap"></canvas>
+    <div class="fir-split">
+      <div class="fir-panel">
+        <div class="fir-header">
+          <h2 id="firTitle">---</h2>
+          <button id="firUmbrella" class="btn-icon" title="Back to world map">☂</button>
+        </div>
+        <div class="fir-summary" id="firSummary"></div>
+        <div class="fir-list" id="firList"></div>
+      </div>
+      <canvas id="firMap" class="fir-map"></canvas>
+    </div>
   </div>
 
   <div class="modal-ov" id="planOv" hidden>
@@ -10734,7 +10799,7 @@ E) ${e}`;
     //  CONFIG — pour passer en LIVE, renseignez l'URL de votre proxy.
     //  Laissez vide ("") pour utiliser le jeu de démonstration.
     // ============================================================
-    const BACKEND_URL = "https://notam-proxy-production.up.railway.app";
+    const BACKEND_URL = "http://127.0.0.1:8787";
 
     // Récupère les NOTAM bruts (tableau de chaînes ICAO) pour un code OACI.
     // - démo  : lit le jeu local (DB)
@@ -11953,7 +12018,7 @@ function renderInfo(icao) {
     // --- Carte FIR mondiale (frontières ICAO) ------------------------------
     const FIR_URL = "./fir/boundaries.json";
     const FIR_CLOSURES_URL = "./fir/closures.json";
-    let FIR = null, FIR_CLOSURES = null, firView = null, _firBg = null, _firBgCanvas = null, _firBgZoomTimer = null, firHitboxes = [];
+    let FIR = null, FIR_CLOSURES = null, FIR_NOTAMS = null, firView = null, _firBg = null, _firBgCanvas = null, _firBgZoomTimer = null, firHitboxes = [];
     async function fetchFir() {
       // Même règle que fetchLayout() : réseau d'abord (no-cache), repli mémoire
       // seulement si le fetch échoue (hors ligne) — jamais de pull amont ici,
@@ -11989,10 +12054,70 @@ function renderInfo(icao) {
       }
       return FIR_CLOSURES;   // hors ligne complet : ce qu'on avait déjà en mémoire
     }
+    // NOTAM de sujet AF (= portant sur la FIR entière), groupés par FIR.
+    // Sert au liseré vert « cette FIR a des NOTAM actifs » et au panneau de
+    // lecture. Volontairement borné au sujet AF : ~190 Ko, donc chargeable
+    // d'un bloc et cachable pour le hors-ligne. Le détail exhaustif d'une FIR
+    // (toutes rubriques) se charge à la demande, voir fetchFirDetail().
+    async function fetchFirNotams() {
+      if (!BACKEND_URL) return FIR_NOTAMS;
+      try {
+        const r = await fetch(BACKEND_URL + "/api/fir/notams", { cache: "no-cache" });
+        if (r.ok) {
+          const j = await r.json();
+          if (j && j.fir) { FIR_NOTAMS = j.fir; return FIR_NOTAMS; }
+        }
+      } catch (e) { /* hors ligne : le service worker sert la copie mise en cache */ }
+      return FIR_NOTAMS;
+    }
+    // Détail complet d'une FIR (toutes rubriques, pas seulement AF). Réseau
+    // uniquement : plusieurs Mo si on les préchargeait toutes. Hors ligne, on
+    // se rabat sur les NOTAM AF déjà en mémoire — moins riche, mais jamais vide.
+    async function fetchFirDetail(fir) {
+      if (BACKEND_URL) {
+        try {
+          const r = await fetch(BACKEND_URL + "/api/fir/notams/" + encodeURIComponent(fir), { cache: "no-cache" });
+          if (r.ok) { const j = await r.json(); if (j && Array.isArray(j.notams)) return j; }
+        } catch (e) { /* repli ci-dessous */ }
+      }
+      const local = FIR_NOTAMS && FIR_NOTAMS[fir];
+      return local ? { fir, level: local.level, reason: local.reason, notams: local.notams, partial: true } : null;
+    }
     async function ensureFirReady() {
-      if (FIR && FIR_CLOSURES) return true;
-      await Promise.all([fetchFir(), fetchFirClosures()]);
+      if (FIR && FIR_CLOSURES && FIR_NOTAMS) return true;
+      await Promise.all([fetchFir(), fetchFirClosures(), fetchFirNotams()]);
       return !!FIR;
+    }
+
+    // --- Pays d'une FIR ------------------------------------------------------
+    // Déduit du préfixe OACI à 2 lettres, en s'appuyant sur la base AIRPORTS
+    // déjà embarquée : « LD » -> Croatie parce que les 9 aérodromes LDxx y
+    // sont. Couvre 424 des 427 FIR sans table supplémentaire à maintenir.
+    // Les FIR océaniques et les 3 exceptions restent sans pays — et dans ce cas
+    // on n'affiche ni drapeau ni nom, plutôt qu'une approximation trompeuse.
+    let _firCountryByPrefix = null;
+    function firCountry(fir) {
+      if (!_firCountryByPrefix) {
+        const tally = {};
+        for (const icao in AIRPORTS) {
+          const cc = AIRPORTS[icao] && AIRPORTS[icao].cc;
+          if (!cc || !/^[A-Z]{4}$/.test(icao)) continue;
+          const p = icao.slice(0, 2);
+          (tally[p] = tally[p] || {})[cc] = (tally[p][cc] || 0) + 1;
+        }
+        _firCountryByPrefix = {};
+        for (const p in tally) {                       // le pays majoritaire l'emporte
+          _firCountryByPrefix[p] = Object.entries(tally[p]).sort((a, b) => b[1] - a[1])[0][0];
+        }
+      }
+      return _firCountryByPrefix[String(fir).slice(0, 2)] || null;
+    }
+    // Émoji drapeau = les 2 lettres du code ISO décalées vers les Regional
+    // Indicator Symbols. Sans code ISO connu, on ne renvoie rien.
+    function countryFlag(name) {
+      const iso = COUNTRY_ISO[name];
+      if (!iso) return "";
+      return String.fromCodePoint(...[...iso].map(c => 0x1F1E6 + c.charCodeAt(0) - 65));
     }
 
     // Dessine le fond (mer, terres, relief, côtes, lacs, villes) sur un canvas donné.
@@ -12349,6 +12474,15 @@ function renderInfo(icao) {
         }
         return null;
       }
+      // zone FIR sous un point (rectangle autour du nom)
+      function hitFir(px, py) {
+        if (!firView) return null;
+        for (let i = firHitboxes.length - 1; i >= 0; i--) {
+          const h = firHitboxes[i];
+          if (px >= h.bx && px <= h.bx + h.bw && py >= h.by && py <= h.by + h.bh) return h;
+        }
+        return null;
+      }
       // Ajoute un terrain monde à la route active (rôle alt, marqué user) + persiste.
       function addWorldToRoute(code) {
         code = (code || "").toUpperCase();
@@ -12380,7 +12514,7 @@ function renderInfo(icao) {
           drag = p; scheduleDraw();
         } else {
           const dpr = mapView.dpr, px = p[0] * dpr, py = p[1] * dpr;
-          cv.style.cursor = (hitAirport(px, py) || hitWorld(px, py)) ? "pointer" : "grab";
+          cv.style.cursor = (hitAirport(px, py) || hitWorld(px, py) || hitFir(px, py)) ? "pointer" : "grab";
         }
       });
       cv.addEventListener("pointerup", e => {
@@ -12391,17 +12525,21 @@ function renderInfo(icao) {
             const a = hitAirport(px, py);
             if (a) { $("#mapOv").hidden = true; $("#routeScreen").hidden = true; load(a.icao); }
             else {
-              const w = hitWorld(px, py);
-              if (w) {
-                if (w.saved) {
-                  // vert : on charge et on affiche les NOTAM sur la 1re page
-                  $("#mapOv").hidden = true; $("#routeScreen").hidden = true; load(w.icao);
-                } else if (navigator.onLine) {
-                  // rouge + connecté : ajout à la route puis chargement (load -> fetch + saveOffline -> passe vert)
-                  addWorldToRoute(w.icao);
-                  $("#mapOv").hidden = true; $("#routeScreen").hidden = true; load(w.icao);
-                } else {
-                  mapToast("Connexion requise pour charger " + w.icao);
+              const f = hitFir(px, py);
+              if (f) { openFirPanel(f.id); }
+              else {
+                const w = hitWorld(px, py);
+                if (w) {
+                  if (w.saved) {
+                    // vert : on charge et on affiche les NOTAM sur la 1re page
+                    $("#mapOv").hidden = true; $("#routeScreen").hidden = true; load(w.icao);
+                  } else if (navigator.onLine) {
+                    // rouge + connecté : ajout à la route puis chargement (load -> fetch + saveOffline -> passe vert)
+                    addWorldToRoute(w.icao);
+                    $("#mapOv").hidden = true; $("#routeScreen").hidden = true; load(w.icao);
+                  } else {
+                    mapToast("Connexion requise pour charger " + w.icao);
+                  }
                 }
               }
             }
@@ -12424,6 +12562,85 @@ function renderInfo(icao) {
       }, { passive: false });
       cv.addEventListener("touchend", () => pinch = null);
     })();
+
+    // --- FIR panel (vue scindée NOTAM + map) --------------------------------
+    async function openFirPanel(firId) {
+      if (!FIR_NOTAMS || !FIR_NOTAMS[firId]) return;
+      const title = $("#firTitle");
+      const summary = $("#firSummary");
+      const list = $("#firList");
+
+      title.textContent = firId;
+      summary.innerHTML = "";
+      list.innerHTML = `<div class="empty loading"><span class="spinner"></span>Loading NOTAMs for ${esc(firId)}…</div>`;
+
+      $("#firOv").hidden = false;
+
+      // Charger les NOTAM du FIR
+      let notams = [];
+      try {
+        if (BACKEND_URL) {
+          const r = await fetch(`${BACKEND_URL}/api/fir/notams/${encodeURIComponent(firId)}`);
+          if (r.ok) notams = (await r.json()).notams || [];
+        }
+      } catch (e) {}
+
+      // Fallback: utiliser les NOTAM en mémoire
+      if (!notams.length && FIR_NOTAMS[firId]) {
+        notams = FIR_NOTAMS[firId].map(text => ({ raw: text, text }));
+      }
+
+      // Parser et afficher
+      const parsed = notams.map(n => {
+        const p = parseNotam(n.raw || n.text);
+        return { ...p, ...classifyNotam(p.qcode, p.e), schedule: parseSchedule(p.d) };
+      });
+
+      // Résumé
+      const sev = { critical: 0, caution: 0, info: 0 };
+      parsed.forEach(n => { if (sev[n.severity] !== undefined) sev[n.severity]++; });
+      summary.innerHTML = `
+        <div class="stat crit"><div class="n">${sev.critical}</div></div>
+        <div class="stat caut"><div class="n">${sev.caution}</div></div>
+        <div class="stat info"><div class="n">${sev.info}</div></div>`;
+
+      // Liste
+      if (parsed.length === 0) {
+        list.innerHTML = `<div class="empty">No NOTAMs for ${esc(firId)}</div>`;
+      } else {
+        list.innerHTML = parsed.map((n, i) => {
+          const sev = n.severity === "critical" ? "🔴" : n.severity === "caution" ? "🟡" : "🟢";
+          return `<div class="notam-card" style="font-size:12px;padding:8px;border:1px solid var(--line);border-radius:6px;background:var(--panel2);">
+            <div>${sev} <strong>${esc(n.id)}</strong> ${esc(n.qcode)} ${esc(n.categories[0] || "")}</div>
+            <div style="margin-top:4px;color:var(--muted);">${esc((n.e || "").substring(0, 80))}</div>
+          </div>`;
+        }).join("");
+      }
+
+      // Zoom sur le FIR
+      const fir = FIR.find(f => f.id === firId);
+      if (fir && firView) {
+        const bounds = calculateFirBounds(fir);
+        if (bounds) {
+          firView.cx = (bounds.minLon + bounds.maxLon) / 2;
+          firView.cy = (bounds.minLat + bounds.maxLat) / 2;
+          firView.scale = 80;  // zoom niveau moyen
+          scheduleFirDraw();
+        }
+      }
+    }
+
+    function calculateFirBounds(fir) {
+      if (!fir.rings || fir.rings.length === 0) return null;
+      let minLat = 90, maxLat = -90, minLon = 180, maxLon = -180;
+      fir.rings[0].forEach(([lon, lat]) => {
+        minLat = Math.min(minLat, lat);
+        maxLat = Math.max(maxLat, lat);
+        minLon = Math.min(minLon, lon);
+        maxLon = Math.max(maxLon, lon);
+      });
+      return { minLat, maxLat, minLon, maxLon };
+    }
 
     // --- Dessin + interactions carte FIR mondiale ---------------------------
     let _firRafPending = false;
@@ -12454,11 +12671,19 @@ function renderInfo(icao) {
       // Les FIR neutres apparaissent progressivement en zoomant, leurs étiquettes un cran plus tard.
       const showNeutral = v.scale > 27;    // ~9 crans de molette plus tard qu'avant (chaque cran = ×1.18)
       const showLabels = v.scale > 40;
+      // Vert = « cette FIR a des NOTAM actifs, sans restriction d'accès ».
+      // Volontairement très transparent et réservé au zoom : 74 FIR sont
+      // concernées, les afficher en vue monde noierait le rouge et l'ambre,
+      // qui sont le vrai signal.
+      const showGreen = v.scale > 27;
+      const GREEN = light ? "#1f8b5f" : "#34d39a";
       ctx.font = "600 " + Math.round(10.5 * dpr) + "px 'IBM Plex Mono',monospace";
       ctx.textAlign = "center"; ctx.textBaseline = "middle";
       for (const f of FIR) {
         const closure = FIR_CLOSURES ? FIR_CLOSURES.get(f.id) : null;
-        const col = closure ? (closure.level === "red" ? RED : AMBER) : null;
+        const hasNotams = !!(FIR_NOTAMS && FIR_NOTAMS[f.id]);
+        const col = closure ? (closure.level === "red" ? RED : AMBER)
+                  : (hasNotams && showGreen ? GREEN : null);
         if (!col && !showNeutral) continue;    // écrémage précoce : ni tracé ni coût de calcul
         let anyOnScreen = false;
         ctx.beginPath();
@@ -12473,31 +12698,47 @@ function renderInfo(icao) {
         }
         if (!anyOnScreen) continue;
         if (col) {
-          ctx.fillStyle = col + "33";       // remplissage léger (alpha ~20%)
+          // Le vert reste nettement plus discret que le rouge/ambre : il ne
+          // signale qu'une activité NOTAM, pas une restriction d'accès.
+          const isGreen = !closure;
+          ctx.fillStyle = col + (isGreen ? "14" : "33");   // ~8% vs ~20% d'opacité
           ctx.fill();
-          ctx.lineWidth = 1.6 * dpr; ctx.strokeStyle = col;
+          ctx.lineWidth = (isGreen ? 1.1 : 1.6) * dpr;
+          ctx.strokeStyle = isGreen ? col + "88" : col;
         } else {
           ctx.lineWidth = 1.1 * dpr; ctx.strokeStyle = neutralStroke;
         }
         ctx.stroke();
-        // FIR fermée : étiquette toujours visible (même dézoomé), sinon seulement au zoom
-        if ((closure || showLabels) && f.lx != null && f.ly != null) {
+        // Étiquette : toujours visible pour une FIR porteuse de NOTAM (fermée,
+        // restreinte, ou simplement active), sinon seulement une fois zoomé.
+        // C'est cette étiquette qui sert de zone cliquable — son rectangle est
+        // enregistré dans firHitboxes, d'où le curseur « main » au survol.
+        const tagged = closure || (hasNotams && showGreen);
+        if ((tagged || showLabels) && f.lx != null && f.ly != null) {
           const lx = X(f.lx), ly = Y(f.ly);
           if (onScreen(lx, ly)) {
-            if (closure) {
+            if (tagged) {
               const w = ctx.measureText(f.id).width, pad = 5 * dpr, bw = w + pad * 2, bh = 14 * dpr;
-              ctx.fillStyle = col;
+              const bx = lx - bw / 2, by = ly - bh / 2;
               ctx.beginPath();
-              if (ctx.roundRect) ctx.roundRect(lx - bw / 2, ly - bh / 2, bw, bh, bh / 2);
-              else ctx.rect(lx - bw / 2, ly - bh / 2, bw, bh);
-              ctx.fill();
-              ctx.fillStyle = light ? "#1b1200" : "#170e00";
+              if (ctx.roundRect) ctx.roundRect(bx, by, bw, bh, bh / 2);
+              else ctx.rect(bx, by, bw, bh);
+              if (closure) {
+                ctx.fillStyle = col; ctx.fill();
+                ctx.fillStyle = light ? "#1b1200" : "#170e00";
+              } else {
+                // Pastille verte évidée : lisible sans peser autant qu'une
+                // fermeture, pour que le regard aille d'abord au rouge/ambre.
+                ctx.fillStyle = light ? "rgba(255,255,255,.82)" : "rgba(10,15,20,.72)";
+                ctx.fill();
+                ctx.lineWidth = 1.2 * dpr; ctx.strokeStyle = col + "cc"; ctx.stroke();
+                ctx.fillStyle = col;
+              }
               ctx.fillText(f.id, lx, ly);
-              firHitboxes.push({ id: f.id, x: lx, y: ly, r: Math.max(bw, bh) / 2, closure });
+              firHitboxes.push({ id: f.id, bx, by, bw, bh, closure: closure || null, hasNotams });
             } else {
               ctx.fillStyle = light ? "rgba(20,50,90,.9)" : "rgba(200,225,250,.92)";
               ctx.fillText(f.id, lx, ly);
-              firHitboxes.push({ id: f.id, x: lx, y: ly, r: 12 * dpr, closure: null });
             }
           }
         }
@@ -12519,6 +12760,7 @@ function renderInfo(icao) {
     }
     $("#firMapBtn").onclick = async () => { if (await ensureFirReady()) openFirMap(); };
     $("#firClose").onclick = () => { $("#firOv").hidden = true; };
+    $("#firUmbrella").onclick = () => { $("#firOv").hidden = true; };
     (() => {  // interactions carte FIR : molette / glisser / pincer / clic sur une FIR fermée
       const cv = $("#firMap");
       const kx = () => Math.cos(firView.cy * Math.PI / 180);
@@ -12529,10 +12771,16 @@ function renderInfo(icao) {
         t.textContent = msg; t.classList.add("show");
         clearTimeout(t._h); t._h = setTimeout(() => t.classList.remove("show"), 4200);
       }
-      function hitClosure(px, py) {
+      // Zone cliquable = le rectangle de l'étiquette (et non le polygone de la
+      // FIR) : les FIR se chevauchent largement (espaces inférieur/supérieur,
+      // secteurs océaniques), un clic dans un polygone serait ambigu alors
+      // qu'une étiquette désigne une FIR sans équivoque.
+      function hitFir(px, py) {
+        const pad = 3 * firView.dpr;         // tolérance au doigt/à la souris
         for (let i = firHitboxes.length - 1; i >= 0; i--) {
           const h = firHitboxes[i];
-          if (h.closure && Math.hypot(px - h.x, py - h.y) <= h.r + 4 * firView.dpr) return h;
+          if (px >= h.bx - pad && px <= h.bx + h.bw + pad &&
+              py >= h.by - pad && py <= h.by + h.bh + pad) return h;
         }
         return null;
       }
@@ -12545,17 +12793,24 @@ function renderInfo(icao) {
       const CLICK_TOL = 6;
       cv.addEventListener("pointerdown", e => { drag = pos(e); dragStart = drag; cv.setPointerCapture(e.pointerId); });
       cv.addEventListener("pointermove", e => {
-        if (!firView || !drag) return;
+        if (!firView) return;
         const p = pos(e);
-        firView.cx -= (p[0] - drag[0]) / (kx() * firView.scale); firView.cy += (p[1] - drag[1]) / firView.scale;
-        drag = p; scheduleFirDraw();
+        if (drag) {
+          firView.cx -= (p[0] - drag[0]) / (kx() * firView.scale); firView.cy += (p[1] - drag[1]) / firView.scale;
+          drag = p; scheduleFirDraw();
+        } else {
+          // Curseur « main » dès qu'on entre dans une étiquette : c'est le seul
+          // indice qu'une FIR est consultable.
+          const dpr = firView.dpr;
+          cv.style.cursor = hitFir(p[0] * dpr, p[1] * dpr) ? "pointer" : "grab";
+        }
       });
       cv.addEventListener("pointerup", e => {
         if (dragStart && firView) {
           const p = pos(e), dist = Math.hypot(p[0] - dragStart[0], p[1] - dragStart[1]);
           if (dist <= CLICK_TOL) {
-            const dpr = firView.dpr, h = hitClosure(p[0] * dpr, p[1] * dpr);
-            if (h) firToast(h.id + " (" + (h.closure.level === "red" ? "fermée" : "restreinte") + ") — " + h.closure.reason);
+            const dpr = firView.dpr, h = hitFir(p[0] * dpr, p[1] * dpr);
+            if (h) openFirDetail(h.id);
           }
         }
         drag = null; dragStart = null;
