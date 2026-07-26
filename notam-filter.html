@@ -12678,6 +12678,22 @@ function renderInfo(icao) {
       resizeFirCanvas();
       scheduleFirDraw();
     }
+    // Élargit CRITICAL_TEXT (severity(), plus haut) pour les seuls NOTAM de
+    // FIR : capte « NO <mots> AVBL » (ex. HSSS A0052/26, « NO AIR TFC CONTROL
+    // SVC AVBL ») — un ATC/service indisponible, resté en Caution car
+    // CRITICAL_TEXT ne connaît que la forme « NOT AVBL »/« NOT AVAILABLE ».
+    // Volontairement PAS ajouté à CRITICAL_TEXT global : ce motif touche
+    // potentiellement les NOTAM de terrain aussi (ex. « NO PROGRESSIVE TAXI
+    // AVBL »), non audité ici. Vérifié le 2026-07-26 sur les 318 NOTAM FIR
+    // actifs (sujet Q-code AF) : 1 seul match, exactement le cas visé, aucun
+    // faux positif même en élargissant la fenêtre de recherche à 150
+    // caractères. À élargir aux terrains seulement après un audit séparé.
+    const FIR_CRITICAL_EXTRA_RE = /\bNO\b[\s\S]{0,60}\bAVBL\b/;
+    function firSeverity(q, e) {
+      const base = severity(q, e);
+      if (base !== "critical" && FIR_CRITICAL_EXTRA_RE.test((e || "").toUpperCase())) return "critical";
+      return base;
+    }
     async function openFirPanel(firId) {
       if (!FIR_NOTAMS || !FIR_NOTAMS[firId]) return;
       const title = $("#firTitle");
@@ -12712,7 +12728,8 @@ function renderInfo(icao) {
       // Parser et afficher
       const parsed = notams.map(raw => {
         const p = parseNotam(raw);
-        return { ...p, ...classifyNotam(p.qcode, p.e), schedule: parseSchedule(p.d) };
+        const c = classifyNotam(p.qcode, p.e);
+        return { ...p, ...c, severity: firSeverity(p.qcode, p.e), schedule: parseSchedule(p.d) };
       });
 
       // Tri par sévérité décroissante : rouge, puis ambre, puis vert. Tri
