@@ -3852,17 +3852,27 @@ body .stat .k{
       // -> pas de fermeture totale, reste au rang caution/CONDITION_SEVERITY).
       const isClosure = CRITICAL_TEXT.some(k => t.includes(k)) ||
         (t.includes("PROHIBITED") && !RESTRICT_TEXT.some(k => t.includes(k)));
+      // Un NOTAM qui restreint ou interdit l'accès, TOTALEMENT (isClosure) OU
+      // CONDITIONNELLEMENT (PROHIBITED avec condition de type/envergure, ou tout
+      // autre match RESTRICT_TEXT), cite très souvent un OBSTACLE comme simple
+      // CAUSE ("... DUE TO OBSTACLE(S)") — ce mot ne doit jamais faire retomber en
+      // Information une restriction réellement active, même conditionnelle. Cas
+      // réel LFPO A4935/26 "RWY 02/20 RESTRICTION DUE TO OBSTACLE : LDG RWY 20
+      // PROHIBITED FOR ACFT WHICH WINGSPAN EXCEEDS 36M" : conditionnel
+      // (isClosure=false) mais reste une restriction active -> Caution, jamais
+      // Info malgré le mot OBSTACLE.
+      const isActiveRestriction = isClosure || t.includes("PROHIBITED") || RESTRICT_TEXT.some(k => t.includes(k));
       // NOTAM levé (CNL/CANCELLED/WITHDRAWN/VOID) : simple information, pas une
-      // alerte active — sauf si isClosure (une fermeture reste active malgré la
-      // mention d'une levée passée). Réutilise CNL_TEXT (plus bas,
-      // planKind()/isResumption()) pour rester cohérent avec le "reopened" du
-      // plan. Cas réel LFPO : un NOTAM "... NOTAM VOID" doit retomber en
-      // Information, jamais rester Critical/Caution.
-      if (CNL_TEXT.some(k => t.includes(k)) && !isClosure) return "info";
+      // alerte active — sauf si isActiveRestriction (une restriction/fermeture
+      // reste active malgré la mention d'une levée passée). Réutilise CNL_TEXT
+      // (plus bas, planKind()/isResumption()) pour rester cohérent avec le
+      // "reopened" du plan. Cas réel LFPO : un NOTAM "... NOTAM VOID" doit
+      // retomber en Information, jamais rester Critical/Caution.
+      if (CNL_TEXT.some(k => t.includes(k)) && !isActiveRestriction) return "info";
       // Grues (« crane ») et mâts (« mast ») : toujours classés en Information —
-      // sauf si isClosure (une interdiction totale prime sur la simple mention
-      // d'un obstacle comme cause du NOTAM).
-      if (INFO_TEXT_RE.test(t) && !isClosure) return "info";
+      // sauf si isActiveRestriction (une restriction/interdiction, même
+      // conditionnelle, prime sur la simple mention d'un obstacle comme cause).
+      if (INFO_TEXT_RE.test(t) && !isActiveRestriction) return "info";
       let sev;
       if (isClosure) sev = "critical";
       else sev = CONDITION_SEVERITY[cond] || "caution";
@@ -14074,7 +14084,15 @@ window.addEventListener("scroll", hidePop, true);
        fermeture explicite garde toujours la priorité ; à défaut, le texte
        ambigu (aucun mot de fermeture NI de restriction reconnu) retombe en
        ambre « à vérifier » — voir le fallback en bas de fonction. */
-    const RESTRICT_TEXT = ["PROHIBITED TO", "RESTRICTION", "LIMITED TO", "LTD TO",
+    // NB : le seul mot "RESTRICTION" a été RETIRÉ le 2026-07-27 — de vrais NOTAM
+    // LFPO (A4935/26 et un second réel non identifié) l'utilisent comme simple
+    // libellé d'en-tête ("RWY 02/20 RESTRICTION DUE TO OBSTACLE : LDG ... PROHIBITED
+    // FOR ACFT WHICH WINGSPAN EXCEEDS 36M" ET aussi "RESTRICTION RWY 02/20 : LDG RWY
+    // 20 PROHIBITED DUE TO OBSTACLES." — cette seconde phrase n'a AUCUNE condition
+    // de type/envergure, c'est une interdiction TOTALE). Le mot seul ne distingue
+    // pas restriction partielle vs fermeture totale ; seule une vraie condition
+    // (envergure, type d'appareil...) le fait — d'où la liste ci-dessous.
+    const RESTRICT_TEXT = ["PROHIBITED TO", "LIMITED TO", "LTD TO",
       "WINGSPAN GREATER", "WINGSPAN ABOVE", "WINGSPAN OVER", "WINGSPAN EXCEEDS",
       "WINGSPAN HIGHER THAN", "NOT AVBL FOR ACFT", "ACFT TYPE"];
     function planKind(n) {
