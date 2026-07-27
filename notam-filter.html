@@ -1330,6 +1330,7 @@
       max-height: 86vh;
       overflow-y: auto;
       -webkit-overflow-scrolling: touch;
+      overscroll-behavior: contain;
       padding: 20px 20px 24px
     }
 
@@ -1819,11 +1820,17 @@
       }
 
       .modal.plan {
+        /* position:fixed + inset:0, pas une hauteur en vh/dvh : sur tablette,
+           un balayage vertical fait apparaître/disparaître la barre d'adresse
+           du navigateur, ce qui recalcule 100dvh à chaque frame et provoque un
+           sursaut de mise en page — le bandeau fixe (ICAO + Now/Today/Tomorrow
+           + croix) semble alors disparaître un instant. inset:0 colle la
+           modale au viewport visuel réel sans dépendre de ce recalcul. */
+        position: fixed;
+        inset: 0;
         max-width: 100%;
         width: 100%;
         max-height: 100%;
-        height: 100vh;
-        height: 100dvh;
         border-radius: 0;
         border: 0
       }
@@ -11717,13 +11724,21 @@ function renderInfo(icao) {
     };
 
     /* ---- fenêtre d'aide (?) ---- */
+    // Verrouille html ET body : sur certains Chrome/Safari tablette, bloquer
+    // seul body laisse encore filtrer le scroll de la page (donc le bandeau
+    // fixe du plan) pendant un balayage vertical rapide.
+    function closePlanOv() {
+      $("#planOv").hidden = true;
+      document.documentElement.style.overflow = "";
+      document.body.style.overflow = "";
+    }
     $("#planBtn").onclick = () => { openPlan(); };
-    $("#planClose").onclick = () => { $("#planOv").hidden = true; document.body.style.overflow = ""; };
-    $("#planOv").onclick = e => { if (e.target === $("#planOv")) { $("#planOv").hidden = true; document.body.style.overflow = ""; } };
+    $("#planClose").onclick = closePlanOv;
+    $("#planOv").onclick = e => { if (e.target === $("#planOv")) closePlanOv(); };
     $("#helpBtn").onclick = () => { $("#helpOv").hidden = false; };
     $("#helpClose").onclick = () => { $("#helpOv").hidden = true; };
     $("#helpOv").onclick = e => { if (e.target === $("#helpOv")) $("#helpOv").hidden = true; };
-    document.addEventListener("keydown", e => { if (e.key === "Escape") { $("#helpOv").hidden = true; $("#infoOv").hidden = true; $("#planOv").hidden = true; document.body.style.overflow = ""; } });
+    document.addEventListener("keydown", e => { if (e.key === "Escape") { $("#helpOv").hidden = true; $("#infoOv").hidden = true; if (!$("#planOv").hidden) closePlanOv(); } });
     $("#infoBtn").onclick = () => {
       if (!currentIcao) return;
       $("#infoTitle").textContent = currentIcao + " — Airport info";
@@ -15389,6 +15404,9 @@ window.addEventListener("scroll", hidePop, true);
       // Verrouille le défilement de la page en dessous : sur iPad/Chrome, un
       // corps de page défilable derrière l'overlay fait dériver l'en-tête
       // "figé" (position:fixed) avec la carte pendant le scroll tactile.
+      // html ET body : sur certaines tablettes, bloquer body seul ne suffit
+      // pas à empêcher le scroll de la page derrière l'overlay.
+      document.documentElement.style.overflow = "hidden";
       document.body.style.overflow = "hidden";
       body.innerHTML = `<div class="plan-msg"><div class="spinner"></div>Loading layout…</div>`;
       if (!icao) { body.innerHTML = `<div class="plan-msg">Load an aerodrome first.</div>`; return; }
