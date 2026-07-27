@@ -3832,8 +3832,6 @@ body .stat .k{
     const HELI_TEXT_RE = /\b(HEL|HELI|HELIPAD|HELIPADS|HELIPORT|HELIDECK|HELICOPTER|HELICOPTERS|HLS|FATO|TLOF)\b/;
     function severity(q, e) {
       const [subj, cond] = qcodeParts(q), t = (e || "").toUpperCase();
-      // Grues (« crane ») et mâts (« mast ») : toujours classés en Information.
-      if (INFO_TEXT_RE.test(t)) return "info";
       // Passage en Information UNIQUEMENT pour les NOTAM dont le sujet EST un poste
       // de stationnement (code Q « MP »). On ne se base PAS sur le mot « stand » dans
       // le texte : une fermeture de taxiway/piste qui cite un stand reste critique.
@@ -3842,8 +3840,31 @@ body .stat .k{
       // même U/S, CLSD, withdrawn... (tour, mât, grue, bâtiment... l'obstacle reste
       // signalé mais n'appelle pas d'action opérationnelle immédiate).
       if (subj === "OB" || subj === "OL") return "info";
+      // Signal de fermeture/interdiction ACTIVE : mot de fermeture (CRITICAL_TEXT)
+      // OU "PROHIBITED" sans condition de type/envergure (RESTRICT_TEXT, plus bas)
+      // — une interdiction TOTALE, pas une simple restriction partielle. Calculé
+      // une fois pour primer sur les deux raccourcis "info" ci-dessous (CNL_TEXT,
+      // INFO_TEXT_RE) : ni une mention d'obstacle-comme-cause, ni une référence à
+      // une ancienne levée, ne doivent masquer une fermeture qui reste active.
+      // Cas réel LFPO A4641/26 "LDG RWY 20 PROHIBITED DUE TO OBST" (aucune
+      // condition -> critical, même si le mot "OBST" y apparaît comme cause) vs
+      // A4935/26 "...PROHIBITED FOR ACFT WHICH WINGSPAN EXCEEDS 36M" (condition
+      // -> pas de fermeture totale, reste au rang caution/CONDITION_SEVERITY).
+      const isClosure = CRITICAL_TEXT.some(k => t.includes(k)) ||
+        (t.includes("PROHIBITED") && !RESTRICT_TEXT.some(k => t.includes(k)));
+      // NOTAM levé (CNL/CANCELLED/WITHDRAWN/VOID) : simple information, pas une
+      // alerte active — sauf si isClosure (une fermeture reste active malgré la
+      // mention d'une levée passée). Réutilise CNL_TEXT (plus bas,
+      // planKind()/isResumption()) pour rester cohérent avec le "reopened" du
+      // plan. Cas réel LFPO : un NOTAM "... NOTAM VOID" doit retomber en
+      // Information, jamais rester Critical/Caution.
+      if (CNL_TEXT.some(k => t.includes(k)) && !isClosure) return "info";
+      // Grues (« crane ») et mâts (« mast ») : toujours classés en Information —
+      // sauf si isClosure (une interdiction totale prime sur la simple mention
+      // d'un obstacle comme cause du NOTAM).
+      if (INFO_TEXT_RE.test(t) && !isClosure) return "info";
       let sev;
-      if (CRITICAL_TEXT.some(k => t.includes(k))) sev = "critical";
+      if (isClosure) sev = "critical";
       else sev = CONDITION_SEVERITY[cond] || "caution";
       // Hélicoptères : au maximum « Caution » (jamais Critical).
       if (HELI_TEXT_RE.test(t) && sev === "critical") sev = "caution";
