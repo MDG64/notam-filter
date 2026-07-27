@@ -11724,13 +11724,30 @@ function renderInfo(icao) {
     };
 
     /* ---- fenêtre d'aide (?) ---- */
-    // Verrouille html ET body : sur certains Chrome/Safari tablette, bloquer
-    // seul body laisse encore filtrer le scroll de la page (donc le bandeau
-    // fixe du plan) pendant un balayage vertical rapide.
+    // Un simple overflow:hidden ne suffit pas : si la page est scrollée loin
+    // (NOTAM sol cliqué en bas de liste), certaines tablettes ancrent encore
+    // les éléments position:fixed au sommet du DOCUMENT non scrollé plutôt
+    // qu'au viewport visuel actuel — le bandeau du plan (ICAO + Now/Today/
+    // Tomorrow + croix) s'ouvre alors hors-écran. On fige la page à sa
+    // position de scroll actuelle (position:fixed + top négatif), ce qui
+    // annule ce décalage ; on restaure le scroll à la fermeture.
+    let planScrollLockY = 0;
+    function lockPlanScroll() {
+      planScrollLockY = window.scrollY || document.documentElement.scrollTop || 0;
+      document.documentElement.style.overflow = "hidden";
+      document.body.style.position = "fixed";
+      document.body.style.top = -planScrollLockY + "px";
+      document.body.style.left = "0";
+      document.body.style.right = "0";
+    }
     function closePlanOv() {
       $("#planOv").hidden = true;
       document.documentElement.style.overflow = "";
-      document.body.style.overflow = "";
+      document.body.style.position = "";
+      document.body.style.top = "";
+      document.body.style.left = "";
+      document.body.style.right = "";
+      window.scrollTo(0, planScrollLockY);
     }
     $("#planBtn").onclick = () => { openPlan(); };
     $("#planClose").onclick = closePlanOv;
@@ -15401,13 +15418,7 @@ window.addEventListener("scroll", hidePop, true);
       $("#planSub").textContent = "";
       $("#planTimeSlot").innerHTML = "";
       ov.hidden = false;
-      // Verrouille le défilement de la page en dessous : sur iPad/Chrome, un
-      // corps de page défilable derrière l'overlay fait dériver l'en-tête
-      // "figé" (position:fixed) avec la carte pendant le scroll tactile.
-      // html ET body : sur certaines tablettes, bloquer body seul ne suffit
-      // pas à empêcher le scroll de la page derrière l'overlay.
-      document.documentElement.style.overflow = "hidden";
-      document.body.style.overflow = "hidden";
+      lockPlanScroll();
       body.innerHTML = `<div class="plan-msg"><div class="spinner"></div>Loading layout…</div>`;
       if (!icao) { body.innerHTML = `<div class="plan-msg">Load an aerodrome first.</div>`; return; }
 
