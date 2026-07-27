@@ -3397,9 +3397,9 @@ body .stat .k{
       <button class="stationmapbtn" id="stationMapBtn" aria-label="Show route map"
         title="Show route map">🌐</button>
       <button class="routebtn" id="routeBtn">Route</button>
-      <button class="routebtn" id="firMapBtn" aria-label="Carte mondiale des FIR" title="Carte mondiale des FIR">FIR</button>
+      <button class="routebtn" id="firMapBtn" aria-label="World FIR map" title="World FIR map">FIR</button>
       <div class="hdr-actions">
-        <button class="help-btn" id="themeBtn" aria-label="Basculer le thème" title="Mode jour">☀</button>
+        <button class="help-btn" id="themeBtn" aria-label="Toggle theme" title="Day mode">☀</button>
         <button class="help-btn" id="helpBtn" aria-label="Information" title="Information">?</button>
       </div>
     </div>
@@ -3425,7 +3425,7 @@ body .stat .k{
             <rect x="10.1" y="10.6" width="3.8" height="9" rx="1.9" fill="#16232f"/>
           </svg>
         </button>
-        <button class="planbtn" id="planBtn" aria-label="Plan de la plateforme" title="Plan de la plateforme">
+        <button class="planbtn" id="planBtn" aria-label="Aerodrome layout" title="Aerodrome layout">
           <svg viewBox="0 0 34 14" width="54" aria-hidden="true"><use href="#icon-plansign"/></svg>
         </button>
       </div>
@@ -3516,13 +3516,13 @@ body .stat .k{
   <!-- ================= OVERLAY CARTE FIR MONDIALE ================= -->
   <div class="map-ov" id="firOv" hidden>
     <!-- Bouton retour: visible UNIQUEMENT en vue mondiale -->
-    <button class="fir-back-btn" id="firBackBtn" aria-label="Retour à l'application" title="Retour à l'application">←</button>
+    <button class="fir-back-btn" id="firBackBtn" aria-label="Back to app" title="Back to app">←</button>
     <div class="fir-split" id="firSplit">
       <div class="fir-panel" id="firPanel" hidden>
         <div class="fir-header">
           <h2 id="firTitle">---</h2>
           <!-- Bouton fermer: visible en mode détail sur tous les écrans -->
-          <button class="btn-icon fir-panel-close-btn" id="firPanelClose" aria-label="Fermer et revenir à la mappemonde" title="Fermer et revenir à la mappemonde">✕</button>
+          <button class="btn-icon fir-panel-close-btn" id="firPanelClose" aria-label="Close and return to world map" title="Close and return to world map">✕</button>
         </div>
         <div class="fir-summary" id="firSummary"></div>
         <div class="fir-list" id="firList"></div>
@@ -11309,7 +11309,7 @@ function isUS(icao) {
 }
 function renderRunways(icao) {
   const s = RUNWAYS[icao];
-  if (!s) return `<div class="hd-note">Pas de données de piste pour cet aérodrome.</div>`;
+  if (!s) return `<div class="hd-note">No runway data for this aerodrome.</div>`;
   const us = isUS(icao);
   const rows = s.split(";").map(r => {
     const [ends, lenFt] = r.split(":");
@@ -11333,7 +11333,7 @@ function renderInfo(icao) {
   const meta = AIRPORT_META[icao];
   const box = $("#infoBody");
   if (!meta) {
-    box.innerHTML = `<div class="hd-note">Pas de métadonnées disponibles pour ${esc(icao)}.</div>`;
+    box.innerHTML = `<div class="hd-note">No metadata available for ${esc(icao)}.</div>`;
     return;
   }
   const [elevFt, tz, lat, lon] = meta;
@@ -11344,8 +11344,8 @@ function renderInfo(icao) {
     timeZone: tz, hour: "2-digit", minute: "2-digit", hour12: false,
   }).format(now);
   let sunHtml;
-  if (sun.midnightSun) sunHtml = `<div class="hd-note"><b>Soleil de minuit</b> — le soleil ne se couche pas aujourd'hui.</div>`;
-  else if (sun.polarNight) sunHtml = `<div class="hd-note"><b>Nuit polaire</b> — le soleil ne se lève pas aujourd'hui.</div>`;
+  if (sun.midnightSun) sunHtml = `<div class="hd-note"><b>Midnight sun</b> — the sun does not set today.</div>`;
+  else if (sun.polarNight) sunHtml = `<div class="hd-note"><b>Polar night</b> — the sun does not rise today.</div>`;
   else sunHtml = `<div class="hd-row">
       <div class="hd-desc">Sunrise: ${fmtHM(sun.sunrise)}Z</div>
       <div class="hd-desc">Sunset: ${fmtHM(sun.sunset)}Z</div>
@@ -11701,7 +11701,7 @@ function renderInfo(icao) {
     function applyTheme(t) {
       document.body.classList.toggle("light", t === "light");
       const b = $("#themeBtn");
-      if (b) { b.textContent = t === "light" ? "☾" : "☀"; b.title = t === "light" ? "Mode nuit" : "Mode jour"; }
+      if (b) { b.textContent = t === "light" ? "☾" : "☀"; b.title = t === "light" ? "Night mode" : "Day mode"; }
     }
     let theme = localStorage.getItem(THEME_KEY) || "light";
     applyTheme(theme);
