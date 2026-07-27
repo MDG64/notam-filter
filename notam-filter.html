@@ -11755,30 +11755,27 @@ function renderInfo(icao) {
     };
 
     /* ---- fenêtre d'aide (?) ---- */
-    // Un simple overflow:hidden ne suffit pas : si la page est scrollée loin
-    // (NOTAM sol cliqué en bas de liste), certaines tablettes ancrent encore
-    // les éléments position:fixed au sommet du DOCUMENT non scrollé plutôt
-    // qu'au viewport visuel actuel — le bandeau du plan (ICAO + Now/Today/
-    // Tomorrow + croix) s'ouvre alors hors-écran. On fige la page à sa
-    // position de scroll actuelle (position:fixed + top négatif), ce qui
-    // annule ce décalage ; on restaure le scroll à la fermeture.
+    // Un NOTAM sol cliqué en bas de liste laisse la page scrollée loin quand
+    // l'overlay (position:fixed) s'ouvre. Sur iPad/Chrome, geler la page avec
+    // body{position:fixed; top:-Ypx} (la technique "freeze" habituelle) a en
+    // pratique décalé l'overlay lui-même hors-écran vers le haut — au lieu de
+    // rester ancré au vrai viewport, il hérite du décalage du body figé. Pour
+    // écarter toute cette classe de bug, on ramène simplement la page en
+    // scrollY=0 AVANT d'afficher l'overlay (aucun décalage ne peut alors se
+    // propager), puis un overflow:hidden classique bloque le scroll pendant
+    // que le plan est ouvert. Le scroll d'origine est restauré à la fermeture.
     let planScrollLockY = 0;
     function lockPlanScroll() {
       planScrollLockY = window.scrollY || document.documentElement.scrollTop || 0;
+      if (planScrollLockY) window.scrollTo(0, 0);
       document.documentElement.style.overflow = "hidden";
-      document.body.style.position = "fixed";
-      document.body.style.top = -planScrollLockY + "px";
-      document.body.style.left = "0";
-      document.body.style.right = "0";
+      document.body.style.overflow = "hidden";
     }
     function closePlanOv() {
       $("#planOv").hidden = true;
       document.documentElement.style.overflow = "";
-      document.body.style.position = "";
-      document.body.style.top = "";
-      document.body.style.left = "";
-      document.body.style.right = "";
-      window.scrollTo(0, planScrollLockY);
+      document.body.style.overflow = "";
+      if (planScrollLockY) { window.scrollTo(0, planScrollLockY); planScrollLockY = 0; }
     }
     $("#planBtn").onclick = () => { openPlan(); };
     $("#planClose").onclick = closePlanOv;
@@ -14741,12 +14738,21 @@ window.addEventListener("scroll", hidePop, true);
       for (const [s, ns] of plan.TOUCH) if (ns.some(x => x.id === notamId)) out.push(s);
       return out;
     }
-    // emprise (coords projetées) d'un lot de surfaces
-    function planBBoxOf(surfs) {
+    // emprise (coords projetées) d'un lot de surfaces — restreinte à la
+    // PORTION qu'un NOTAM ferme réellement quand c'est un « BTN X AND Y »
+    // (plan.CUTS), jamais le taxiway hôte en entier : sinon centrer sur
+    // « TWY P BTN TWY Z AND TWY M2 » recadre sur tout P, loin du bout que
+    // Z et M2 délimitent (cf. commentaire de planBuild sur ce même cas).
+    function planBBoxOf(surfs, notamId) {
       let a = 1e9, b = 1e9, c = -1e9, d = -1e9;
-      for (const s of surfs) for (const g of s.segs) for (const p of g) {
-        const [x, y] = plan.px(p);
-        if (x < a) a = x; if (x > c) c = x; if (y < b) b = y; if (y > d) d = y;
+      const grow = (x, y) => { if (x < a) a = x; if (x > c) c = x; if (y < b) b = y; if (y > d) d = y; };
+      for (const s of surfs) {
+        const cuts = notamId ? (plan.CUTS.get(s) || []).filter(cc => cc.n.id === notamId) : [];
+        if (cuts.length) {
+          for (const cc of cuts) for (const p of (cc.cut.seg || cc.cut.marks || [])) grow(p[0], p[1]);
+        } else {
+          for (const g of s.segs) for (const p of g) { const [x, y] = plan.px(p); grow(x, y); }
+        }
       }
       if (!(c > a)) { a -= 1e-4; c += 1e-4; }
       if (!(d > b)) { b -= 1e-4; d += 1e-4; }
@@ -14755,9 +14761,9 @@ window.addEventListener("scroll", hidePop, true);
     // centre la vue sur un lot de surfaces (typiquement celles d'un NOTAM
     // cliqué depuis la liste) — assez zoomé pour que ce soit lisible, jamais
     // plus qu'il ne faut pour rester dans le cadre.
-    function planFocus(surfs) {
+    function planFocus(surfs, notamId) {
       const cv = $("#planCv"); if (!cv || !plan || !surfs.length) return;
-      const bx = planBBoxOf(surfs), f = plan.fit;
+      const bx = planBBoxOf(surfs, notamId), f = plan.fit;
       const cx = (bx.x0 + bx.x1) / 2, cy = (bx.y0 + bx.y1) / 2;
       const w = (bx.x1 - bx.x0) * f.s, h = (bx.y1 - bx.y0) * f.s;
       const PAD = 2.6;
@@ -15507,7 +15513,7 @@ window.addEventListener("scroll", hidePop, true);
         if (surfs.length) {
           plan.sel = surfs[0];
           planShowPick(surfs[0]);
-          planFocus(surfs);
+          planFocus(surfs, focusNotam.id);
         }
       }
     }
