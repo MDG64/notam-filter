@@ -14001,27 +14001,48 @@ window.addEventListener("scroll", hidePop, true);
        n'est apparu dans les 208 NOTAMs réels observés. */
     const CNL_TEXT = ["NOTAM CNL", "NOTAM CANCELLED", "NOTAM WITHDRAWN", "NOTAM VOID"];
     const RESUME_TEXT = ["RESUMED NORMAL", "RE-OPENED", "REOPENED", "BACK TO NORMAL", "NORMAL OPERATION"];
+    // Convention US/Europe très fréquente : un NOTAM qui clôt une fermeture se
+    // borne souvent à « TWY W35 W40 OK » — le(s) ref(s) suivi(s) du seul mot OK,
+    // sans aucune des formules de RESUME_TEXT. Ancré en fin de texte (\s*$) pour
+    // ne jamais matcher un "OK" logé au milieu d'un autre mot ou d'une phrase.
+    const RESUME_OK_RE = /\bOK\.?\s*$/;
     function isResumption(n) {
       const T = (n.e || "").toUpperCase();
       if (CNL_TEXT.some(k => T.includes(k))) return true;
       if (/(?:^|\s)CNL\.?(?:\s|$)/.test(T)) return true;         // "... CNL." isolé, ex. événement annulé
-      if (RESUME_TEXT.some(k => T.includes(k)))
+      if (RESUME_TEXT.some(k => T.includes(k)) || RESUME_OK_RE.test(T))
         return !CRITICAL_TEXT.some(k => T.includes(k));
       return false;
     }
     /* Une fermeture (CLSD, U/S…) interdit tout accès : rouge plein. Une
        RESTRICTION (limite d'envergure, interdiction à certains types d'appareil)
        laisse la surface utilisable pour d'autres : ambre hachuré, pas rouge.
-       Détection sur le TEXTE seulement, jamais sur le Q-code seul — un texte
-       ambigu reste fermeture par défaut (le choix le plus sûr), seule une
-       formulation de restriction explicite fait basculer en ambre. Un mot de
-       fermeture explicite garde toujours la priorité. */
+       Détection sur le TEXTE seulement, jamais sur le Q-code seul. Un mot de
+       fermeture explicite garde toujours la priorité ; à défaut, le texte
+       ambigu (aucun mot de fermeture NI de restriction reconnu) retombe en
+       ambre « à vérifier » — voir le fallback en bas de fonction. */
     const RESTRICT_TEXT = ["PROHIBITED TO", "RESTRICTION", "LIMITED TO", "LTD TO",
-      "WINGSPAN GREATER", "WINGSPAN ABOVE", "WINGSPAN OVER", "NOT AVBL FOR ACFT", "ACFT TYPE"];
+      "WINGSPAN GREATER", "WINGSPAN ABOVE", "WINGSPAN OVER", "WINGSPAN EXCEEDS",
+      "WINGSPAN HIGHER THAN", "NOT AVBL FOR ACFT", "ACFT TYPE"];
     function planKind(n) {
+      // Une levée (NOTAM CNL/VOID, reprise normale) n'est pas juste « rien à
+      // peindre » : c'est une confirmation positive que la surface est de
+      // nouveau utilisable, donc un signal vert — pas la couleur de fond
+      // neutre qu'aurait un taxiway jamais mentionné.
+      if (isResumption(n)) return "reopened";
       const T = (n.e || "").toUpperCase();
-      if (CRITICAL_TEXT.some(k => T.includes(k))) return "closed";
+      // « CLOSURE » (nom) apparaît dans des NOTAM réels ("CLOSURE OF TAXIWAYS
+      // ...") sans jamais contenir littéralement CLSD/CLOSED — vérifié le
+      // 2026-07-27 sur LFBO A4912/26, qui repeignait à tort en ambre.
+      if (CRITICAL_TEXT.some(k => T.includes(k)) || T.includes("CLOSURE")) return "closed";
       if (RESTRICT_TEXT.some(k => T.includes(k))) return "restricted";
+      // PROHIBITED sans condition de type/envergure (déjà captée juste au-dessus
+      // par RESTRICT_TEXT) est une interdiction TOTALE, pas une restriction
+      // partielle : rouge. Cas réel LFPO A4641/26 « LDG RWY 20 PROHIBITED DUE TO
+      // OBST » (aucune condition -> rouge) vs A4935/26 « ...PROHIBITED FOR ACFT
+      // WHICH WINGSPAN EXCEEDS 36M » (condition -> ambre, capté au-dessus).
+      // L'ordre compte : ce test ne s'exécute qu'après l'échec de RESTRICT_TEXT.
+      if (T.includes("PROHIBITED")) return "closed";
       // Fallback : un NOTAM « sol » qui référence une surface SANS mot de fermeture
       // (CLSD/U/S…) NI de restriction n'est PAS une fermeture — panneau ou marquage
       // manquant, éclairage, minima, obstacle « près de RWY xx »… On surligne en
@@ -14031,7 +14052,8 @@ window.addEventListener("scroll", hidePop, true);
       return "restricted";
     }
     function paintsGround(n) {
-      if (isResumption(n)) return false;
+      // Une levée touche bien la surface (elle doit s'afficher en vert, cf.
+      // planKind) — elle n'est plus écartée ici comme un non-événement.
       const qc = categoriesFromQcode(n.qcode);
       if (qc.size) return qc.has("sol");
       return n.categories.includes("sol");
@@ -14059,13 +14081,16 @@ window.addEventListener("scroll", hidePop, true);
        taxiways, est donc la plus CLAIRE en nuit et la plus FONCÉE en jour.
        Le halo lumineux, lui, n'a de sens que sur fond sombre : sur du blanc
        il ne fait que salir la couleur.
-       Le plan n'a QU'UNE couleur de surlignage : le rouge « fermé ». La sévérité
-       ne colore pas le plan — une surface est concernée ou elle ne l'est pas.
-       La nuance (critique/info) vit dans la liste, pas sur la piste. */
+       Le plan a deux couleurs de surlignage franches : rouge « fermé » et vert
+       « réouvert » (NOTAM CNL/VOID, reprise normale). La sévérité ne colore pas
+       le plan — une surface est concernée ou elle ne l'est pas. La nuance
+       (critique/info) vit dans la liste, pas sur la piste. Vert reprend les
+       teintes --green déjà établies ailleurs dans l'app (cohérence visuelle). */
     const PLAN_THEME = {
       dark: {
         closed: "#ff5d6c",
         restricted: "#f6b23e",
+        reopened: "#34d39a",
 
         // Mode nuit : chaussées grises, suffisamment contrastées avec le fond.
         base: {
@@ -14100,6 +14125,7 @@ window.addEventListener("scroll", hidePop, true);
       light: {
         closed: "#e5484d",
         restricted: "#cf7a12",
+        reopened: "#12936a",
 
         // Mode jour : palette proche de la carte de référence.
         base: {
@@ -14579,11 +14605,16 @@ window.addEventListener("scroll", hidePop, true);
          Tout le reste — restriction de texte, fermeture partielle dans la
          journée, simple avis — n'est qu'un NOM en ambre (voir planDraw) :
          c'est le temps qui choisit entre rouge et ambre, mais seulement parmi
-         ce que le texte reconnaît déjà comme une fermeture. */
+         ce que le texte reconnaît déjà comme une fermeture.
+         Le vert (reprise/annulation) ne s'affiche que si RIEN d'autre ne ferme
+         ni ne restreint la surface : une levée ne doit jamais masquer une
+         fermeture ou restriction par ailleurs active sur le même tronçon. */
       const closures = act.filter(n => planKind(n) === "closed");
       const full = closures.length > 0 && (!planTWin || closures.some(n => planFullyCovers(n, planTWin)));
-      const kind = full ? "closed" : "restricted";
-      return { state: full ? "instant" : "span", kind, col: planPal()[kind], ns: act };
+      if (full) return { state: "instant", kind: "closed", col: planPal().closed, ns: act };
+      const settling = act.filter(n => planKind(n) !== "reopened");
+      if (!settling.length) return { state: "instant", kind: "reopened", col: planPal().reopened, ns: act };
+      return { state: "span", kind: "restricted", col: planPal().restricted, ns: act };
     }
 
     /* ---------- rendu ---------- */
@@ -15024,13 +15055,14 @@ window.addEventListener("scroll", hidePop, true);
       const drawn = S.map(s => ({ s, st: planState(s) })).filter(x => x.st);
       for (const { s, st } of drawn) {
         const dim = st.state === "span", col = st.col;
-        /* Seule une FERMETURE (couvre toute la période affichée) peint la
-           géométrie. Une restriction — une partie de la journée seulement — ne
-           colore que le NOM de l'élément : les boucles d'étiquettes plus bas
-           lisent st.col/st.state indépendamment de ce qui est peint ici, donc
-           le nom passe en ambre sans qu'on trace le moindre trait. Peindre en
-           plus un trait/hachure/point pour « quelques heures » sur-alertait
-           pour un signal que le nom amber suffit à donner. */
+        /* Fermeture ET réouverture peignent la géométrie (état "instant",
+           trait plein) — ce sont des faits établis, pas des nuances. Une
+           restriction — une partie de la journée seulement — ne colore que le
+           NOM de l'élément : les boucles d'étiquettes plus bas lisent
+           st.col/st.state indépendamment de ce qui est peint ici, donc le nom
+           passe en ambre sans qu'on trace le moindre trait. Peindre en plus un
+           trait/hachure/point pour « quelques heures » sur-alertait pour un
+           signal que le nom amber suffit à donner. */
         if (s.t === "std") {
           if (st.kind === "restricted") continue;    // nom en ambre seul, rien à tracer
           for (const g of s.segs) {
