@@ -3785,15 +3785,24 @@ body .stat .k{
         "TACAN", "VORTAC", "MARKER", "RNAV", "RNP", "GLS", "LPV", "LNAV", "VNAV", "IAP", "APCH",
         "APPROACH", "STAR", "MISSED", "MINIMA", "MINIMUM", "RVR", "PAPI", "VASI",
         "APCH LGT", "RWY LGT", "RUNWAY LIGHT", "RCLL", "REDL", "HOLDING", "TRANSITION",
-        "OBST", "OBSTACLE", "CRANE", "BIRD"],
+        "OBST", "OBSTACLE", "CRANE", "BIRD",
+        "WINDCONE", "WIND CONE", "WDI", "WIND DIRECTION INDICATOR"],
       // BIRD (concentration/activité aviaire) : gêne décollage ET approche à la
       // fois — validé le 2026-07-26 (revue LFPO, cas test), d'où le mot-clé
       // dans les deux listes plutôt qu'une seule.
-      depart: ["SID", "DEPARTURE", "CLB GRADIENT", "CLIMB GRADIENT", "INITIAL CLIMB", "NADP", "BIRD"],
+      // Même raison pour la manche à air (WINDCONE/WDI) : elle donne le vent de
+      // surface, qu'on décolle ou qu'on atterrisse. Le LLM ne retenait
+      // qu'« approche » — corrigé par la revue du 2026-07-28 (KMIA).
+      depart: ["SID", "DEPARTURE", "CLB GRADIENT", "CLIMB GRADIENT", "INITIAL CLIMB", "NADP", "BIRD",
+        "WINDCONE", "WIND CONE", "WDI", "WIND DIRECTION INDICATOR"],
       sol: ["TWY", "TAXIWAY", "APRON", "STAND", "PARKING", "RAMP", "STOPWAY", "SWY", "SHOULDER",
         "MOVEMENT AREA", "STOP BAR", "STOPBAR", "WIP", "WORK IN PROGRESS", "CONSTRUCTION",
         "MAINT", "GRASS CUTTING", "DE-ICING", "DEICING", "PUSHBACK", "DOCKING",
-        "BRAKING ACTION", "FRICTION", "CONTAMINATED", "SNOW", "SLUSH", "FOD"],
+        "BRAKING ACTION", "FRICTION", "CONTAMINATED", "SNOW", "SLUSH", "FOD",
+        // Essais moteur au point fixe et phases BASH (Bird Aircraft Strike
+        // Hazard) des bases militaires US : deux régimes d'activité qui se
+        // gèrent au sol, sur les aires. Revue du 2026-07-28 (KSKA).
+        "ENGINE RUN", "ENG RUN", "BASH"],
     };
     const CRITICAL_TEXT = ["CLSD", "CLOSED", "U/S", "UNSERVICEABLE", "UNSERV", "NOT AVBL",
       "NOT AVAILABLE", "UNSAFE", "WITHDRAWN"];
@@ -11540,10 +11549,18 @@ function renderInfo(icao) {
     // Tout échec est ignoré : jamais d'erreur visible, l'app est inchangée.
     const classifySent = new Set();    // textes déjà soumis (évite de redemander)
     let proposeSeq = 0;
+    // NOTAM d'annulation dont l'item E) ne fait que recopier l'en-tête :
+    // « E) L0011/26 NOTAMC L0010/26 A) ETAR ». Les USA en produisent beaucoup, et
+    // ils n'ont aucun contenu opérationnel — le LLM ne peut qu'inventer une
+    // phase de vol à partir d'un numéro de série. La revue du 2026-07-28 en
+    // comptait 5 sur 9 propositions de terrain, tous tranchés « null » — plus de
+    // la moitié de la file de relecture, pour rien.
+    // Tester `n.e` seul ne suffit pas : il n'est justement pas vide.
+    const CANCEL_ECHO_RE = /^\s*\(?[A-Z]?\d{3,4}\/\d{2}\s+NOTAMC\b/;
     async function proposeUnclassified() {
       if (!navigator.onLine || !BACKEND_URL) return;
       const seq = ++proposeSeq;
-      const todo = current.filter(n => n.source === "unclassified" && n.e);
+      const todo = current.filter(n => n.source === "unclassified" && n.e && !CANCEL_ECHO_RE.test(n.e));
       if (!todo.length) return;
 
       for (const n of todo.slice(0, 12)) {          // borne : jamais de rafale
