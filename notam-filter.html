@@ -13895,7 +13895,7 @@ window.addEventListener("scroll", hidePop, true);
        ============================================================ */
     const LAYOUT_URL = "./layouts/";
     const layoutCache = new Map();          // icao -> layout | null
-    let planIndex = null;                   // { ICAO: 2|1 }  2 = twy nommés, 1 = pistes seules
+    let planIndex = null;                   // { ICAO: 3|2|1 } 3 = + postes et bâtiments, 2 = twy nommés, 1 = pistes seules
 
     // L'index dit QUI a un plan, avant tout clic. Sans lui le bouton mentirait
     // sur les terrains sans géométrie : un 404 n'est pas une réponse à un pilote.
@@ -15468,9 +15468,17 @@ window.addEventListener("scroll", hidePop, true);
       await loadPlanIndex();
       if (currentIcao !== icao) return;
       btn.hidden = !hasPlan(icao);
-      btn.title = planIndex[icao] === 1
-        ? "Layout — runways only, taxiways unnamed in OpenStreetMap"
-        : "Aerodrome layout";
+      /* Le bouton annonce ce qu'il contient. La couverture OpenStreetMap va
+         du terrain entièrement cartographié à la piste nue : promettre
+         « aerodrome layout » partout, c'est décevoir une fois sur deux. Un
+         schéma de piste seule reste utile — une fermeture de piste est le
+         NOTAM le plus critique — à condition de ne pas l'avoir annoncé
+         comme autre chose. */
+      btn.title = {
+        3: "Aerodrome layout — runways, named taxiways, stands and buildings",
+        2: "Aerodrome layout — runways and named taxiways; stands and buildings not mapped",
+        1: "Runways only — taxiways are not named in OpenStreetMap",
+      }[planIndex[icao]] || "Aerodrome layout";
     }
 
     async function openPlan(focusNotam) {
