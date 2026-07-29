@@ -1,0 +1,107 @@
+{
+  "source": "revue humaine du 2026-07-28",
+  "total": 9,
+  "cas": [
+    {
+      "hash": "e92b5f956a97e190",
+      "flux": "aerodrome",
+      "famille": "T1",
+      "sujet": "LFPO",
+      "attendu": [
+        "depart",
+        "approche"
+      ],
+      "decisionLLM": "approche",
+      "texte": "A1234/26 NOTAMN Q) LFFF/QFAXX/IV/NBO/A/000/999/4843N00222E005 A) LFPO B) 2607260800 C) 2608012359 E) BIRD CONCENTRATION IN THE VICINITY OF THE AERODROME, EXERCISE CAUTION DURING TAKE-OFF AND LANDING."
+    },
+    {
+      "hash": "fa7c1404e006b88f",
+      "flux": "aerodrome",
+      "famille": "T1",
+      "sujet": "KMIA",
+      "attendu": [
+        "depart",
+        "approche"
+      ],
+      "decisionLLM": "approche",
+      "texte": "07/102 NOTAMN \r\nQ) KZMA//V/M/A/000/999/2547N08017W005 \r\nA) KMIA \r\nB) 2607071244 \r\nC) 2607312359 \r\n\r\nE) AD AP WINDCONE U/S"
+    },
+    {
+      "hash": "1b71666fd797da3e",
+      "flux": "aerodrome",
+      "famille": "T2",
+      "sujet": "ETAR",
+      "attendu": [
+        "null"
+      ],
+      "decisionLLM": "null",
+      "texte": "L0011/26 NOTAMC L0010/26\nA) ETAR\nE) L0011/26 NOTAMC L0010/26\nA) ETAR"
+    },
+    {
+      "hash": "548ff4e0fd103969",
+      "flux": "aerodrome",
+      "famille": "T2",
+      "sujet": "KTUS",
+      "attendu": [
+        "null"
+      ],
+      "decisionLLM": "null",
+      "texte": "M0023/26 NOTAMC M0022/26\nA) KTUS\nE) M0023/26 NOTAMC M0022/26\nA) KTUS"
+    },
+    {
+      "hash": "540ad2c8765ccf0a",
+      "flux": "aerodrome",
+      "famille": "T2",
+      "sujet": "KSKA",
+      "attendu": [
+        "null"
+      ],
+      "decisionLLM": "null",
+      "texte": "M0663/26 NOTAMC M0662/26\nA) KSKA\nE) M0663/26 NOTAMC M0662/26\nA) KSKA"
+    },
+    {
+      "hash": "465a3c0af6545045",
+      "flux": "aerodrome",
+      "famille": "T3",
+      "sujet": "KSKA",
+      "attendu": [
+        "sol"
+      ],
+      "decisionLLM": "sol",
+      "texte": "M0624/26 NOTAMN \r\nQ) ZSE/QXXXX/IV/NBO/A/000/999/4736N11739W005 \r\nA) KSKA \r\nB) 2606252303 \r\nC) 2608282359 \r\nE) BASH PHASE I IN EFFECT"
+    },
+    {
+      "hash": "6b60c7466a8cd4d1",
+      "flux": "aerodrome",
+      "famille": "T3",
+      "sujet": "KSKA",
+      "attendu": [
+        "sol"
+      ],
+      "decisionLLM": "sol",
+      "texte": "M0533/26 NOTAMN \r\nQ) ZSE/QXXXX/IV/NBO/A/000/999/4736N11739W005 \r\nA) KSKA \r\nB) 2605301828 \r\nC) 2608272359 \r\nE) IDLE ONLY ENGINE RUN OPERATIONS APPROVED ON SPOTS 25, 26, 27, & 28"
+    },
+    {
+      "hash": "4e29fb0ae3763ceb",
+      "flux": "aerodrome",
+      "famille": "T3",
+      "sujet": "KSKA",
+      "attendu": [
+        "null"
+      ],
+      "decisionLLM": "sol",
+      "texte": "M0661/26 NOTAMC M0660/26\nA) KSKA\nE) M0661/26 NOTAMC M0660/26\nA) KSKA"
+    },
+    {
+      "hash": "f8e9bdf7f826f25a",
+      "flux": "aerodrome",
+      "famille": "T3",
+      "sujet": "KSKA",
+      "attendu": [
+        "null"
+      ],
+      "decisionLLM": "sol",
+      "texte": "M0665/26 NOTAMC M0477/26\nA) KSKA\nE) M0665/26 NOTAMC M0477/26\nA) KSKA"
+    }
+  ]
+}
