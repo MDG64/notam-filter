@@ -15468,16 +15468,17 @@ window.addEventListener("scroll", hidePop, true);
       await loadPlanIndex();
       if (currentIcao !== icao) return;
       btn.hidden = !hasPlan(icao);
-      /* Le bouton annonce ce qu'il contient. La couverture OpenStreetMap va
-         du terrain entièrement cartographié à la piste nue : promettre
-         « aerodrome layout » partout, c'est décevoir une fois sur deux. Un
-         schéma de piste seule reste utile — une fermeture de piste est le
-         NOTAM le plus critique — à condition de ne pas l'avoir annoncé
-         comme autre chose. */
+      /* Le bouton annonce ce qu'il contient. La couverture va du terrain
+         entièrement cartographié à la piste nue : promettre « aerodrome
+         layout » partout, c'est décevoir une fois sur deux. Un schéma de
+         piste seule reste utile — une fermeture de piste est le NOTAM le
+         plus critique — à condition de ne pas l'avoir annoncé comme autre
+         chose. La source des données est citée dans le panneau d'aide, pas
+         ici : une infobulle doit répondre « qu'est-ce que je vais voir ». */
       btn.title = {
         3: "Aerodrome layout — runways, named taxiways, stands and buildings",
-        2: "Aerodrome layout — runways and named taxiways; stands and buildings not mapped",
-        1: "Runways only — taxiways are not named in OpenStreetMap",
+        2: "Aerodrome layout — runways and named taxiways; no stands or buildings available",
+        1: "Runways only — taxiway names not available",
       }[planIndex[icao]] || "Aerodrome layout";
     }
 
@@ -15496,7 +15497,7 @@ window.addEventListener("scroll", hidePop, true);
       if ($("#planOv").hidden || currentIcao !== icao) return;   // fermé ou terrain changé entre-temps
       if (!layout) {
         body.innerHTML = `<div class="plan-msg">No layout available for <b>${esc(icao)}</b>.<br>
-          OpenStreetMap has no mapped surfaces for this aerodrome.</div>`;
+          No mapped surfaces for this aerodrome.</div>`;
         return;
       }
       plan = planBuild(layout, current);
