@@ -14263,7 +14263,13 @@ window.addEventListener("scroll", hidePop, true);
         off: "#505050",
         offLabel: "#202020",
         chipOff: "rgba(255,255,255,.96)",
-        halo: "rgba(255,255,255,.92)",
+        /* Pas de halo en thème clair : le liseré blanc entourait chaque nom de
+           piste et de taxiway et leur donnait un air d'autocollant, là où une
+           vraie carte de plateforme pose le texte à plat sur la chaussée.
+           Le thème sombre garde le sien, qui est NOIR : son texte est clair
+           (#d4dce2) sur une chaussée sombre (#777d82), soit 2,9:1 — sans le
+           halo il devient illisible. Ce n'est pas le liseré blanc visé ici. */
+        halo: null,
         glow: false
       }
     };
@@ -15022,13 +15028,17 @@ window.addEventListener("scroll", hidePop, true);
       planBoxes.push({ x: bx, y: by, w, h });
       ctx.save();
       ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.lineJoin = "round";
-      /* Texte posé à même la carte, avec halo — comme une vraie carte AD 2 :
-         noir (teinte neutre du thème) au repos, rouge/ambre dès qu'un NOTAM
-         touche l'élément. Même règle pour les taxiways que pour le reste. */
+      /* Texte posé à même la carte — comme une vraie carte AD 2 : noir (teinte
+         neutre du thème) au repos, rouge/ambre dès qu'un NOTAM touche
+         l'élément. Même règle pour les taxiways que pour le reste.
+         Halo seulement si le thème en définit un (cf. PLAN_THEME) : le thème
+         clair n'en a plus. */
       const accent = (on || pend) ? col : P.offLabel;
-      ctx.strokeStyle = P.halo; ctx.lineWidth = (3.6 + 0.8 * (LS - 1)) * planDPR;
-      ctx.miterLimit = 2;
-      ctx.strokeText(text, x, y + 0.5 * planDPR);
+      if (P.halo) {
+        ctx.strokeStyle = P.halo; ctx.lineWidth = (3.6 + 0.8 * (LS - 1)) * planDPR;
+        ctx.miterLimit = 2;
+        ctx.strokeText(text, x, y + 0.5 * planDPR);
+      }
       ctx.fillStyle = accent;
       ctx.fillText(text, x, y + 0.5 * planDPR);
       ctx.restore();
