@@ -14263,7 +14263,13 @@ window.addEventListener("scroll", hidePop, true);
         off: "#505050",
         offLabel: "#202020",
         chipOff: "rgba(255,255,255,.96)",
-        halo: "rgba(255,255,255,.92)",
+        /* Pas de halo en thème clair : le liseré blanc entourait chaque nom de
+           piste et de taxiway et leur donnait un air d'autocollant, là où une
+           vraie carte de plateforme pose le texte à plat sur la chaussée.
+           Le thème sombre garde le sien, qui est NOIR : son texte est clair
+           (#d4dce2) sur une chaussée sombre (#777d82), soit 2,9:1 — sans le
+           halo il devient illisible. Ce n'est pas le liseré blanc visé ici. */
+        halo: null,
         glow: false
       }
     };
@@ -14277,6 +14283,11 @@ window.addEventListener("scroll", hidePop, true);
     };
 
     const PLAN_CENTER_W = 0.72;
+    /* Étiquettes taxiway/piste : grotesque gras (Helvetica/Arial), la police des
+       vraies cartes de plateforme — pas le monospace de l'interface. Familles
+       système : rien à télécharger, même rendu sur Windows (Arial) et macOS
+       (Helvetica). */
+    const PLAN_LBL_FONT = "'Helvetica Neue',Helvetica,Arial,sans-serif";
     // Les couleurs des surfaces non surlignées vivent dans PLAN_THEME.base,
     // par thème (voir plus bas). La trame doit rester lisible sans jamais
     // rivaliser avec le surlignage : c'est le décor, pas le message.
@@ -14415,61 +14426,234 @@ window.addEventListener("scroll", hidePop, true);
       /* Une piste porte DEUX noms. OSM l'indexe sous la paire (« 14L/32R »),
          un NOTAM la cite indifféremment par la paire ou par un seul QFU
          (« RWY 32R U/S »). On indexe donc sous les trois clés, sinon une piste
-         fermée reste grise — l'erreur la plus grave que ce plan puisse faire. */
+         fermée reste grise — l'erreur la plus grave que ce plan puisse faire.
+         Encore faut-il RECONNAÎTRE la paire. OSM ne l'écrit pas d'une seule
+         façon : « 14L/32R », mais aussi « 18L-36R » (KMCO), « 08;26 » (KTUL),
+         « 6-24 » (KABE), et sans le zéro de tête (« 4R/22L » à KBOS, « 4R »
+         seul à KMDW). Le NOTAM, lui, dit toujours « RWY 04R/22L » : le filet
+         de refsFromNotam() n'extrait que des QFU à DEUX chiffres. Sans
+         normaliser le séparateur ET le zéro de tête, 193 pistes US sur 2182
+         (152 terrains — dont KMCO, où les QUATRE pistes sont muettes) ne sont
+         atteintes par aucun NOTAM. On garde la ref brute comme clé (un NOTAM
+         peut la citer mot pour mot), puis on ajoute chaque QFU normalisé, et
+         seulement s'il est canonique : ça écarte d'office les faux QFU d'OSM
+         (« X/X », « NE/SW », « DIRT RUNWAY », hydrobase « 08W/26W », planeur
+         « 11G/29G », cap vrai militaire « 164/344 ») qu'aucun NOTAM ne cite —
+         les indexer ne créerait que des clés mortes. */
       const INDEX = new Map();
       const idx = (k, s) => { if (!INDEX.has(k)) INDEX.set(k, []); if (!INDEX.get(k).includes(s)) INDEX.get(k).push(s); };
+      const QFU = /^\d{2}[LRC]?$/;
       for (const s of SURF) if (s.r) {
         idx(s.t + ":" + s.r, s);
-        if (s.t === "rwy" && s.r.includes("/"))
-          for (const end of s.r.split("/")) { const e = end.trim(); if (e) idx("rwy:" + e, s); }
+        if (s.t === "rwy")
+          for (const end of s.r.split(/[/;-]/)) {
+            const e = end.trim().replace(/^(\d)(?=[LRC]?$)/, "0$1");
+            if (QFU.test(e)) idx("rwy:" + e, s);
+          }
       }
       const lat0 = layout.arp[0], lon0 = layout.arp[1];
       const KX = Math.cos(lat0 * Math.PI / 180);
       const px = ([la, lo]) => [(lo - lon0) * KX, -(la - lat0)];
 
-      /* Ligne de guidage d'un poste : on s'assure que son DERNIER point est
-         toujours l'extrémité côté bâtiment — celle qui sert à poser le nom —
-         jamais celle côté taxiway. Le côté taxiway se repère par PROXIMITÉ
-         (pas coïncidence exacte : deux lignes digitalisées séparément ne
-         partagent presque jamais un nœud bit-à-bit) avec le réseau de
-         circulation (taxiway/aire de trafic) OU avec une AUTRE ligne de
-         poste — plusieurs postes convergent souvent vers un même point de
-         branche sans passer par un taxiway nommé (cas U41/U42/V10/V12 à
-         LFBO, qui ne touchent aucun taxiway mais se rejoignent entre eux).
-         L'extrémité la plus proche de l'un de ces deux réseaux est le côté
-         taxiway ; l'autre, isolée, est le nez de l'avion.
-         Fait une seule fois au chargement (coût O(postes × réseau)), pas à
-         chaque image. */
+      /* Ancre du nom d'un poste : le point où le NEZ de l'avion s'arrête. On la
+         calcule une fois au chargement et on la range dans s.lab = { p, q } —
+         p le point d'ancrage, q son voisin sur la ligne, qui donne la
+         direction. Trois cas, dans cet ordre :
+         · un seul bout de la ligne touche le réseau de circulation : l'AUTRE
+           bout est le nez. C'est le cas courant (60 % des postes) ;
+         · aucun bout ne le touche : on garde le plus éloigné du réseau ;
+         · les DEUX bouts le touchent — poste TRAVERSANT, entrée par un
+           taxilane et sortie par un autre (33 postes sur 121 à LEMG, 16 sur
+           107 à LEVC) : il n'existe alors aucun bout libre. On prend le point
+           INTÉRIEUR le plus éloigné du réseau, le fond de l'impasse, là où le
+           nez s'arrête. C'est ce cas que l'ancienne règle (« le bout le plus
+           loin du réseau ») tranchait à la pièce : les deux bouts étant à
+           distance 0, elle gardait l'ordre de digitalisation d'OSM et posait
+           le nom au hasard d'un côté ou de l'autre, à 50 m du poste, en pleine
+           aire de manœuvre.
+         La proximité, pas la coïncidence : deux lignes digitalisées séparément
+         ne partagent presque jamais un nœud bit-à-bit.
+         Le réseau de référence est STRICTEMENT taxiway + piste. Y mêler les
+         polygones d'aire de trafic (leur contour longe justement le nez des
+         avions) ou les lignes des autres postes fait tomber le bon côté de
+         92 % à 85 % sur les 921 postes au contact d'un bâtiment de 8 grands
+         terrains — 64 % au lieu de 94 % à EDDF, 87 % au lieu de 96 % à LEBL.
+         On cherche sur TOUS les segments de la ref, jamais sur le seul « plus
+         fourni en points » : à LEMG les postes 461-464 sont un Y (deux
+         tronçons de 20 m + une voie d'accès de 97 m) et c'est la voie d'accès
+         qui gagnait — le nom se posait à 97 m du poste.
+         Grille de 40 m pour le plus proche voisin : en force brute, ZSPD
+         demanderait 64 M de distances au chargement. */
       const stdSurf = SURF.filter(s => s.t === "std");
-      const netXY = [];
+      const CELL = 40 / 111320;            // 40 m, en degrés (px() travaille en degrés)
+      const ON_NET = 2.5 / 111320;         // « ce bout touche le réseau »
+      const netGrid = new Map();
+      let gx0 = Infinity, gx1 = -Infinity, gy0 = Infinity, gy1 = -Infinity;
       for (const s of SURF) {
-        if (s.t !== "twy" && s.t !== "apr") continue;
-        for (const g of s.segs) for (const p of g) netXY.push(px(p));
+        if (s.t !== "twy" && s.t !== "rwy") continue;
+        for (const g of s.segs) for (const p of g) {
+          const q = px(p), ci = Math.floor(q[0] / CELL), cj = Math.floor(q[1] / CELL);
+          let b = netGrid.get(ci + ":" + cj); if (!b) netGrid.set(ci + ":" + cj, b = []); b.push(q);
+          if (ci < gx0) gx0 = ci; if (ci > gx1) gx1 = ci;
+          if (cj < gy0) gy0 = cj; if (cj > gy1) gy1 = cj;
+        }
       }
-      const stdXY = [];
-      const stdLines = [];   // { g, start, end } — plage de stdXY qui lui appartient
-      for (const s of stdSurf) for (const g of s.segs) {
-        const start = stdXY.length;
-        for (const p of g) stdXY.push(px(p));
-        stdLines.push({ g, start, end: stdXY.length });
-      }
-      const nearestSq = (pt, ownStart, ownEnd) => {
+      /* Distance au réseau, par anneaux de cellules : on s'arrête dès qu'aucun
+         anneau plus lointain ne peut faire mieux — et au plus tard quand
+         l'anneau a dépassé toute la grille, sinon un terrain cartographié SANS
+         aucun taxiway (aucun aujourd'hui sur 3 576, mais les plans sont
+         régénérés depuis OSM) ferait tourner la recherche à vide sur des
+         centaines de milliers de cellules par point, à l'ouverture du plan. */
+      const netNear = netGrid.size ? ll => {
+        const p = px(ll), cx = Math.floor(p[0] / CELL), cy = Math.floor(p[1] / CELL);
+        const rMax = Math.max(cx - gx0, gx1 - cx, cy - gy0, gy1 - cy) + 1;
         let best = Infinity;
-        for (const q of netXY) {
-          const dx = pt[0] - q[0], dy = pt[1] - q[1], d = dx * dx + dy * dy;
-          if (d < best) best = d;
+        for (let r = 0; r <= rMax; r++) {
+          for (let i = cx - r; i <= cx + r; i++) for (let j = cy - r; j <= cy + r; j++) {
+            if (r && Math.abs(i - cx) !== r && Math.abs(j - cy) !== r) continue;
+            const b = netGrid.get(i + ":" + j); if (!b) continue;
+            for (const q of b) {
+              const dx = p[0] - q[0], dy = p[1] - q[1], d = dx * dx + dy * dy;
+              if (d < best) best = d;
+            }
+          }
+          const reach = r * CELL;
+          if (best <= reach * reach) break;
         }
-        for (let i = 0; i < stdXY.length; i++) {
-          if (i >= ownStart && i < ownEnd) continue;   // ignore sa PROPRE ligne
-          const q = stdXY[i], dx = pt[0] - q[0], dy = pt[1] - q[1], d = dx * dx + dy * dy;
-          if (d < best) best = d;
+        return Math.sqrt(best);
+      } : () => Infinity;
+      for (const s of stdSurf) {
+        const lines = s.segs.filter(g => g.length >= 2);
+        if (!lines.length) { s.lab = null; continue; }   // nœud OSM nu : second passage
+        let best = null;
+        for (const g of lines) {
+          const dA = netNear(g[0]), dB = netNear(g[g.length - 1]);
+          const tA = dA <= ON_NET, tB = dB <= ON_NET;
+          let i, d;
+          if (tA !== tB) { i = tA ? g.length - 1 : 0; d = tA ? dB : dA; }
+          else if (!tA) { i = dB > dA ? g.length - 1 : 0; d = Math.max(dA, dB); }
+          else {                                      // traversant : fond de l'impasse
+            i = 0; d = -1;
+            for (let k = 0; k < g.length; k++) { const dk = netNear(g[k]); if (dk > d) { d = dk; i = k; } }
+          }
+          if (!best || d > best.d) best = { d, g, i };
         }
-        return best;
+        /* La direction doit être celle de la ligne À cet endroit, donc le
+           voisin le PLUS PROCHE de l'ancre — et cherché sur TOUS les segments
+           qui passent par elle, pas seulement celui qui a gagné. Les sommets
+           OSM sont espacés très irrégulièrement, et un poste en Y partage son
+           sommet central entre plusieurs segments : à LEMG, le poste 464 ne
+           voyait que le voisin situé 79 m plus haut sur la voie d'accès et
+           s'alignait sur elle au lieu de son propre tronçon de 20 m. */
+        const anchor = best.g[best.i];
+        const a0 = px(anchor);
+        let q = null, qd = Infinity, far = null;
+        for (const g of s.segs) for (let k = 0; k < g.length; k++) {
+          if (g[k][0] !== anchor[0] || g[k][1] !== anchor[1]) continue;
+          for (const nb of [g[k - 1], g[k + 1]]) {
+            if (!nb) continue;
+            const c = px(nb), d = (a0[0] - c[0]) ** 2 + (a0[1] - c[1]) ** 2;
+            /* far : le bout du segment situé DERRIÈRE q. Il borne le recul de
+               l'anti-chevauchement — sans borne, le pas (exprimé en pixels
+               écran) ignore la longueur de la ligne et le libellé finit par
+               reculer au-delà d'elle, jusqu'à 186 m plus loin sur les postes
+               courts de LEMG : le défaut même qu'on corrige ici. */
+            if (d > 0 && d < qd) { qd = d; q = nb; far = nb === g[k - 1] ? g[0] : g[g.length - 1]; }
+          }
+        }
+        s.lab = { p: anchor, q, far };
+      }
+
+      /* Postes réduits à un NŒUD OSM : 9 698 des 39 010 postes nommés (24,9 %),
+         83 sur 121 à LEMG, la totalité des 164 de ZSSS. Aucune ligne de guidage,
+         donc aucune direction — et deux défauts qui se voyaient :
+         · le libellé restait HORIZONTAL, soit 43° d'écart médian avec l'axe réel
+           de l'avion (autant dire un cap tiré au sort), au milieu de voisins
+           correctement tournés ;
+         · sans « far », le pas de l'anti-chevauchement valait 0 : les six
+           tentatives de recul retombaient au pixel près sur la même case et
+           l'étiquette DISPARAISSAIT au lieu de glisser — 16 postes muets sur 83
+           à LEMG, quel que soit le zoom.
+         On reconstitue donc un axe, dans cet ordre :
+         · l'axe du poste VOISIN qui, lui, a une ligne, s'il est à moins de
+           120 m — de très loin le meilleur indice (0,5° d'écart médian en
+           validation croisée sur 4 917 postes lignés) : deux postes d'une même
+           rangée pointent dans la même direction ;
+         · sinon le PLUS LONG bord d'aire de trafic à moins de 60 m, tourné de
+           90° — le contour de l'aire longe la rangée, l'avion s'y range en
+           travers (0,9° d'écart médian) ;
+         · sinon le bord d'aire le plus proche, et seulement en deçà de 150 m ;
+         · au-delà, on garde l'horizontale : mieux vaut ne rien affirmer que
+           recopier l'orientation d'une aire située à l'autre bout du terrain.
+         La direction du taxiway le plus proche a été mesurée puis ÉCARTÉE : elle
+         est perpendiculaire à la vérité (89° d'écart médian). Le taxiway voisin
+         d'un poste est le taxilane qui dessert la rangée, pas l'axe de l'avion.
+         L'ancre, elle, ne bouge JAMAIS : c'est le nœud OSM. On n'a pas déplacé
+         l'étiquette, on l'a orientée — et on lui a donné de quoi glisser le long
+         de cet axe quand elle en chevauche une autre. q et far sont donc
+         SYNTHÉTIQUES : ils n'existent pas dans OSM et ne servent qu'à ça. */
+      const M2D = 1 / 111320;                 // 1 m, en degrés (px() travaille en degrés)
+      const NLS_R2 = (120 * M2D) ** 2, APR_R2 = (60 * M2D) ** 2, APR_MAX2 = (150 * M2D) ** 2;
+      const unpx = ([x, y]) => [lat0 - y, lon0 + x / KX];
+      const segD2 = (p, a, b) => {
+        const vx = b[0] - a[0], vy = b[1] - a[1], L2 = vx * vx + vy * vy;
+        let t = L2 ? ((p[0] - a[0]) * vx + (p[1] - a[1]) * vy) / L2 : 0;
+        t = t < 0 ? 0 : t > 1 ? 1 : t;
+        const dx = p[0] - (a[0] + t * vx), dy = p[1] - (a[1] + t * vy);
+        return dx * dx + dy * dy;
       };
-      for (const { g, start, end } of stdLines) {
-        if (g.length < 2) continue;
-        const a = px(g[0]), b = px(g[g.length - 1]);
-        if (nearestSq(b, start, end) < nearestSq(a, start, end)) g.reverse();
+      // Axes connus : tout poste LIGNÉ, nommé ou non — une géométrie reste une
+      // géométrie, et les postes anonymes d'une rangée orientent les autres.
+      const LINE_AX = [];
+      for (const s of stdSurf) {
+        if (!s.lab || !s.lab.q) continue;
+        const a0 = px(s.lab.p), a1 = px(s.lab.q);
+        LINE_AX.push({ p: a0, a: Math.atan2(a0[1] - a1[1], a0[0] - a1[0]) });
+      }
+      const aprSeg = [];
+      for (const s of SURF) {
+        if (s.t !== "apr") continue;
+        for (const g of s.segs) for (let i = 1; i < g.length; i++) {
+          const a = px(g[i - 1]), b = px(g[i]);
+          if (a[0] !== b[0] || a[1] !== b[1]) aprSeg.push([a, b]);
+        }
+      }
+      for (const s of stdSurf) {
+        if (s.lab) continue;                        // déjà traité : il a une ligne
+        const g = s.segs.find(g => g.length);
+        if (!g) { s.lab = null; continue; }
+        const anchor = g[0];
+        // Un poste sans ref n'est jamais étiqueté : inutile de lui chercher un
+        // axe, mais il garde son ancre pour ne rien changer par ailleurs.
+        if (!s.r) { s.lab = { p: anchor, q: null }; continue; }
+        const p = px(anchor);
+        let ax = null;
+        let bd = NLS_R2;
+        for (const L of LINE_AX) {
+          const dx = p[0] - L.p[0], dy = p[1] - L.p[1], d = dx * dx + dy * dy;
+          if (d < bd) { bd = d; ax = L.a; }
+        }
+        if (ax === null) {
+          // Rotation de 90° d'un bord d'aire : (vx,vy) -> (-vy,vx).
+          let bl = -1, nd = APR_MAX2, nearAx = null;
+          for (const [a, b] of aprSeg) {
+            const d = segD2(p, a, b);
+            const vx = b[0] - a[0], vy = b[1] - a[1];
+            if (d <= APR_R2) {
+              const L2 = vx * vx + vy * vy;
+              if (L2 > bl) { bl = L2; ax = Math.atan2(vx, -vy); }
+            }
+            if (d < nd) { nd = d; nearAx = Math.atan2(vx, -vy); }
+          }
+          if (ax === null) ax = nearAx;
+        }
+        if (ax === null) { s.lab = { p: anchor, q: null }; continue; }   // rien de fiable
+        /* q donne la direction ; far borne le recul à 30 m — la longueur d'un
+           poste moyen, donc un glissement qui reste SUR le poste qu'il nomme.
+           Tous deux sont posés en arrière de l'ancre : planDraw() lit
+           u = (p - q)/|p - q| puis recule en p - u·back, c'est-à-dire vers q. */
+        const back = d => unpx([p[0] - Math.cos(ax) * d, p[1] - Math.sin(ax) * d]);
+        s.lab = { p: anchor, q: back(5 * M2D), far: back(30 * M2D) };
       }
 
       /* Pour résoudre une borne « BTN X AND Y », on cherche X et Y parmi TOUTES
@@ -14924,7 +15108,37 @@ window.addEventListener("scroll", hidePop, true);
        son nom — plusieurs points sont tentés le long du tracé, puis on force.
        Un taxiway coloré sans nom attire l'œil sans rien dire. */
     let planBoxes = [];
-    function planPlace(ctx, text, x, y, col, mode, force, kind = null) {
+    /* Deux étiquettes se gênent-elles VRAIMENT ?
+       L'enveloppe droite d'un libellé TOURNÉ est bien plus large que le libellé
+       lui-même : à 45°, un nom de 60×22 px occupe une enveloppe de 58×58. S'en
+       tenir à elle fait renoncer à des places pourtant libres — c'est ce qui
+       faisait taire des postes dès que leur nom cessait d'être horizontal.
+       On garde donc l'enveloppe comme filtre RAPIDE — quatre comparaisons, elle
+       écarte la quasi-totalité des paires — et on ne sort le théorème des axes
+       séparateurs que pour les rares paires qui se recouvrent pour de bon.
+       Chaque réservation porte ses quatre coins : un libellé droit n'est qu'un
+       cas particulier, ses coins SONT son enveloppe, et le test reste exact. */
+    function planQuadHit(A, B) {
+      for (const q of [A, B]) {
+        for (let i = 0; i < 4; i++) {
+          const p1 = q[i], p2 = q[(i + 1) & 3];
+          const nx = p1[1] - p2[1], ny = p2[0] - p1[0];
+          let a0 = Infinity, a1 = -Infinity, b0 = Infinity, b1 = -Infinity;
+          for (const p of A) { const d = p[0] * nx + p[1] * ny; if (d < a0) a0 = d; if (d > a1) a1 = d; }
+          for (const p of B) { const d = p[0] * nx + p[1] * ny; if (d < b0) b0 = d; if (d > b1) b1 = d; }
+          if (a1 < b0 || b1 < a0) return false;          // axe séparateur : elles ne se touchent pas
+        }
+      }
+      return true;
+    }
+    function planBoxHit(bx, by, bw, bh, quad) {
+      for (const b of planBoxes) {
+        if (bx > b.x + b.w || bx + bw < b.x || by > b.y + b.h || by + bh < b.y) continue;
+        if (planQuadHit(quad, b.c)) return true;
+      }
+      return false;
+    }
+    function planPlace(ctx, text, x, y, col, mode, force) {
       const on = mode === "instant", pend = mode === "span";
       const P = planPal();
       // Échelle SOUS-LINÉAIRE selon le zoom : les étiquettes grossissent, mais
@@ -14934,28 +15148,33 @@ window.addEventListener("scroll", hidePop, true);
       // et cachait à jamais les mêmes étiquettes.
       const LS = Math.min(1 + (plan.view.k - 1) * 0.4, 2.2);
       const fs = (on ? 12.5 : 11.5) * LS;
-      // Taxiway : texte italique posé à même la chaussée, comme sur une
-      // vraie carte de plateforme (AD 2 / Jeppesen) — plus de panneau noir.
-      const isTwy = kind === "twy";
-      ctx.font = (isTwy ? "italic " : "") + (on ? "700 " : "600 ") + fs * planDPR + "px 'IBM Plex Mono',monospace";
+      // Texte droit posé à même la chaussée, comme sur une vraie carte de
+      // plateforme (AD 2 / Jeppesen) — plus de panneau noir, plus d'italique :
+      // sur ces cartes, seules les aires de trafic sont en italique.
+      ctx.font = "700 " + fs * planDPR + "px " + PLAN_LBL_FONT;
       // Boîte de collision seulement : plus de puce dessinée, mais on réserve
       // quand même l'espace pour que deux noms ne se chevauchent pas.
       const padX = 3 * LS * planDPR, padY = 1.5 * LS * planDPR;
       const tw = ctx.measureText(text).width;
       const w = tw + padX * 2, h = fs * planDPR + padY * 2;
       const bx = x - w / 2, by = y - h / 2;
-      if (!force) for (const b of planBoxes)
-        if (!(bx > b.x + b.w || bx + w < b.x || by > b.y + b.h || by + h < b.y)) return false;
-      planBoxes.push({ x: bx, y: by, w, h });
+      // Libellé droit : ses coins sont son enveloppe.
+      const quad = [[bx, by], [bx + w, by], [bx + w, by + h], [bx, by + h]];
+      if (!force && planBoxHit(bx, by, w, h, quad)) return false;
+      planBoxes.push({ x: bx, y: by, w, h, c: quad });
       ctx.save();
       ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.lineJoin = "round";
-      /* Texte posé à même la carte, avec halo — comme une vraie carte AD 2 :
-         noir (teinte neutre du thème) au repos, rouge/ambre dès qu'un NOTAM
-         touche l'élément. Même règle pour les taxiways que pour le reste. */
+      /* Texte posé à même la carte — comme une vraie carte AD 2 : noir (teinte
+         neutre du thème) au repos, rouge/ambre dès qu'un NOTAM touche
+         l'élément. Même règle pour les taxiways que pour le reste.
+         Halo seulement si le thème en définit un (cf. PLAN_THEME) : le thème
+         clair n'en a plus. */
       const accent = (on || pend) ? col : P.offLabel;
-      ctx.strokeStyle = P.halo; ctx.lineWidth = (3.6 + 0.8 * (LS - 1)) * planDPR;
-      ctx.miterLimit = 2;
-      ctx.strokeText(text, x, y + 0.5 * planDPR);
+      if (P.halo) {
+        ctx.strokeStyle = P.halo; ctx.lineWidth = (3.6 + 0.8 * (LS - 1)) * planDPR;
+        ctx.miterLimit = 2;
+        ctx.strokeText(text, x, y + 0.5 * planDPR);
+      }
       ctx.fillStyle = accent;
       ctx.fillText(text, x, y + 0.5 * planDPR);
       ctx.restore();
@@ -14978,7 +15197,7 @@ window.addEventListener("scroll", hidePop, true);
        l'utilisateur déplace ou zoome, le libellé se replace tout seul sur ce
        qu'il voit — au lieu de rester collé au milieu géographique et de sortir
        du cadre. Rien de visible => pas d'étiquette (inutile hors cadre). */
-    function planLabel(ctx, text, segs, col, mode, kind = null) {
+    function planLabel(ctx, text, segs, col, mode) {
       const cv = ctx.canvas, W = cv.width, H = cv.height, M = 8 * planDPR;
       const inView = p => p[0] >= M && p[0] <= W - M && p[1] >= M && p[1] <= H - M;
       const cand = [];
@@ -14997,9 +15216,9 @@ window.addEventListener("scroll", hidePop, true);
       const fr = [0.5, 0.4, 0.6, 0.3, 0.7, 0.2, 0.8, 0.12, 0.88];
       for (const t of fr) {
         const p = vis[Math.min(vis.length - 1, Math.round(t * (vis.length - 1)))];
-        if (planPlace(ctx, text, p[0], p[1], col, mode, false, kind)) return;
+        if (planPlace(ctx, text, p[0], p[1], col, mode, false)) return;
       }
-      if (mode !== "off") { const p = vis[Math.floor(vis.length / 2)]; planPlace(ctx, text, p[0], p[1], col, mode, true, kind); }
+      if (mode !== "off") { const p = vis[Math.floor(vis.length / 2)]; planPlace(ctx, text, p[0], p[1], col, mode, true); }
     }
     // planSC travaille en lat/lon ; les découpes sont en projeté. planSCp fait
     // le même écran-mapping en partant du projeté.
@@ -15018,12 +15237,14 @@ window.addEventListener("scroll", hidePop, true);
       ctx.beginPath(); ctx.arc(p[0], p[1], r * 0.42, 0, 7);
       ctx.fillStyle = planLight() ? "#f7fafc" : "#0b0f13"; ctx.fill();
     }
-    /* Étiquette de poste : un rectangle (pas de fanion, pas de pointe) posé
-       EN BOUT de la ligne de guidage, PARALLÈLE à elle — (ax,ay) est
-       l'extrémité côté bâtiment (le plus loin des taxiways, réordonnée une
-       fois pour toutes dans planBuild()) ; angle, la direction de la ligne à
-       cet endroit. Le rectangle prolonge la ligne au lieu d'être posé au
-       hasard à côté. Contour coloré selon l'état comme le reste du plan
+    /* Étiquette de poste : un rectangle (pas de fanion, pas de pointe) CENTRÉ
+       sur le nez du poste et PARALLÈLE à sa ligne de guidage — (ax,ay) est
+       l'ancre calculée par planBuild (voir s.lab) ; angle, la direction de la
+       ligne à cet endroit. Centré, et non posé bout à bout : en prolongement,
+       le rectangle partait d'une largeur entière au-delà de la ligne et
+       finissait à flotter en dehors de la chaussée, sans plus toucher ce qu'il
+       nomme. À cheval sur le nez, il reste accroché à sa ligne.
+       Contour coloré selon l'état comme le reste du plan
        (rouge fermé / ambre restreint / gris neutre).
        Même anti-chevauchement que planPlace (réservation dans planBoxes,
        retour false sans rien dessiner en cas de collision) — indispensable
@@ -15038,21 +15259,20 @@ window.addEventListener("scroll", hidePop, true);
       const tw = ctx.measureText(txt).width;
       const w = tw + padX * 2, h = fs + padY * 2;
 
-      // Repère local : le bord proche du rectangle touche l'extrémité de la
-      // ligne (ax,ay) ; le rectangle s'étend vers +x, dans le prolongement.
+      // Repère local : (ax,ay) est le CENTRE du rectangle ; il s'étend de part
+      // et d'autre le long de la ligne (axe +x = direction de la ligne).
       const cosA = Math.cos(angle), sinA = Math.sin(angle);
-      const cx = w / 2;
 
-      // AABB du rectangle tourné, pour l'anti-chevauchement (planBoxes reste
-      // en repère écran non tourné : on prend l'enveloppe des 4 coins).
-      const local = [[0, -h / 2], [w, -h / 2], [w, h / 2], [0, h / 2]];
+      // Les QUATRE COINS du rectangle tourné : ils servent au test exact
+      // (planQuadHit). L'enveloppe droite qu'on en tire n'est plus qu'un
+      // filtre rapide — s'y arrêter faisait renoncer à des places libres.
+      const local = [[-w / 2, -h / 2], [w / 2, -h / 2], [w / 2, h / 2], [-w / 2, h / 2]];
       const world = local.map(([lx, ly]) => [ax + lx * cosA - ly * sinA, ay + lx * sinA + ly * cosA]);
       const xs = world.map(p => p[0]), ys = world.map(p => p[1]);
       const bx = Math.min(...xs), by = Math.min(...ys);
       const bw = Math.max(...xs) - bx, bh = Math.max(...ys) - by;
-      if (!force) for (const b of planBoxes)
-        if (!(bx > b.x + b.w || bx + bw < b.x || by > b.y + b.h || by + bh < b.y)) return false;
-      planBoxes.push({ x: bx, y: by, w: bw, h: bh });
+      if (!force && planBoxHit(bx, by, bw, bh, world)) return false;
+      planBoxes.push({ x: bx, y: by, w: bw, h: bh, c: world });
 
       const accent = (on || pend) ? col : P.off;
       const r = 3 * LS * planDPR;
@@ -15063,7 +15283,7 @@ window.addEventListener("scroll", hidePop, true);
       ctx.shadowBlur = 3 * planDPR;
       ctx.shadowOffsetY = 1 * planDPR;
       ctx.beginPath();
-      ctx.roundRect(0, -h / 2, w, h, r);
+      ctx.roundRect(-w / 2, -h / 2, w, h, r);
       ctx.fillStyle = "#ffffff";
       ctx.fill();
       ctx.lineWidth = 1.3 * planDPR;
@@ -15077,7 +15297,6 @@ window.addEventListener("scroll", hidePop, true);
       ctx.fillStyle = "#111";
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
-      ctx.translate(cx, 0);
       if (cosA < 0) ctx.rotate(Math.PI);
       ctx.fillText(txt, 0, 0);
       ctx.restore();
@@ -15247,11 +15466,11 @@ window.addEventListener("scroll", hidePop, true);
       const lab = S.filter(s => s.r && (s.t === "twy" || s.t === "rwy"));
       const st_ = new Map(drawn.map(x => [x.s, x.st]));
       // touchés par un NOTAM : toujours étiquetés
-      for (const s of lab) if (st_.get(s)) planLabel(ctx, s.r, s.segs, st_.get(s).col, st_.get(s).state, s.t);
+      for (const s of lab) if (st_.get(s)) planLabel(ctx, s.r, s.segs, st_.get(s).col, st_.get(s).state);
       // éteints : PISTES toujours (peu nombreuses, repères clés) ; taxiways dès
       // qu'on zoome un peu, sinon des dizaines d'étiquettes feraient une bouillie.
       for (const s of lab) if (!st_.get(s) && (s.t === "rwy" || plan.view.k > 1.15))
-        planLabel(ctx, s.r, s.segs, planPal().off, "off", s.t);
+        planLabel(ctx, s.r, s.segs, planPal().off, "off");
 
       /* Postes : 130 à LFBO, 519 à LFPG. À l'échelle d'ouverture, tout étiqueter
          serait une bouillie — mais l'utilisateur doit pouvoir TOUS les voir en
@@ -15277,32 +15496,32 @@ window.addEventListener("scroll", hidePop, true);
           if (s.t !== "std" || !s.r || isComboRef(s.r)) continue;
           const st = st_.get(s);
           if (!st && plan.view.k < 6.4) continue;
-          // Certains postes fusionnent DEUX géométries sous la même ref (un
-          // nœud ET une way OSM, cf. commentaire dans buildSurfaces) : segs[0]
-          // est alors parfois le simple point isolé, pas la vraie ligne de
-          // guidage. On prend le segment le plus riche en points — la ligne,
-          // quand elle existe — sinon l'étiquette retombait à plat (angle 0)
-          // alors que la ligne visible sur le plan part en diagonale.
-          const g0 = s.segs.reduce((best, g) => g.length > best.length ? g : best, s.segs[0]);
+          // Ancre et direction viennent de planBuild (s.lab) : le nez du poste,
+          // choisi sur TOUS ses segments. Ici on ne fait que projeter.
+          const L = s.lab; if (!L) continue;
           const col = st ? st.col : P_.off, mode = st ? st.state : "off";
-          if (g0.length >= 2) {
-            const p1 = planSC(g0[g0.length - 2]), p2 = planSC(g0[g0.length - 1]);
-            const dx = p2[0] - p1[0], dy = p2[1] - p1[1], len = Math.hypot(dx, dy) || 1;
-            const ux = dx / len, uy = dy / len, angle = Math.atan2(dy, dx);
-            /* Des postes voisins (ex. U40/U41/U42 à LFBO) ont parfois leurs
-               extrémités très rapprochées : le libellé du premier posé
-               chevauche celui du suivant. Plutôt que de le faire disparaître,
-               on le GLISSE en arrière le long de SA PROPRE ligne (toujours
-               parallèle, toujours ancré dessus) jusqu'à trouver une place
-               libre — jamais dans le vide à côté. */
-            const step = 14 * Math.min(1 + (plan.view.k - 1) * 0.4, 2.2) * planDPR;
-            for (let i = 0; i < 6; i++) {
-              const back = i * step;
-              if (drawStandLabel(ctx, p2[0] - ux * back, p2[1] - uy * back, angle, s.r, col, mode, false)) break;
-            }
-          } else {
-            const p = planSC(g0[0]);
-            drawStandLabel(ctx, p[0], p[1], 0, s.r, col, mode, false);
+          const p = planSC(L.p);
+          let angle = 0, ux = 1, uy = 0;
+          if (L.q) {
+            const q = planSC(L.q);
+            const dx = p[0] - q[0], dy = p[1] - q[1], len = Math.hypot(dx, dy) || 1;
+            ux = dx / len; uy = dy / len; angle = Math.atan2(dy, dx);
+          }
+          /* Des postes voisins (ex. U40/U41/U42 à LFBO) ont parfois leurs
+             extrémités très rapprochées : le libellé du premier posé
+             chevauche celui du suivant. Plutôt que de le faire disparaître,
+             on le GLISSE en arrière le long de SA PROPRE ligne (toujours
+             parallèle, toujours ancré dessus) jusqu'à trouver une place
+             libre — jamais dans le vide à côté.
+             Le recul est BORNÉ à 80 % de la ligne : le pas est en pixels
+             écran, il ne sait rien de la longueur du poste, et sur les lignes
+             courtes il faisait sortir le libellé de sa propre géométrie. */
+          const far = L.far ? planSC(L.far) : null;
+          const run = far ? Math.hypot(far[0] - p[0], far[1] - p[1]) : 0;
+          const step = Math.min(14 * Math.min(1 + (plan.view.k - 1) * 0.4, 2.2) * planDPR, run * 0.8 / 5);
+          for (let i = 0; i < 6; i++) {
+            const back = i * step;
+            if (drawStandLabel(ctx, p[0] - ux * back, p[1] - uy * back, angle, s.r, col, mode, false)) break;
           }
         }
       }
