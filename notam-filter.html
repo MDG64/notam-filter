@@ -14426,13 +14426,30 @@ window.addEventListener("scroll", hidePop, true);
       /* Une piste porte DEUX noms. OSM l'indexe sous la paire (« 14L/32R »),
          un NOTAM la cite indifféremment par la paire ou par un seul QFU
          (« RWY 32R U/S »). On indexe donc sous les trois clés, sinon une piste
-         fermée reste grise — l'erreur la plus grave que ce plan puisse faire. */
+         fermée reste grise — l'erreur la plus grave que ce plan puisse faire.
+         Encore faut-il RECONNAÎTRE la paire. OSM ne l'écrit pas d'une seule
+         façon : « 14L/32R », mais aussi « 18L-36R » (KMCO), « 08;26 » (KTUL),
+         « 6-24 » (KABE), et sans le zéro de tête (« 4R/22L » à KBOS, « 4R »
+         seul à KMDW). Le NOTAM, lui, dit toujours « RWY 04R/22L » : le filet
+         de refsFromNotam() n'extrait que des QFU à DEUX chiffres. Sans
+         normaliser le séparateur ET le zéro de tête, 193 pistes US sur 2182
+         (152 terrains — dont KMCO, où les QUATRE pistes sont muettes) ne sont
+         atteintes par aucun NOTAM. On garde la ref brute comme clé (un NOTAM
+         peut la citer mot pour mot), puis on ajoute chaque QFU normalisé, et
+         seulement s'il est canonique : ça écarte d'office les faux QFU d'OSM
+         (« X/X », « NE/SW », « DIRT RUNWAY », hydrobase « 08W/26W », planeur
+         « 11G/29G », cap vrai militaire « 164/344 ») qu'aucun NOTAM ne cite —
+         les indexer ne créerait que des clés mortes. */
       const INDEX = new Map();
       const idx = (k, s) => { if (!INDEX.has(k)) INDEX.set(k, []); if (!INDEX.get(k).includes(s)) INDEX.get(k).push(s); };
+      const QFU = /^\d{2}[LRC]?$/;
       for (const s of SURF) if (s.r) {
         idx(s.t + ":" + s.r, s);
-        if (s.t === "rwy" && s.r.includes("/"))
-          for (const end of s.r.split("/")) { const e = end.trim(); if (e) idx("rwy:" + e, s); }
+        if (s.t === "rwy")
+          for (const end of s.r.split(/[/;-]/)) {
+            const e = end.trim().replace(/^(\d)(?=[LRC]?$)/, "0$1");
+            if (QFU.test(e)) idx("rwy:" + e, s);
+          }
       }
       const lat0 = layout.arp[0], lon0 = layout.arp[1];
       const KX = Math.cos(lat0 * Math.PI / 180);
@@ -14507,11 +14524,7 @@ window.addEventListener("scroll", hidePop, true);
       } : () => Infinity;
       for (const s of stdSurf) {
         const lines = s.segs.filter(g => g.length >= 2);
-        if (!lines.length) {                          // poste réduit à un nœud OSM
-          const g = s.segs.find(g => g.length);
-          s.lab = g ? { p: g[0], q: null } : null;
-          continue;
-        }
+        if (!lines.length) { s.lab = null; continue; }   // nœud OSM nu : second passage
         let best = null;
         for (const g of lines) {
           const dA = netNear(g[0]), dB = netNear(g[g.length - 1]);
@@ -14549,6 +14562,98 @@ window.addEventListener("scroll", hidePop, true);
           }
         }
         s.lab = { p: anchor, q, far };
+      }
+
+      /* Postes réduits à un NŒUD OSM : 9 698 des 39 010 postes nommés (24,9 %),
+         83 sur 121 à LEMG, la totalité des 164 de ZSSS. Aucune ligne de guidage,
+         donc aucune direction — et deux défauts qui se voyaient :
+         · le libellé restait HORIZONTAL, soit 43° d'écart médian avec l'axe réel
+           de l'avion (autant dire un cap tiré au sort), au milieu de voisins
+           correctement tournés ;
+         · sans « far », le pas de l'anti-chevauchement valait 0 : les six
+           tentatives de recul retombaient au pixel près sur la même case et
+           l'étiquette DISPARAISSAIT au lieu de glisser — 16 postes muets sur 83
+           à LEMG, quel que soit le zoom.
+         On reconstitue donc un axe, dans cet ordre :
+         · l'axe du poste VOISIN qui, lui, a une ligne, s'il est à moins de
+           120 m — de très loin le meilleur indice (0,5° d'écart médian en
+           validation croisée sur 4 917 postes lignés) : deux postes d'une même
+           rangée pointent dans la même direction ;
+         · sinon le PLUS LONG bord d'aire de trafic à moins de 60 m, tourné de
+           90° — le contour de l'aire longe la rangée, l'avion s'y range en
+           travers (0,9° d'écart médian) ;
+         · sinon le bord d'aire le plus proche, et seulement en deçà de 150 m ;
+         · au-delà, on garde l'horizontale : mieux vaut ne rien affirmer que
+           recopier l'orientation d'une aire située à l'autre bout du terrain.
+         La direction du taxiway le plus proche a été mesurée puis ÉCARTÉE : elle
+         est perpendiculaire à la vérité (89° d'écart médian). Le taxiway voisin
+         d'un poste est le taxilane qui dessert la rangée, pas l'axe de l'avion.
+         L'ancre, elle, ne bouge JAMAIS : c'est le nœud OSM. On n'a pas déplacé
+         l'étiquette, on l'a orientée — et on lui a donné de quoi glisser le long
+         de cet axe quand elle en chevauche une autre. q et far sont donc
+         SYNTHÉTIQUES : ils n'existent pas dans OSM et ne servent qu'à ça. */
+      const M2D = 1 / 111320;                 // 1 m, en degrés (px() travaille en degrés)
+      const NLS_R2 = (120 * M2D) ** 2, APR_R2 = (60 * M2D) ** 2, APR_MAX2 = (150 * M2D) ** 2;
+      const unpx = ([x, y]) => [lat0 - y, lon0 + x / KX];
+      const segD2 = (p, a, b) => {
+        const vx = b[0] - a[0], vy = b[1] - a[1], L2 = vx * vx + vy * vy;
+        let t = L2 ? ((p[0] - a[0]) * vx + (p[1] - a[1]) * vy) / L2 : 0;
+        t = t < 0 ? 0 : t > 1 ? 1 : t;
+        const dx = p[0] - (a[0] + t * vx), dy = p[1] - (a[1] + t * vy);
+        return dx * dx + dy * dy;
+      };
+      // Axes connus : tout poste LIGNÉ, nommé ou non — une géométrie reste une
+      // géométrie, et les postes anonymes d'une rangée orientent les autres.
+      const LINE_AX = [];
+      for (const s of stdSurf) {
+        if (!s.lab || !s.lab.q) continue;
+        const a0 = px(s.lab.p), a1 = px(s.lab.q);
+        LINE_AX.push({ p: a0, a: Math.atan2(a0[1] - a1[1], a0[0] - a1[0]) });
+      }
+      const aprSeg = [];
+      for (const s of SURF) {
+        if (s.t !== "apr") continue;
+        for (const g of s.segs) for (let i = 1; i < g.length; i++) {
+          const a = px(g[i - 1]), b = px(g[i]);
+          if (a[0] !== b[0] || a[1] !== b[1]) aprSeg.push([a, b]);
+        }
+      }
+      for (const s of stdSurf) {
+        if (s.lab) continue;                        // déjà traité : il a une ligne
+        const g = s.segs.find(g => g.length);
+        if (!g) { s.lab = null; continue; }
+        const anchor = g[0];
+        // Un poste sans ref n'est jamais étiqueté : inutile de lui chercher un
+        // axe, mais il garde son ancre pour ne rien changer par ailleurs.
+        if (!s.r) { s.lab = { p: anchor, q: null }; continue; }
+        const p = px(anchor);
+        let ax = null;
+        let bd = NLS_R2;
+        for (const L of LINE_AX) {
+          const dx = p[0] - L.p[0], dy = p[1] - L.p[1], d = dx * dx + dy * dy;
+          if (d < bd) { bd = d; ax = L.a; }
+        }
+        if (ax === null) {
+          // Rotation de 90° d'un bord d'aire : (vx,vy) -> (-vy,vx).
+          let bl = -1, nd = APR_MAX2, nearAx = null;
+          for (const [a, b] of aprSeg) {
+            const d = segD2(p, a, b);
+            const vx = b[0] - a[0], vy = b[1] - a[1];
+            if (d <= APR_R2) {
+              const L2 = vx * vx + vy * vy;
+              if (L2 > bl) { bl = L2; ax = Math.atan2(vx, -vy); }
+            }
+            if (d < nd) { nd = d; nearAx = Math.atan2(vx, -vy); }
+          }
+          if (ax === null) ax = nearAx;
+        }
+        if (ax === null) { s.lab = { p: anchor, q: null }; continue; }   // rien de fiable
+        /* q donne la direction ; far borne le recul à 30 m — la longueur d'un
+           poste moyen, donc un glissement qui reste SUR le poste qu'il nomme.
+           Tous deux sont posés en arrière de l'ancre : planDraw() lit
+           u = (p - q)/|p - q| puis recule en p - u·back, c'est-à-dire vers q. */
+        const back = d => unpx([p[0] - Math.cos(ax) * d, p[1] - Math.sin(ax) * d]);
+        s.lab = { p: anchor, q: back(5 * M2D), far: back(30 * M2D) };
       }
 
       /* Pour résoudre une borne « BTN X AND Y », on cherche X et Y parmi TOUTES
@@ -15003,6 +15108,36 @@ window.addEventListener("scroll", hidePop, true);
        son nom — plusieurs points sont tentés le long du tracé, puis on force.
        Un taxiway coloré sans nom attire l'œil sans rien dire. */
     let planBoxes = [];
+    /* Deux étiquettes se gênent-elles VRAIMENT ?
+       L'enveloppe droite d'un libellé TOURNÉ est bien plus large que le libellé
+       lui-même : à 45°, un nom de 60×22 px occupe une enveloppe de 58×58. S'en
+       tenir à elle fait renoncer à des places pourtant libres — c'est ce qui
+       faisait taire des postes dès que leur nom cessait d'être horizontal.
+       On garde donc l'enveloppe comme filtre RAPIDE — quatre comparaisons, elle
+       écarte la quasi-totalité des paires — et on ne sort le théorème des axes
+       séparateurs que pour les rares paires qui se recouvrent pour de bon.
+       Chaque réservation porte ses quatre coins : un libellé droit n'est qu'un
+       cas particulier, ses coins SONT son enveloppe, et le test reste exact. */
+    function planQuadHit(A, B) {
+      for (const q of [A, B]) {
+        for (let i = 0; i < 4; i++) {
+          const p1 = q[i], p2 = q[(i + 1) & 3];
+          const nx = p1[1] - p2[1], ny = p2[0] - p1[0];
+          let a0 = Infinity, a1 = -Infinity, b0 = Infinity, b1 = -Infinity;
+          for (const p of A) { const d = p[0] * nx + p[1] * ny; if (d < a0) a0 = d; if (d > a1) a1 = d; }
+          for (const p of B) { const d = p[0] * nx + p[1] * ny; if (d < b0) b0 = d; if (d > b1) b1 = d; }
+          if (a1 < b0 || b1 < a0) return false;          // axe séparateur : elles ne se touchent pas
+        }
+      }
+      return true;
+    }
+    function planBoxHit(bx, by, bw, bh, quad) {
+      for (const b of planBoxes) {
+        if (bx > b.x + b.w || bx + bw < b.x || by > b.y + b.h || by + bh < b.y) continue;
+        if (planQuadHit(quad, b.c)) return true;
+      }
+      return false;
+    }
     function planPlace(ctx, text, x, y, col, mode, force) {
       const on = mode === "instant", pend = mode === "span";
       const P = planPal();
@@ -15023,9 +15158,10 @@ window.addEventListener("scroll", hidePop, true);
       const tw = ctx.measureText(text).width;
       const w = tw + padX * 2, h = fs * planDPR + padY * 2;
       const bx = x - w / 2, by = y - h / 2;
-      if (!force) for (const b of planBoxes)
-        if (!(bx > b.x + b.w || bx + w < b.x || by > b.y + b.h || by + h < b.y)) return false;
-      planBoxes.push({ x: bx, y: by, w, h });
+      // Libellé droit : ses coins sont son enveloppe.
+      const quad = [[bx, by], [bx + w, by], [bx + w, by + h], [bx, by + h]];
+      if (!force && planBoxHit(bx, by, w, h, quad)) return false;
+      planBoxes.push({ x: bx, y: by, w, h, c: quad });
       ctx.save();
       ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.lineJoin = "round";
       /* Texte posé à même la carte — comme une vraie carte AD 2 : noir (teinte
@@ -15127,16 +15263,16 @@ window.addEventListener("scroll", hidePop, true);
       // et d'autre le long de la ligne (axe +x = direction de la ligne).
       const cosA = Math.cos(angle), sinA = Math.sin(angle);
 
-      // AABB du rectangle tourné, pour l'anti-chevauchement (planBoxes reste
-      // en repère écran non tourné : on prend l'enveloppe des 4 coins).
+      // Les QUATRE COINS du rectangle tourné : ils servent au test exact
+      // (planQuadHit). L'enveloppe droite qu'on en tire n'est plus qu'un
+      // filtre rapide — s'y arrêter faisait renoncer à des places libres.
       const local = [[-w / 2, -h / 2], [w / 2, -h / 2], [w / 2, h / 2], [-w / 2, h / 2]];
       const world = local.map(([lx, ly]) => [ax + lx * cosA - ly * sinA, ay + lx * sinA + ly * cosA]);
       const xs = world.map(p => p[0]), ys = world.map(p => p[1]);
       const bx = Math.min(...xs), by = Math.min(...ys);
       const bw = Math.max(...xs) - bx, bh = Math.max(...ys) - by;
-      if (!force) for (const b of planBoxes)
-        if (!(bx > b.x + b.w || bx + bw < b.x || by > b.y + b.h || by + bh < b.y)) return false;
-      planBoxes.push({ x: bx, y: by, w: bw, h: bh });
+      if (!force && planBoxHit(bx, by, bw, bh, world)) return false;
+      planBoxes.push({ x: bx, y: by, w: bw, h: bh, c: world });
 
       const accent = (on || pend) ? col : P.off;
       const r = 3 * LS * planDPR;
