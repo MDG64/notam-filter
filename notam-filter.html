@@ -12132,10 +12132,24 @@ function renderInfo(icao) {
       $("#stationMapBtn").hidden = false;                // toujours visible
       $("#stationMapBtn").classList.toggle("hasroute", hasRoute);
     }
+    // La route n'existe en mémoire (curRoute) qu'après un passage par la page
+    // Route : au rechargement de l'app, ou en ouvrant la carte directement par
+    // le globe du header, on avait une mappemonde vide alors qu'une route est
+    // pourtant enregistrée. On la recalcule ici depuis le stockage (calcul pur,
+    // aucun accès réseau : le corridor se redéduit de GEO).
+    function restoreSavedRoute() {
+      if (curRoute && curRoute.ok) return curRoute;
+      const saved = activeRoute();
+      if (!saved || !saved.dep || !GEO || !GEO[saved.dep]) return null;
+      const r = computeRoute(saved.dep, saved.arr, saved.alt, { width: saved.width });
+      if (r && r.ok) curRoute = r;
+      return curRoute;
+    }
     // Ouvre la carte depuis n'importe quelle page : on s'assure d'abord que la base
     // aérodromes (GEO) et les frontières (BORDERS) sont chargées, comme le fait openRoute().
     async function ensureMapReady() {
       if (!GEO) { try { await loadGeoData(); } catch (e) { return false; } }
+      restoreSavedRoute();          // route persistée -> tracé + cadrage dès l'ouverture
       await loadBorders();
       refreshMapBtn();
       return !!BORDERS;
@@ -12457,6 +12471,9 @@ function renderInfo(icao) {
       return local ? { fir, level: local.level, reason: local.reason, notams: local.notams, partial: true } : null;
     }
     async function ensureFirReady() {
+      // GEO sert au cadrage d'ouverture (continent du 1er favori) : base
+      // embarquée, aucun réseau, on peut la charger inconditionnellement.
+      try { await loadGeoData(); } catch (_) { }
       if (FIR && FIR_CLOSURES && FIR_NOTAMS) return true;
       await Promise.all([fetchFir(), fetchFirClosures(), fetchFirNotams()]);
       return !!FIR;
@@ -13195,6 +13212,60 @@ function renderInfo(icao) {
         }
       }
     }
+    // --- Cadrage d'ouverture de la carte FIR ---------------------------------
+    // Boîtes lon/lat grossières : il s'agit d'amener « le bon continent » à
+    // l'écran, pas de tracer une frontière. Recouvrements assumés (Méditerranée
+    // : Europe ET Afrique) — c'est la boîte la plus petite, donc la plus
+    // spécifique, qui l'emporte.
+    const CONTINENT_BOXES = [
+      { id: "EU", minLon: -25, maxLon: 45, minLat: 34, maxLat: 71 },
+      { id: "AF", minLon: -20, maxLon: 52, minLat: -35, maxLat: 38 },
+      { id: "NA", minLon: -168, maxLon: -52, minLat: 7, maxLat: 72 },
+      { id: "SA", minLon: -82, maxLon: -34, minLat: -56, maxLat: 13 },
+      { id: "AS", minLon: 44, maxLon: 150, minLat: 2, maxLat: 73 },
+      { id: "OC", minLon: 110, maxLon: 180, minLat: -48, maxLat: 2 },
+    ];
+    // Repli sans favori : Europe + Afrique d'un seul tenant.
+    const EU_AF_BOX = { id: "EUAF", minLon: -25, maxLon: 55, minLat: -35, maxLat: 71 };
+    function continentBoxFor(lat, lon) {
+      const inside = CONTINENT_BOXES.filter(b =>
+        lat >= b.minLat && lat <= b.maxLat && lon >= b.minLon && lon <= b.maxLon);
+      const area = b => (b.maxLon - b.minLon) * (b.maxLat - b.minLat);
+      if (inside.length) return inside.sort((a, b) => area(a) - area(b))[0];
+      // Hors de toute boîte (îles isolées, hautes latitudes) : la plus proche,
+      // plutôt qu'un repli Europe qui enverrait un favori du Pacifique à côté.
+      let best = EU_AF_BOX, bestD = Infinity;
+      for (const b of CONTINENT_BOXES) {
+        const dx = Math.max(b.minLon - lon, 0, lon - b.maxLon);
+        const dy = Math.max(b.minLat - lat, 0, lat - b.maxLat);
+        const d = Math.hypot(dx, dy);
+        if (d < bestD) { bestD = d; best = b; }
+      }
+      return best;
+    }
+    // Cadre une boîte lon/lat dans le canvas, même convention d'échelle que
+    // drawFirMap (pixels CSS par degré de latitude). Le min des deux contraintes
+    // fait que le portrait se débrouille seul : la largeur limite, la hauteur suit.
+    function firViewForBox(r, box) {
+      const cy = (box.minLat + box.maxLat) / 2, cx = (box.minLon + box.maxLon) / 2;
+      const kx = Math.cos(cy * Math.PI / 180);
+      const latSpan = Math.max(1, box.maxLat - box.minLat);
+      const lonSpan = Math.max(1, (box.maxLon - box.minLon) * kx);
+      return { cx, cy, scale: Math.max(1, Math.min((r.height * 0.9) / latSpan, (r.width * 0.9) / lonSpan)) };
+    }
+    // Vue d'ouverture : le continent du 1er favori — c'est le terrain que l'app
+    // charge d'elle-même au démarrage, donc la zone que le pilote regarde.
+    // Sans favori (ou coordonnées inconnues), repli Europe-Afrique.
+    function firHomeView(r) {
+      // 1er favori dont on connaît la position : un favori absent de la base
+      // mondiale ne doit pas faire retomber tout le monde sur le repli.
+      let home = null;
+      if (GEO) for (const code of favs) {
+        const g = GEO[code];
+        if (g && Number.isFinite(g.lat) && Number.isFinite(g.lon)) { home = g; break; }
+      }
+      return firViewForBox(r, home ? continentBoxFor(home.lat, home.lon) : EU_AF_BOX);
+    }
     function firWorldDefaultView(r) {
       // vue monde par défaut, même cadrage que la carte route sans itinéraire.
       // En portrait (mobile), l'échelle est contrainte par la largeur : viser
@@ -13217,11 +13288,9 @@ function renderInfo(icao) {
       currentFirDetailId = null;
       const cv = $("#firMap"), r = cv.getBoundingClientRect(), dpr = window.devicePixelRatio || 1;
       cv.width = Math.round(r.width * dpr); cv.height = Math.round(r.height * dpr);
-      if (!firView) {
-        firView = { ...firWorldDefaultView(r), dpr };
-      } else {
-        firView.dpr = dpr;                  // conserve position/zoom entre deux ouvertures
-      }
+      // Recadrage à CHAQUE ouverture sur le continent du 1er favori : on ouvre
+      // toujours chez soi, quitte à perdre le pan/zoom de la visite précédente.
+      firView = { ...firHomeView(r), dpr };
       drawFirMap();
     }
     $("#firMapBtn").onclick = async () => { if (await ensureFirReady()) openFirMap(); };
