@@ -3785,7 +3785,7 @@ body .stat .k{
         "TACAN", "VORTAC", "MARKER", "RNAV", "RNP", "GLS", "LPV", "LNAV", "VNAV", "IAP", "APCH",
         "APPROACH", "STAR", "MISSED", "MINIMA", "MINIMUM", "RVR", "PAPI", "VASI",
         "APCH LGT", "RWY LGT", "RUNWAY LIGHT", "RCLL", "REDL", "HOLDING", "TRANSITION",
-        "OBST", "OBSTACLE", "CRANE", "BIRD",
+        "OBST", "OBSTACLE", "CRANE", "BIRD", "BASH",
         "WINDCONE", "WIND CONE", "WDI", "WIND DIRECTION INDICATOR"],
       // BIRD (concentration/activité aviaire) : gêne décollage ET approche à la
       // fois — validé le 2026-07-26 (revue LFPO, cas test), d'où le mot-clé
@@ -3793,16 +3793,24 @@ body .stat .k{
       // Même raison pour la manche à air (WINDCONE/WDI) : elle donne le vent de
       // surface, qu'on décolle ou qu'on atterrisse. Le LLM ne retenait
       // qu'« approche » — corrigé par la revue du 2026-07-28 (KMIA).
-      depart: ["SID", "DEPARTURE", "CLB GRADIENT", "CLIMB GRADIENT", "INITIAL CLIMB", "NADP", "BIRD",
+      // BASH (Bird Aircraft Strike Hazard) était rangé en « sol » le 2026-07-28,
+      // au motif que ces phases se gèrent depuis les aires. Déplacé ici le
+      // 2026-07-31 : le risque décrit est la COLLISION AVIAIRE, qui se produit
+      // aux basses altitudes du décollage et de l'approche, pas au roulage. La
+      // version précédente était par ailleurs incohérente avec elle-même —
+      // « BIRD » valait déjà départ+approche, or BASH désigne exactement le même
+      // danger.
+      depart: ["SID", "DEPARTURE", "CLB GRADIENT", "CLIMB GRADIENT", "INITIAL CLIMB", "NADP", "BIRD", "BASH",
         "WINDCONE", "WIND CONE", "WDI", "WIND DIRECTION INDICATOR"],
       sol: ["TWY", "TAXIWAY", "APRON", "STAND", "PARKING", "RAMP", "STOPWAY", "SWY", "SHOULDER",
         "MOVEMENT AREA", "STOP BAR", "STOPBAR", "WIP", "WORK IN PROGRESS", "CONSTRUCTION",
         "MAINT", "GRASS CUTTING", "DE-ICING", "DEICING", "PUSHBACK", "DOCKING",
         "BRAKING ACTION", "FRICTION", "CONTAMINATED", "SNOW", "SLUSH", "FOD",
-        // Essais moteur au point fixe et phases BASH (Bird Aircraft Strike
-        // Hazard) des bases militaires US : deux régimes d'activité qui se
-        // gèrent au sol, sur les aires. Revue du 2026-07-28 (KSKA).
-        "ENGINE RUN", "ENG RUN", "BASH"],
+        // Essais moteur au point fixe : régime d'activité qui se gère au sol,
+        // sur les aires. Revue du 2026-07-28 (KSKA). « BASH » figurait ici
+        // jusqu'au 2026-07-31 — déplacé en départ+approche, voir le commentaire
+        // de ces deux listes.
+        "ENGINE RUN", "ENG RUN"],
     };
     const CRITICAL_TEXT = ["CLSD", "CLOSED", "U/S", "UNSERVICEABLE", "UNSERV", "NOT AVBL",
       "NOT AVAILABLE", "UNSAFE", "WITHDRAWN"];
