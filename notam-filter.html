@@ -1800,6 +1800,21 @@
       color: var(--amber)
     }
 
+    /* Avertissement « refs absentes du layout ». Séparé du compteur par un filet :
+       ce n'est pas une nuance du décompte, c'est une limite du fond de carte. */
+    .plan-tally .plan-miss {
+      margin-top: 6px;
+      padding-top: 6px;
+      border-top: 1px solid var(--line2);
+      color: var(--amber)
+    }
+
+    .plan-tally .plan-miss b {
+      color: var(--amber);
+      font-family: var(--mono);
+      font-weight: 600
+    }
+
     .plan-pick {
       margin-top: 10px;
       min-height: 0
@@ -14229,6 +14244,16 @@ window.addEventListener("scroll", hidePop, true);
         restricted: "#f6b23e",
         reopened: "#34d39a",
 
+        /* Le vert « rouvert » CONFIRME qu'une surface est de nouveau utilisable :
+           c'est une bonne nouvelle, pas une alerte. Il ne doit donc jamais peser
+           autant à l'écran que le rouge « fermé » ou l'ambre « restreint » —
+           sinon un terrain qui vient de lever cinq NOTAM se lit comme un terrain
+           en travaux. On le rend à FAIBLE OPACITÉ : présent si on le cherche,
+           effacé si on cherche autre chose. Deux valeurs, pas une : le tracé au
+           sol s'estompe plus que le NOM, qui doit rester lisible — un trait
+           fantôme sans nom n'apprend rien. */
+        reopenedAlpha: { paint: .26, label: .55 },
+
         // Mode nuit : chaussées grises, suffisamment contrastées avec le fond.
         base: {
           rwy: "#585e64",
@@ -14263,6 +14288,9 @@ window.addEventListener("scroll", hidePop, true);
         closed: "#e5484d",
         restricted: "#cf7a12",
         reopened: "#12936a",
+        // cf. le commentaire du thème sombre. Sur fond blanc, un vert translucide
+        // s'efface plus vite que sur fond noir : on remonte les deux valeurs.
+        reopenedAlpha: { paint: .3, label: .62 },
 
         // Mode jour : palette proche de la carte de référence.
         base: {
@@ -14704,13 +14732,30 @@ window.addEventListener("scroll", hidePop, true);
       const TOUCH = new Map(), located = new Set();
       // CUTS : par NOTAM, la géométrie de découpe résolue (segment peint ou marqueurs)
       const CUTS = new Map();
+      /* MISS : refs qu'un NOTAM NOMME mais qui n'existent pas dans le layout.
+         On continue d'afficher le plan — un fond de carte incomplet vaut mieux
+         qu'un écran vide — mais il faut le DIRE, et nommer les refs concernées :
+         sans avertissement, un taxiway fermé que la carte ignore se lit comme un
+         taxiway ouvert, ce qui est exactement l'erreur que ce plan doit éviter.
+         Cas réel LFBO vérifié le 2026-07-31 contre OSM (base 13:02Z) : « TWY T21
+         CLSD », « TWY T20 CLOSED », « TWY T11 CLSD » — la série T de LFBO s'arrête
+         à T10/T22 dans OSM, ces trois refs n'y existent nulle part, donc aucun
+         layout régénéré ne les fera apparaître : c'est une lacune de la DONNÉE,
+         pas du générateur, et elle se corrige dans OSM. */
+      const MISS = new Map();     // "TWY T21" -> [NOTAMs qui la citent]
+      const MISSLBL = { twy: "TWY", rwy: "RWY", stand: "STAND", apron: "APRON" };
 
       for (const n of ground) {
         const refs = refsFromNotam(n.e || "");
         for (const kind of ["twy", "rwy", "stand", "apron"]) {
           for (const ref of refs[kind]) {
             const hits = INDEX.get(KIND2T[kind] + ":" + ref);
-            if (!hits) continue;
+            if (!hits) {
+              const key = MISSLBL[kind] + " " + ref;
+              if (!MISS.has(key)) MISS.set(key, []);
+              if (!MISS.get(key).includes(n)) MISS.get(key).push(n);
+              continue;
+            }
             located.add(n.id);
             for (const s of hits) {
               if (!TOUCH.has(s)) TOUCH.set(s, []);
@@ -14857,7 +14902,7 @@ window.addEventListener("scroll", hidePop, true);
       }
       const main = [...comp.values()].sort((a, b) => b.length - a.length)[0] || SURF.map((_, i) => i);
 
-      return { layout, SURF, TOUCH, CUTS, ground, located, px,
+      return { layout, SURF, TOUCH, CUTS, ground, located, MISS, px,
                B: box(SURF.map((_, i) => i)), Bfit: box(main),
                view: { k: 1, tx: 0, ty: 0 }, fit: { s: 1, ox: 0, oy: 0 }, sel: null };
     }
@@ -14883,7 +14928,30 @@ window.addEventListener("scroll", hidePop, true);
       if (plan) { planDraw(); planTally(); planShowPick(plan.sel); }
     }
 
-    const planShown = n => !planTWin || activeAt(n, planTWin);
+    /* Une levée (NOTAM CNL/VOID, « RESUMED NORMAL OPERATION ») est un ÉVÉNEMENT
+       PONCTUEL, pas un état qui dure : elle dit « à cet instant, la surface
+       redevient utilisable ». Or ces NOTAM n'ont presque jamais de C) — cas réels
+       LFBO relevés le 2026-07-31 : A5062/26 « TAXIWAYS W35 W40 W50 W60 : NOTAM
+       VOID », A5085/26 « RWY 14L/32R : NOTAM VOID », B) seul, aucun C). activeAt()
+       leur donne donc cc = Infinity et le terrain restait vert INDÉFINIMENT : ce
+       jour-là, dix levées peignaient LFBO en vert (les deux pistes comprises)
+       alors que les vraies fermetures ne commençaient que le 3 août.
+       On borne la validité du vert à 24 h après B). Au-delà, la levée est de
+       l'histoire, plus une information de terrain — le NOTAM reste dans la liste,
+       il cesse seulement de colorier le plan. Un C) plus court que 24 h reste
+       prioritaire : activeAt() le tranche déjà, ce test ne fait qu'ajouter une
+       borne HAUTE là où le NOTAM n'en donne pas. */
+    const REOPEN_MS = 24 * 3600 * 1000;
+    function planReopenFresh(n) {
+      if (!isResumption(n)) return true;
+      const b = ts(n.b);
+      if (b == null) return true;                      // sans date de début, on ne juge pas
+      const end = b + REOPEN_MS;
+      // même logique que activeAt : les 24 h doivent CROISER la fenêtre affichée
+      // (activeAt garantit déjà l'autre côté, b <= win.end).
+      return end >= (planTWin ? planTWin.start : Date.now());
+    }
+    const planShown = n => (!planTWin || activeAt(n, planTWin)) && planReopenFresh(n);
 
     /* Plein = fermé sur TOUTE la période regardée. Pointillé = fermé seulement
        une PARTIE de cette période (horaire récurrent, ou fenêtre B-C qui ne
@@ -14934,7 +15002,12 @@ window.addEventListener("scroll", hidePop, true);
       const full = closures.length > 0 && (!planTWin || closures.some(n => planFullyCovers(n, planTWin)));
       if (full) return { state: "instant", kind: "closed", col: planPal().closed, ns: act };
       const settling = act.filter(n => planKind(n) !== "reopened");
-      if (!settling.length) return { state: "instant", kind: "reopened", col: planPal().reopened, ns: act };
+      // seul le vert porte une opacité : voir reopenedAlpha dans PLAN_THEME.
+      if (!settling.length) {
+        const a = planPal().reopenedAlpha;
+        return { state: "instant", kind: "reopened", col: planPal().reopened,
+                 alpha: a.paint, labelAlpha: a.label, ns: act };
+      }
       return { state: "span", kind: "restricted", col: planPal().restricted, ns: act };
     }
 
@@ -15112,6 +15185,14 @@ window.addEventListener("scroll", hidePop, true);
     }
     // variante lat/lon : projette via planSC avant de hachurer
     function planHatch(ctx, g, w, col, dim) { planHatchPts(ctx, g.map(planSC), w, col, dim); }
+    /* Applique une opacité à une couleur de thème : '#rrggbb' + a -> '#rrggbbaa'.
+       Le canvas accepte l'hexa à 8 chiffres, et le résultat reste une COULEUR —
+       donc interchangeable avec planPal() partout (strokeStyle, fillStyle,
+       shadowColor). Passer par ctx.globalAlpha aurait obligé à encadrer des
+       blocs de dessin truffés de `continue` par un save/restore fragile, et
+       planStroke() écrase déjà globalAlpha pour ses pointillés. */
+    const planA = (col, a) => (a == null || a >= 1) ? col
+      : col + Math.round(Math.min(Math.max(a, 0), 1) * 255).toString(16).padStart(2, "0");
     function planStroke(ctx, g, w, col, glow, dash) {
       if (g.length < 2) return;
       ctx.beginPath();
@@ -15419,7 +15500,9 @@ window.addEventListener("scroll", hidePop, true);
       }
       const drawn = S.map(s => ({ s, st: planState(s) })).filter(x => x.st);
       for (const { s, st } of drawn) {
-        const dim = st.state === "span", col = st.col;
+        // st.alpha n'est posé que par l'état « rouvert » ; partout ailleurs
+        // planA() rend la couleur telle quelle.
+        const dim = st.state === "span", col = planA(st.col, st.alpha);
         /* Fermeture ET réouverture peignent la géométrie (état "instant",
            trait plein) — ce sont des faits établis, pas des nuances. Une
            restriction — une partie de la journée seulement — ne colore que le
@@ -15443,7 +15526,9 @@ window.addEventListener("scroll", hidePop, true);
           continue;
         }
         if (s.t === "apr") {
-          for (const g of s.segs) { if (!dim) planFill(ctx, g, col + "26"); planStroke(ctx, g, 1.6, col, false, dim); }
+          // remplissage à ~15 % — composé avec l'opacité de l'état, pas concaténé
+          // à `col` qui peut déjà porter la sienne (hexa 8 chiffres).
+          for (const g of s.segs) { if (!dim) planFill(ctx, g, planA(st.col, .15 * (st.alpha == null ? 1 : st.alpha))); planStroke(ctx, g, 1.6, col, false, dim); }
           continue;
         }
         /* Découpe : si ce taxiway a des NOTAMs « BTN X AND Y » actifs, on ne peint
@@ -15492,8 +15577,10 @@ window.addEventListener("scroll", hidePop, true);
       }
       const lab = S.filter(s => s.r && (s.t === "twy" || s.t === "rwy"));
       const st_ = new Map(drawn.map(x => [x.s, x.st]));
-      // touchés par un NOTAM : toujours étiquetés
-      for (const s of lab) if (st_.get(s)) planLabel(ctx, s.r, s.segs, st_.get(s).col, st_.get(s).state);
+      // touchés par un NOTAM : toujours étiquetés. Le NOM garde sa propre
+      // opacité (labelAlpha), plus forte que le tracé : cf. PLAN_THEME.
+      for (const s of lab) if (st_.get(s))
+        planLabel(ctx, s.r, s.segs, planA(st_.get(s).col, st_.get(s).labelAlpha), st_.get(s).state);
       // éteints : PISTES toujours (peu nombreuses, repères clés) ; taxiways dès
       // qu'on zoome un peu, sinon des dizaines d'étiquettes feraient une bouillie.
       for (const s of lab) if (!st_.get(s) && (s.t === "rwy" || plan.view.k > 1.15))
@@ -15526,7 +15613,7 @@ window.addEventListener("scroll", hidePop, true);
           // Ancre et direction viennent de planBuild (s.lab) : le nez du poste,
           // choisi sur TOUS ses segments. Ici on ne fait que projeter.
           const L = s.lab; if (!L) continue;
-          const col = st ? st.col : P_.off, mode = st ? st.state : "off";
+          const col = st ? planA(st.col, st.labelAlpha) : P_.off, mode = st ? st.state : "off";
           const p = planSC(L.p);
           let angle = 0, ux = 1, uy = 0;
           if (L.q) {
@@ -15563,8 +15650,15 @@ window.addEventListener("scroll", hidePop, true);
       const scope = planTMode === "today" ? "today"
                   : planTMode === "tomorrow" ? "tomorrow"
                   : "right now";
+      /* Refs nommées par un NOTAM de la période affichée mais absentes du fond de
+         carte (cf. MISS dans planBuild). On ne peut nommer que ce que
+         refsFromNotam() a su lire : une « PUSH BACK AREA ROMEO » ou une FATO
+         n'est pas une ref de surface et ne sort donc que dans le compte
+         « could not be placed » ci-dessus, sans être listée ici. */
+      const miss = [...plan.MISS].filter(([, ns]) => ns.some(planShown)).map(([k]) => k);
       el.innerHTML = `<b>${loc}</b> of <b>${g.length}</b> ground NOTAM${g.length === 1 ? "" : "s"} shown on the layout ${scope}.` +
-        (un ? ` <span class="warn">${un} could not be placed</span> — read the full list.` : "");
+        (un ? ` <span class="warn">${un} could not be placed</span> — read the full list.` : "") +
+        (miss.length ? `<div class="plan-miss">⚠ <b>${miss.map(esc).join(" · ")}</b> ${miss.length === 1 ? "is" : "are"} named by a NOTAM but ${miss.length === 1 ? "does" : "do"} not exist on this layout. The drawing comes from OpenStreetMap and can be incomplete — read those NOTAMs in the list, and do not read the blank surface as open.</div>` : "");
     }
 
     /* ---------- interaction ---------- */
