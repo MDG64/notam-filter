@@ -240,8 +240,14 @@
       flex: none
     }
 
+    /* Les deux pastilles du header (jour/nuit, ?) sont plus grosses que le
+       #infoBtn de la ligne station, qui garde sa taille : on ne touche donc
+       qu'aux .help-btn posés dans .hdr-actions. */
     .hdr-actions .help-btn {
-      margin-left: 0
+      margin-left: 0;
+      width: 38px;
+      height: 38px;
+      font-size: 19px
     }
 
     .brand-title {
@@ -467,15 +473,15 @@
     }
 
     .stationmapbtn {
-      width: 34px;
-      height: 34px;
+      width: 42px;
+      height: 42px;
       flex: none;
       margin-left: auto;
       border-radius: 50%;
       border: 1px solid var(--line2);
       background: #1a242c;
       color: var(--cyan);
-      font: 20px/1 var(--sans);
+      font: 24px/1 var(--sans);
       cursor: pointer;
       opacity: .7;
       filter: grayscale(1);
@@ -1275,9 +1281,14 @@
       outline-offset: 3px
     }
 
+    /* Le viewBox est 34x14 : à 63x26 le panneau remplit exactement sa boîte
+       (63/34 ≈ 26/14), donc il fait 26px de haut — la hauteur visible du
+       carré blanc de #infoBtn, qui est un SVG 26x26. Avec height:34px seul,
+       le letterbox du preserveAspectRatio ne laissait que 22px de panneau. */
     .planbtn svg {
       display: block;
-      height: 34px
+      width: 63px;
+      height: 26px
     }
 
     .modal-ov {
@@ -2167,13 +2178,13 @@
 
     /* ---------- bouton Route (dans le header) ---------- */
     .routebtn {
-      font: 600 12px/1 var(--sans);
+      font: 600 14px/1 var(--sans);
       letter-spacing: .08em;
       color: var(--text);
       border: 1px solid var(--line2);
       background: var(--panel2);
       border-radius: 20px;
-      padding: 9px 16px;
+      padding: 11px 19px;
       cursor: pointer;
       transition: background .15s, border-color .15s;
       white-space: nowrap
@@ -2936,9 +2947,9 @@
       }
 
       .stationmapbtn {
-        width: 30px;
-        height: 30px;
-        font-size: 17px
+        width: 34px;
+        height: 34px;
+        font-size: 19px
       }
 
       .help-btn {
@@ -2947,9 +2958,17 @@
         font-size: 12px
       }
 
+      /* Le header reste sur une seule ligne : à 360px de large la barre
+         demande ~342px, marge conservée. */
+      .hdr-actions .help-btn {
+        width: 29px;
+        height: 29px;
+        font-size: 14px
+      }
+
       .planbtn svg {
-        width: 44px;
-        height: 27px
+        width: 63px;
+        height: 26px
       }
 
       .hdr-actions {
@@ -2957,8 +2976,8 @@
       }
 
       .routebtn {
-        padding: 6px 9px;
-        font-size: 10.5px
+        padding: 7px 10px;
+        font-size: 11.5px
       }
 
       .meta .src {
