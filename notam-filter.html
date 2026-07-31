@@ -1815,6 +1815,42 @@
       font-weight: 600
     }
 
+    /* Le bouton de signalement vit DANS l'avertissement, pas à côté : c'est la
+       même information (« il manque quelque chose ici ») et sa seule suite
+       possible. Discret — ce n'est pas une action de vol, et l'équipage ne doit
+       jamais avoir à choisir entre lire le NOTAM et cliquer ici. */
+    .plan-tally .plan-miss-act {
+      margin-top: 7px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap
+    }
+
+    .plan-tally .plan-report {
+      font: 600 10.5px/1 var(--sans);
+      color: var(--amber);
+      background: transparent;
+      border: 1px solid var(--amber);
+      border-radius: 5px;
+      padding: 6px 10px;
+      cursor: pointer
+    }
+
+    .plan-tally .plan-report:disabled {
+      opacity: .5;
+      cursor: default
+    }
+
+    .plan-tally .plan-report-msg {
+      color: var(--muted);
+      font-weight: 500
+    }
+
+    .plan-tally .plan-report-msg.ok {
+      color: var(--green)
+    }
+
     .plan-pick {
       margin-top: 10px;
       min-height: 0
@@ -14317,11 +14353,22 @@ window.addEventListener("scroll", hidePop, true);
            c'est une bonne nouvelle, pas une alerte. Il ne doit donc jamais peser
            autant à l'écran que le rouge « fermé » ou l'ambre « restreint » —
            sinon un terrain qui vient de lever cinq NOTAM se lit comme un terrain
-           en travaux. On le rend à FAIBLE OPACITÉ : présent si on le cherche,
-           effacé si on cherche autre chose. Deux valeurs, pas une : le tracé au
-           sol s'estompe plus que le NOM, qui doit rester lisible — un trait
-           fantôme sans nom n'apprend rien. */
-        reopenedAlpha: { paint: .26, label: .55 },
+           en travaux. On l'efface donc AU SOL : le tracé passe à FAIBLE OPACITÉ,
+           présent si on le cherche, effacé si on cherche autre chose.
+           Le NOM, lui, reste à pleine force. Ce n'est pas une entorse à la
+           discrétion, c'en est la condition : le tracé et le nom ont la MÊME
+           teinte, et un nom translucide posé sur sa propre couleur ne devient
+           pas discret — il disparaît (mesuré à 1,06:1 en thème clair, soit un
+           nom effacé). La retenue vit dans la peinture ; la lisibilité, dans le
+           nom — un trait fantôme sans nom n'apprend rien.
+           `paint` a été REBAISSÉ une fois le nom rendu lisible (halo) : tant que
+           le nom disparaissait, le tracé était le seul indice de la levée et
+           devait tenir tout seul. Il ne porte plus le message, juste le
+           repérage — il peut donc s'effacer davantage. Une seule valeur suffit
+           pour tout le plan : elle est composée dans la couleur, que celle-ci
+           parte vers un taxiway, une piste, un poste (`std`) ou une aire
+           (`apr`). */
+        reopenedAlpha: { paint: .14, label: 1 },
 
         // Mode nuit : chaussées grises, suffisamment contrastées avec le fond.
         base: {
@@ -14358,8 +14405,9 @@ window.addEventListener("scroll", hidePop, true);
         restricted: "#cf7a12",
         reopened: "#12936a",
         // cf. le commentaire du thème sombre. Sur fond blanc, un vert translucide
-        // s'efface plus vite que sur fond noir : on remonte les deux valeurs.
-        reopenedAlpha: { paint: .3, label: .62 },
+        // s'efface plus vite que sur fond noir : la peinture reste un cran
+        // au-dessus de celle du thème sombre. Le nom reste à 1, cerné par haloOn.
+        reopenedAlpha: { paint: .16, label: 1 },
 
         // Mode jour : palette proche de la carte de référence.
         base: {
@@ -14387,13 +14435,23 @@ window.addEventListener("scroll", hidePop, true);
         off: "#505050",
         offLabel: "#202020",
         chipOff: "rgba(255,255,255,.96)",
-        /* Pas de halo en thème clair : le liseré blanc entourait chaque nom de
-           piste et de taxiway et leur donnait un air d'autocollant, là où une
-           vraie carte de plateforme pose le texte à plat sur la chaussée.
+        /* Pas de halo en thème clair pour les noms NEUTRES : le liseré blanc
+           entourait chaque nom de piste et de taxiway et leur donnait un air
+           d'autocollant, là où une vraie carte de plateforme pose le texte à
+           plat sur la chaussée. Noirs sur chaussée grise, ils s'en passent.
            Le thème sombre garde le sien, qui est NOIR : son texte est clair
            (#d4dce2) sur une chaussée sombre (#777d82), soit 2,9:1 — sans le
            halo il devient illisible. Ce n'est pas le liseré blanc visé ici. */
         halo: null,
+        /* Un nom COLORÉ, lui, est toujours posé sur sa propre couleur : le vert
+           sur la bande verte, le rouge sur la bande rouge, l'ambre sur la
+           chaussée qu'il est seul à signaler (le restreint ne peint rien).
+           Même teinte dessus et dessous — 1,06:1, 1,00:1 et 1,03:1 mesurés :
+           trois noms effacés. Le liseré clair leur redonne un fond à eux
+           (~3,9:1) et ne touche QUE la poignée de surfaces concernées par un
+           NOTAM : l'effet autocollant reproché ci-dessus épargne la carte au
+           repos, qui reste posée à plat. */
+        haloOn: "rgba(255,255,255,.92)",
         glow: false
       }
     };
@@ -15347,8 +15405,13 @@ window.addEventListener("scroll", hidePop, true);
          Halo seulement si le thème en définit un (cf. PLAN_THEME) : le thème
          clair n'en a plus. */
       const accent = (on || pend) ? col : P.offLabel;
-      if (P.halo) {
-        ctx.strokeStyle = P.halo; ctx.lineWidth = (3.6 + 0.8 * (LS - 1)) * planDPR;
+      /* Un nom coloré peut réclamer un autre liseré que les noms neutres : il
+         est posé sur la couleur de son propre état, pas sur la chaussée nue
+         (cf. haloOn dans PLAN_THEME). Sans haloOn — thème sombre —, tout le
+         monde garde le halo commun : le rendu nuit ne bouge pas. */
+      const halo = (on || pend) ? (P.haloOn || P.halo) : P.halo;
+      if (halo) {
+        ctx.strokeStyle = halo; ctx.lineWidth = (3.6 + 0.8 * (LS - 1)) * planDPR;
         ctx.miterLimit = 2;
         ctx.strokeText(text, x, y + 0.5 * planDPR);
       }
@@ -15710,6 +15773,130 @@ window.addEventListener("scroll", hidePop, true);
       }
     }
 
+    /* ---------- signalement d'une lacune du fond de carte ----------
+       Une surface citée par un NOTAM mais absente du plan ne se corrige NI ici
+       NI dans le générateur : elle manque dans la donnée source, en amont. Le
+       seul geste demandé à l'équipage est donc UN clic — pas de formulaire, pas
+       d'adresse à saisir, pas de client mail à ouvrir. Tout le contexte utile
+       (terrain, refs, texte intégral des NOTAM qui les nomment) est déjà dans
+       l'app : c'est elle qui l'envoie.
+       Rien d'autre ne part : ni position, ni identifiant, ni route chargée.
+
+       CE QUI N'EST JAMAIS SUPPRIMÉ : le bouton d'un autre utilisateur. Le
+       nombre de signalements sur un même terrain est ce qui PRIORISE la
+       correction — un trou vu par sept équipages passe devant un trou vu une
+       fois. L'app ne demande donc jamais au serveur si quelqu'un a déjà
+       signalé, ne l'affiche jamais, et le serveur ne le dit pas non plus.
+       L'accusé ne vit que le temps de la session en cours (mémoire, jamais
+       localStorage) : il empêche le double-clic du MÊME équipage, et il
+       disparaît au rechargement — une tablette d'EFB partagée doit laisser
+       cliquer l'équipage suivant comme si de rien n'était. */
+    const LAYOUT_REPORT_KEY = "notam_layout_reports";
+    const layoutReportKey = (icao, refs) => icao + "|" + refs.slice().sort().join(",");
+    const layoutReportSent = new Set();   // session en cours UNIQUEMENT
+
+    function layoutReportState() {
+      const s = store.get(LAYOUT_REPORT_KEY);
+      return { queue: (s && Array.isArray(s.queue)) ? s.queue : [] };
+    }
+    function layoutReportSave(s) {
+      // Seule la file d'attente est persistée — elle doit survivre à un
+      // rechargement hors ligne, c'est sa raison d'être. Bornée à 20 : le
+      // stockage local est partagé avec les NOTAM hors-ligne (plusieurs Mo) et
+      // ne doit jamais tomber en QuotaExceeded à cause de ce journal.
+      if (s.queue.length > 20) s.queue = s.queue.slice(-20);
+      store.set(LAYOUT_REPORT_KEY, { queue: s.queue });
+    }
+
+    async function layoutReportPost(p) {
+      if (!BACKEND_URL) return false;
+      const r = await fetch(BACKEND_URL + "/api/layout-report", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(p),
+      });
+      return r.ok;
+    }
+
+    /* Un signalement qui échoue (hors ligne en vol, proxy en redémarrage) est
+       mis en file et repart tout seul dès le retour du réseau — sinon le clic
+       unique promis à l'utilisateur ne serait tenu qu'avec de la couverture. */
+    async function layoutReportFlush() {
+      const s = layoutReportState();
+      if (!s.queue.length || !navigator.onLine || !BACKEND_URL) return;
+      const rest = [];
+      for (const p of s.queue) {
+        let ok = false;
+        try { ok = await layoutReportPost(p); } catch (e) { ok = false; }
+        if (ok) layoutReportSent.add(layoutReportKey(p.icao, p.refs));
+        else rest.push(p);
+      }
+      s.queue = rest;
+      layoutReportSave(s);
+    }
+    addEventListener("online", layoutReportFlush);
+    layoutReportFlush();
+
+    /* Câblage du bouton. Rejoué à chaque reconstruction du compteur (changement
+       de fenêtre horaire) : les refs manquantes ne sont pas les mêmes selon la
+       période affichée, donc l'accusé de réception non plus. */
+    function planWireReport(pairs, refs, unplaced) {
+      const btn = $("#planReport"), msg = $("#planReportMsg");
+      if (!btn || !msg) return;
+      const icao = currentIcao || "";
+      const key = layoutReportKey(icao, refs);
+      const st = layoutReportState();
+      const queued = st.queue.some(p => layoutReportKey(p.icao, p.refs) === key);
+
+      if (layoutReportSent.has(key) || queued) {
+        btn.disabled = true;
+        btn.textContent = "Reported";
+        msg.textContent = queued ? "Will be sent when back online." : "Thank you — the map data will be checked.";
+        msg.className = "plan-report-msg ok";
+        return;
+      }
+
+      btn.disabled = false;
+      btn.textContent = "Report missing surface";
+      btn.title = "Sends this aerodrome and the NOTAMs concerned, so the map data can be corrected. Nothing else is sent.";
+      msg.textContent = "";
+      msg.className = "plan-report-msg";
+
+      btn.onclick = async () => {
+        // Les NOTAM joints sont ceux de la période AFFICHÉE qui nomment une des
+        // refs absentes : ce sont eux qui prouvent que la surface existe.
+        const seen = new Map();
+        for (const [, ns] of pairs) {
+          for (const n of ns) {
+            if (!planShown(n) || seen.has(n.id)) continue;
+            seen.set(n.id, { id: n.id, text: n.e || n.raw || "" });
+          }
+        }
+        const payload = { icao, refs, notams: [...seen.values()], unplaced };
+
+        btn.disabled = true;
+        msg.textContent = "Sending…";
+        let ok = false;
+        try { ok = await layoutReportPost(payload); } catch (e) { ok = false; }
+
+        if (ok) {
+          layoutReportSent.add(key);
+          btn.textContent = "Reported";
+          msg.textContent = "Thank you — the map data will be checked.";
+          msg.className = "plan-report-msg ok";
+          return;
+        }
+        // Échec : on garde le signalement plutôt que de renvoyer l'utilisateur
+        // à un second clic. Le bouton dit ce qui s'est passé, sans rien exiger.
+        const s2 = layoutReportState();
+        s2.queue.push(payload);
+        layoutReportSave(s2);
+        btn.textContent = "Reported";
+        msg.textContent = "Saved — it will be sent as soon as the connection is back.";
+        msg.className = "plan-report-msg ok";
+      };
+    }
+
     /* ---------- compteur d'honnêteté ---------- */
     function planTally() {
       const g = plan.ground.filter(planShown);
@@ -15724,10 +15911,21 @@ window.addEventListener("scroll", hidePop, true);
          refsFromNotam() a su lire : une « PUSH BACK AREA ROMEO » ou une FATO
          n'est pas une ref de surface et ne sort donc que dans le compte
          « could not be placed » ci-dessus, sans être listée ici. */
-      const miss = [...plan.MISS].filter(([, ns]) => ns.some(planShown)).map(([k]) => k);
+      const pairs = [...plan.MISS].filter(([, ns]) => ns.some(planShown));
+      const miss = pairs.map(([k]) => k);
+      /* Le fond de carte n'est pas nommé : ce qui compte pour l'équipage est
+         qu'il MANQUE quelque chose ici, pas d'où vient le dessin (la source est
+         citée dans le panneau d'aide). Nommer un fournisseur inviterait à lui
+         adresser la correction, alors que le bouton ci-dessous fait le trajet
+         tout seul — un clic, rien à saisir. */
       el.innerHTML = `<b>${loc}</b> of <b>${g.length}</b> ground NOTAM${g.length === 1 ? "" : "s"} shown on the layout ${scope}.` +
         (un ? ` <span class="warn">${un} could not be placed</span> — read the full list.` : "") +
-        (miss.length ? `<div class="plan-miss">⚠ <b>${miss.map(esc).join(" · ")}</b> ${miss.length === 1 ? "is" : "are"} named by a NOTAM but ${miss.length === 1 ? "does" : "do"} not exist on this layout. The drawing comes from OpenStreetMap and can be incomplete — read those NOTAMs in the list, and do not read the blank surface as open.</div>` : "");
+        (miss.length ? `<div class="plan-miss">⚠ <b>${miss.map(esc).join(" · ")}</b> ${miss.length === 1 ? "is" : "are"} named by a NOTAM but ${miss.length === 1 ? "is" : "are"} missing from this layout — the drawing is incomplete here. Read ${miss.length === 1 ? "that NOTAM" : "those NOTAMs"} in the list, and do not read the blank surface as open.
+          <div class="plan-miss-act">
+            <button type="button" class="plan-report" id="planReport">Report missing surface</button>
+            <span class="plan-report-msg" id="planReportMsg"></span>
+          </div></div>` : "");
+      if (miss.length) planWireReport(pairs, miss, un);
     }
 
     /* ---------- interaction ---------- */
