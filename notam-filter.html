@@ -14134,7 +14134,10 @@ window.addEventListener("scroll", hidePop, true);
       // Chaque ref sort avec sa position token (`at`) : refsFromNotam en a besoin
       // pour savoir si une ref citée comme borne d'un « BTN X AND Y » a ou non
       // une AUTRE mention, indépendante, ailleurs dans le texte.
-      function series(w,i,kw,ok){
+      // `heads` porte les TÊTES de refs composées (« LINK 35 », « EXIT 4 ») —
+      // voir HEADS dans planBuild : elles sont lues sur le terrain affiché, pas
+      // devinées, sinon « TWY A CLSD DUE WORK 3 » inventerait « WORK 3 ».
+      function series(w,i,kw,ok,heads){
         const out=[]; let j=i+1, expectRef=true;
         while(j<w.length){
           let t=w[j];
@@ -14151,6 +14154,15 @@ window.addEventListener("scroll", hidePop, true);
           }
           const rg=range2(t);
           if(rg){ rg.forEach(x=>out.push({ref:x,at:j})); j++; expectRef=false; continue; }
+          /* Ref composée « TÊTE + numéro ». À EGLL les 20 bretelles s'appellent
+             « Link 35 », pas « L35 » : le NOTAM écrit « TWY LINK 35 CLSD » et
+             l'ancienne boucle cassait sec sur LINK (4 lettres, donc hors
+             TWY_REF) — la ref ne sortait même pas en MISS, le NOTAM tombait
+             muet en « could not be placed ». On exige un CHIFFRE dans le second
+             jeton : une tête seule (« TWY LINK CLSD ») ne désigne rien. */
+          if(!isRef && heads && heads.has(t) && w[j+1] && !STOP.has(w[j+1]) && ok(w[j+1]) && /\d/.test(w[j+1])){
+            out.push({ref:t+" "+w[j+1],at:j}); j+=2; expectRef=false; continue;
+          }
           if(isRef){ out.push({ref:t,at:j}); j++; expectRef=false; continue; }
           break;
         }
@@ -14165,13 +14177,13 @@ window.addEventListener("scroll", hidePop, true);
       const range2=s=>{const m=s.match(/^([A-Z]{0,2})(\d{1,3})-([A-Z]{0,2})(\d{1,3})$/);
         return m?range(m[1]+m[2],m[3]+m[4]):null;};
 
-      function refsFromNotam(e){
+      function refsFromNotam(e,heads){
         const w=lex(e), T=" "+(e||"").toUpperCase()+" ";
         const twy=new Set(),twyHits=[],rwy=new Set(),stand=new Set(),apron=new Set(),partial=[];
         const okT=t=>TWY_REF.test(t), okS=t=>/^[A-Z]{0,2}\d{1,3}$/.test(t);
         for(let i=0;i<w.length;i++){
           const k=w[i];
-          if(TWY_KW.has(k))  series(w,i,TWY_KW,okT).forEach(h=>{ twy.add(h.ref); twyHits.push(h); });
+          if(TWY_KW.has(k))  series(w,i,TWY_KW,okT,heads).forEach(h=>{ twy.add(h.ref); twyHits.push(h); });
           if(STD_KW.has(k))  series(w,i,STD_KW,okS).forEach(h=>stand.add(h.ref));
           if(APR_KW.has(k)){ let t=w[i+1]; if(t&&!STOP.has(t)){ if(NATO[t])apron.add(NATO[t]);
             else if(/^[A-Z]{1,2}\d{0,2}$/.test(t))apron.add(t); } }
@@ -14188,7 +14200,11 @@ window.addEventListener("scroll", hidePop, true);
           "PRKG","PARKING","PSN","STAND","STANDS","BAY","POSITION","AND","RAPID","EXIT","OF"]);
         const isRef=t=>/^[A-Z]{0,3}\d{0,3}$/.test(t)&&/[A-Z0-9]/.test(t)&&t.length<=4&&!STOP.has(t);
         const firstRef=(from)=>{ for(let i=from;i<w.length&&i<from+6;i++){ const t=w[i];
-          if(PSKIP.has(t))continue; if(isRef(t))return{ref:t,at:i}; } return null; };
+          if(PSKIP.has(t))continue;
+          // même ref composée qu'au-dessus : « BTN LINK 35 AND LINK 36 » borne
+          // une portion aussi bien que « BTN A3 AND A4 ».
+          if(heads&&heads.has(t)&&w[i+1]&&isRef(w[i+1])&&/\d/.test(w[i+1]))return{ref:t+" "+w[i+1],at:i};
+          if(isRef(t))return{ref:t,at:i}; } return null; };
         const partialPos=[];
         for(let i=0;i<w.length;i++){ const k=w[i];
           if(k==="BTN"||k==="BTWN"||k==="BETWEEN"){ const a=firstRef(i+1); if(!a)continue;
@@ -14625,13 +14641,54 @@ window.addEventListener("scroll", hidePop, true);
       const INDEX = new Map();
       const idx = (k, s) => { if (!INDEX.has(k)) INDEX.set(k, []); if (!INDEX.get(k).includes(s)) INDEX.get(k).push(s); };
       const QFU = /^\d{2}[LRC]?$/;
+      /* Le générateur retombe sur le `name` OSM quand la voie n'a pas de `ref`
+         (fetch-layout.mjs) : la ref stockée devient alors la phrase entière,
+         « TAXIWAY B » — et « Taxiway B », en casse mixte, dans les layouts
+         d'avant l'uppercase. Le NOTAM, lui, dit « TWY B » et refsFromNotam()
+         n'en tire que « B ». Sans alias, la voie est DESSINÉE et NOMMÉE sur le
+         plan mais introuvable à l'index : elle part en MISS et le bandeau
+         déclare le fond de carte incomplet alors qu'il ne l'est pas.
+         371 refs sur 63 terrains sont dans ce cas (LGAV 43, UKBB 30, KROC 23,
+         DTNH 21, EGLL 18). On ajoute les clés au lieu de RÉÉCRIRE s.r : le nom
+         au long reste ce que le plan dessine — c'est le marquage réel au sol —
+         et un NOTAM qui citerait « TAXIWAY B » mot pour mot trouve toujours.
+         Là où les deux graphies coexistent (TBPB tague « A » ET « Taxiway A »
+         sur des tronçons différents de la même voie), l'alias les réunit sous
+         « A » : une fermeture peint enfin la voie ENTIÈRE. */
+      const STRIP = /^(?:TAXIWAYS?|TAXILANES?|TWYS?)\s+/;
       for (const s of SURF) if (s.r) {
         idx(s.t + ":" + s.r, s);
+        const U = String(s.r).toUpperCase();
+        if (U !== s.r) idx(s.t + ":" + U, s);
+        if (s.t === "twy") {
+          const short = U.replace(STRIP, "");
+          if (short && short !== U) idx("twy:" + short, s);
+        }
         if (s.t === "rwy")
           for (const end of s.r.split(/[/;-]/)) {
             const e = end.trim().replace(/^(\d)(?=[LRC]?$)/, "0$1");
             if (QFU.test(e)) idx("rwy:" + e, s);
           }
+      }
+      /* Têtes de refs composées, LUES SUR CE TERRAIN. Certaines voies portent un
+         nom en deux mots qui n'est pas un préfixe de type : EGLL numérote ses
+         bretelles « Link 35 », KJFK a ses « Exit 4 ». Le NOTAM les cite tels
+         quels (« TWY LINK 35 CLSD ») et l'extracteur, qui n'accepte que des
+         indicatifs de 1 à 3 lettres, cassait sur LINK sans rien produire.
+         Le vocabulaire vient du layout affiché et de lui seul : « LINK » n'est
+         une tête qu'aux terrains qui ont des refs « LINK … ». Le deviner par
+         liste câblée ferait glaner n'importe quel mot suivi d'un nombre.
+         Les préfixes de type (TWY/TAXIWAY) sont exclus : l'alias ci-dessus les
+         traite déjà, et mieux — il rend la ref sous son indicatif seul. Les
+         mots-clés des AUTRES familles le sont aussi : un terrain qui possède
+         une voie « Bay 3 » ferait sinon lire « BAY 3 CLSD » deux fois, comme
+         voie ET comme poste, et peindrait deux surfaces là où le NOTAM n'en
+         nomme qu'une. */
+      const HEADS = new Set();
+      for (const s of SURF) if (s.r && s.t === "twy") {
+        const m = String(s.r).toUpperCase().match(/^([A-Z]{2,})\s+\S/);
+        if (m && !STOP.has(m[1]) && !TWY_KW.has(m[1]) && !STD_KW.has(m[1]) && !APR_KW.has(m[1]))
+          HEADS.add(m[1]);
       }
       const lat0 = layout.arp[0], lon0 = layout.arp[1];
       const KX = Math.cos(lat0 * Math.PI / 180);
@@ -14873,7 +14930,7 @@ window.addEventListener("scroll", hidePop, true);
       const MISSLBL = { twy: "TWY", rwy: "RWY", stand: "STAND", apron: "APRON" };
 
       for (const n of ground) {
-        const refs = refsFromNotam(n.e || "");
+        const refs = refsFromNotam(n.e || "", HEADS);
         for (const kind of ["twy", "rwy", "stand", "apron"]) {
           for (const ref of refs[kind]) {
             const hits = INDEX.get(KIND2T[kind] + ":" + ref);
@@ -14958,7 +15015,7 @@ window.addEventListener("scroll", hidePop, true);
          retirer ce bloc ne change pas le rendu. Voir le harnais tests/plan-invariants. */
       const segLen = gp => { let l = 0; for (let i = 1; i < gp.length; i++) l += Math.hypot(gp[i][0] - gp[i - 1][0], gp[i][1] - gp[i - 1][1]); return l; };
       for (const n of ground) {
-        const rf = refsFromNotam(n.e || "");
+        const rf = refsFromNotam(n.e || "", HEADS);
         if (!rf.partial.length) continue;
         for (const [rx, ry] of rf.partial) {
           const hostRef = (rf.twy || []).find(r => r !== rx && r !== ry);
