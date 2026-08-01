@@ -15430,7 +15430,7 @@ window.addEventListener("scroll", hidePop, true);
       }
       return false;
     }
-    function planPlace(ctx, text, x, y, col, mode, force) {
+    function planPlace(ctx, text, x, y, col, mode, force, italic, angle) {
       const on = mode === "instant", pend = mode === "span";
       const P = planPal();
       // Échelle SOUS-LINÉAIRE selon le zoom : les étiquettes grossissent, mais
@@ -15442,20 +15442,42 @@ window.addEventListener("scroll", hidePop, true);
       const fs = (on ? 12.5 : 11.5) * LS;
       // Texte droit posé à même la chaussée, comme sur une vraie carte de
       // plateforme (AD 2 / Jeppesen) — plus de panneau noir, plus d'italique :
-      // sur ces cartes, seules les aires de trafic sont en italique.
-      ctx.font = "700 " + fs * planDPR + "px " + PLAN_LBL_FONT;
+      // sur ces cartes, seules les aires de trafic sont en italique. D'où le
+      // drapeau `italic`, posé par le seul planAprLabel().
+      ctx.font = (italic ? "italic 700 " : "700 ") + fs * planDPR + "px " + PLAN_LBL_FONT;
       // Boîte de collision seulement : plus de puce dessinée, mais on réserve
       // quand même l'espace pour que deux noms ne se chevauchent pas.
       const padX = 3 * LS * planDPR, padY = 1.5 * LS * planDPR;
       const tw = ctx.measureText(text).width;
       const w = tw + padX * 2, h = fs * planDPR + padY * 2;
-      const bx = x - w / 2, by = y - h / 2;
-      // Libellé droit : ses coins sont son enveloppe.
-      const quad = [[bx, by], [bx + w, by], [bx + w, by + h], [bx, by + h]];
-      if (!force && planBoxHit(bx, by, w, h, quad)) return false;
-      planBoxes.push({ x: bx, y: by, w, h, c: quad });
+      /* Libellé droit : ses coins sont son enveloppe. Incliné (`angle`, posé par
+         planAprLabel quand le nom suit le grand axe de son aire), on tourne les
+         quatre coins autour du point d'ancrage — planQuadHit teste par axes
+         séparateurs, il accepte n'importe quel quadrilatère. Le rectangle
+         englobant transmis à planBoxHit doit alors être celui du quad TOURNÉ,
+         sinon son pré-filtre écarterait à tort un vrai chevauchement. */
+      let quad;
+      if (angle) {
+        const ca = Math.cos(angle), sa = Math.sin(angle);
+        quad = [[-w / 2, -h / 2], [w / 2, -h / 2], [w / 2, h / 2], [-w / 2, h / 2]]
+          .map(([u, v]) => [x + u * ca - v * sa, y + u * sa + v * ca]);
+      } else {
+        quad = [[x - w / 2, y - h / 2], [x + w / 2, y - h / 2], [x + w / 2, y + h / 2], [x - w / 2, y + h / 2]];
+      }
+      let bx = Infinity, by = Infinity, bx1 = -Infinity, by1 = -Infinity;
+      for (const p of quad) {
+        if (p[0] < bx) bx = p[0]; if (p[0] > bx1) bx1 = p[0];
+        if (p[1] < by) by = p[1]; if (p[1] > by1) by1 = p[1];
+      }
+      const bw = bx1 - bx, bh = by1 - by;
+      if (!force && planBoxHit(bx, by, bw, bh, quad)) return false;
+      planBoxes.push({ x: bx, y: by, w: bw, h: bh, c: quad });
       ctx.save();
       ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.lineJoin = "round";
+      // Texte incliné : on amène le repère sur l'ancre et on tourne, le tracé
+      // se fait alors à l'origine.
+      if (angle) { ctx.translate(x, y); ctx.rotate(angle); }
+      const tx_ = angle ? 0 : x, ty_ = (angle ? 0 : y) + 0.5 * planDPR;
       /* Texte posé à même la carte — comme une vraie carte AD 2 : noir (teinte
          neutre du thème) au repos, rouge/ambre dès qu'un NOTAM touche
          l'élément. Même règle pour les taxiways que pour le reste.
@@ -15470,10 +15492,10 @@ window.addEventListener("scroll", hidePop, true);
       if (halo) {
         ctx.strokeStyle = halo; ctx.lineWidth = (3.6 + 0.8 * (LS - 1)) * planDPR;
         ctx.miterLimit = 2;
-        ctx.strokeText(text, x, y + 0.5 * planDPR);
+        ctx.strokeText(text, tx_, ty_);
       }
       ctx.fillStyle = accent;
-      ctx.fillText(text, x, y + 0.5 * planDPR);
+      ctx.fillText(text, tx_, ty_);
       ctx.restore();
       return true;
     }
@@ -15516,6 +15538,154 @@ window.addEventListener("scroll", hidePop, true);
         if (planPlace(ctx, text, p[0], p[1], col, mode, false)) return;
       }
       if (mode !== "off") { const p = vis[Math.floor(vis.length / 2)]; planPlace(ctx, text, p[0], p[1], col, mode, true); }
+    }
+    /* ---------- nom d'une aire de trafic ----------
+       Une aire est une SURFACE, pas une ligne : planLabel poserait son nom sur
+       le CONTOUR, c'est-à-dire à cheval sur la limite entre l'aire et ce qui
+       l'entoure — on ne saurait pas laquelle des deux il nomme. On cherche donc
+       un point à l'INTÉRIEUR.
+       Le centroïde ne suffit pas : un apron en L, ou percé par un terminal, le
+       met dehors ; un apron à moitié hors cadre le met hors écran. On balaie
+       donc une grille grossière bornée à la portion VISIBLE, on ne garde que
+       les points intérieurs, et on retient le plus « au large » — le plus loin
+       de tout bord.
+       Le nom est en italique : sur une carte AD 2 / Jeppesen, les aires de
+       trafic sont les seules à l'être (cf. planPlace).
+
+       DROIT D'ABORD, INCLINÉ ENSUITE. Une aire de trafic est rarement un carré.
+       On écrit à l'horizontale quand le nom tient ainsi dans la surface ; sinon
+       on le pose le long de son GRAND AXE (axes principaux des sommets), comme
+       une carte de plateforme écrit le nom dans le sens du parking. Le droit
+       reste prioritaire : sur une aire trapue, un nom penché pour rien se
+       remarque.
+
+       CE QU'ON N'EXIGE PAS : que le nom tienne ENTIÈREMENT dans l'aire. La
+       première version le faisait, et le résultat mesuré à LFBO est sans appel :
+       « Tarmac Nord » réclame 142 px là où sa bande n'en dégage que 11, et les
+       17 aires nommées n'obtenaient leur nom qu'entre k=4 et k=24 — autrement
+       dit jamais, puisqu'on ouvre le plan à k=1. Les aires d'OSM sont découpées
+       menu (46 polygones à LFBO), et l'emprise du plan est tirée par les objets
+       les plus lointains : à l'échelle d'ouverture, une aire pèse quelques
+       dizaines de pixels. Un nom centré qui déborde un peu reste lisible et
+       reste ATTACHÉ à ce qu'il nomme ; un nom absent ne dit rien.
+       Ce qu'on exige, donc : une ancre à l'INTÉRIEUR de la surface, et une
+       surface assez grande pour être une cible (diagonale visible >= APR_MIN).
+       Une aire de six pixels ne prendra pas la place d'un nom utile. */
+    function planInRing(R, x, y) {
+      let inside = false;
+      for (let i = 0, j = R.length - 1; i < R.length; j = i++) {
+        const a = R[i], b = R[j];
+        if ((a[1] > y) !== (b[1] > y) &&
+            x < (b[0] - a[0]) * (y - a[1]) / (b[1] - a[1]) + a[0]) inside = !inside;
+      }
+      return inside;
+    }
+    // distance du point au bord le plus proche (contour refermé)
+    function planRingClear(R, x, y) {
+      let d = Infinity;
+      for (let i = 0; i < R.length; i++) {
+        const a = R[i], b = R[(i + 1) % R.length];
+        const t = planDistSeg(x, y, a[0], a[1], b[0], b[1]);
+        if (t < d) d = t;
+      }
+      return d;
+    }
+    /* Grand axe du contour, par axes principaux de ses sommets. atan2 rend
+       (-π, π] et on le divise par deux : l'angle sort déjà dans (-π/2, π/2],
+       donc jamais de nom écrit tête en bas. `elong` (racine du rapport des
+       valeurs propres) dit si la surface est vraiment allongée — sur une aire
+       trapue l'axe n'est qu'un bruit, on ne penche pas le nom pour ça. */
+    function planRingAxis(R) {
+      let mx = 0, my = 0;
+      for (const p of R) { mx += p[0]; my += p[1]; }
+      mx /= R.length; my /= R.length;
+      let sxx = 0, syy = 0, sxy = 0;
+      for (const p of R) {
+        const dx = p[0] - mx, dy = p[1] - my;
+        sxx += dx * dx; syy += dy * dy; sxy += dx * dy;
+      }
+      const tr = sxx + syy, det = Math.sqrt((sxx - syy) * (sxx - syy) + 4 * sxy * sxy);
+      const l1 = (tr + det) / 2, l2 = (tr - det) / 2;
+      return { a: 0.5 * Math.atan2(2 * sxy, sxx - syy), elong: l2 > 0 ? Math.sqrt(l1 / l2) : Infinity };
+    }
+    // aire du contour (formule du lacet), en coordonnées projetées : elle ne
+    // dépend pas du zoom, donc on la calcule une fois et on la garde sur la
+    // surface. Sert à donner la main aux GRANDES aires dans l'anti-chevauchement.
+    function planAprArea(s) {
+      if (s._aprA != null) return s._aprA;
+      let A = 0;
+      for (const g of s.segs) {
+        if (g.length < 3) continue;
+        let a = 0;
+        for (let i = 0; i < g.length; i++) {
+          const p = plan.px(g[i]), q = plan.px(g[(i + 1) % g.length]);
+          a += p[0] * q[1] - q[0] * p[1];
+        }
+        A += Math.abs(a) / 2;
+      }
+      return (s._aprA = A);
+    }
+    /* Le point le plus « au large » d'un contour, dans une fenêtre donnée.
+       Balayage EN DEUX TEMPS : une grille lâche, puis une seconde autour de la
+       maille gagnante. Chaque point coûte deux parcours du contour (dedans ?
+       puis distance au bord) — en une seule passe fine, les 46 aires de LFBO
+       doublaient le temps de planDraw, qui tourne à chaque image pendant un
+       glissé. Deux passes de 9×9 puis 5×5 coûtent moitié moins qu'une de 13×13
+       et visent plus juste. */
+    function planRingSpot(R, x0, y0, x1, y1, N) {
+      let p = null, best = 0;
+      for (let i = 0; i <= N; i++) for (let j = 0; j <= N; j++) {
+        const x = x0 + (x1 - x0) * i / N, y = y0 + (y1 - y0) * j / N;
+        if (!planInRing(R, x, y)) continue;
+        const d = planRingClear(R, x, y);
+        if (d > best) { best = d; p = [x, y]; }
+      }
+      return p ? { p, d: best } : null;
+    }
+    function planAprLabel(ctx, text, segs, col, mode) {
+      const cv = ctx.canvas, W = cv.width, H = cv.height, M = 8 * planDPR;
+      const APR_MIN = 26 * planDPR;           // diagonale visible minimale
+      let best = null, bestD = 0, bestR = null;
+      for (const g of segs) {
+        if (g.length < 3) continue;
+        const R = g.map(planSC);
+        let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+        for (const p of R) {
+          if (p[0] < x0) x0 = p[0]; if (p[0] > x1) x1 = p[0];
+          if (p[1] < y0) y0 = p[1]; if (p[1] > y1) y1 = p[1];
+        }
+        // bornée au cadre : le nom d'une aire qui déborde de l'écran se pose
+        // sur ce qu'on en voit, pas sur son centre géographique invisible.
+        const vx0 = Math.max(x0, M), vy0 = Math.max(y0, M);
+        const vx1 = Math.min(x1, W - M), vy1 = Math.min(y1, H - M);
+        if (vx1 <= vx0 || vy1 <= vy0) continue;
+        if (Math.hypot(vx1 - vx0, vy1 - vy0) < APR_MIN) continue;   // un grain de poussière
+        let hit = planRingSpot(R, vx0, vy0, vx1, vy1, 8);
+        if (!hit) continue;
+        const cx = (vx1 - vx0) / 8, cy = (vy1 - vy0) / 8;
+        const fine = planRingSpot(R, hit.p[0] - cx, hit.p[1] - cy, hit.p[0] + cx, hit.p[1] + cy, 4);
+        if (fine && fine.d > hit.d) hit = fine;
+        if (hit.d > bestD) { bestD = hit.d; best = hit.p; bestR = R; }
+      }
+      if (!best) return;
+      // Mêmes tailles que planPlace : on mesure pour choisir l'orientation.
+      const LS = Math.min(1 + (plan.view.k - 1) * 0.4, 2.2);
+      const fs = (mode === "instant" ? 12.5 : 11.5) * LS * planDPR;
+      ctx.font = "italic 700 " + fs + "px " + PLAN_LBL_FONT;
+      const half = ctx.measureText(text).width / 2;
+      const fits = a => {
+        const dx = half * Math.cos(a), dy = half * Math.sin(a);
+        return planInRing(bestR, best[0] - dx, best[1] - dy) &&
+               planInRing(bestR, best[0] + dx, best[1] + dy);
+      };
+      let angle = 0;
+      if (!fits(0)) {
+        const ax = planRingAxis(bestR);
+        // le grand axe s'il fait gagner quelque chose, ou si la surface est
+        // franchement allongée — sinon le nom reste droit, quitte à déborder.
+        if (fits(ax.a) || ax.elong > 1.5) angle = ax.a;
+      }
+      planPlace(ctx, text, best[0], best[1], col, mode, false, true, angle);
     }
     // planSC travaille en lat/lon ; les découpes sont en projeté. planSCp fait
     // le même écran-mapping en partant du projeté.
@@ -15770,6 +15940,24 @@ window.addEventListener("scroll", hidePop, true);
       // opacité (labelAlpha), plus forte que le tracé : cf. PLAN_THEME.
       for (const s of lab) if (st_.get(s))
         planLabel(ctx, s.r, s.segs, planA(st_.get(s).col, st_.get(s).labelAlpha), st_.get(s).state);
+      /* Aires de trafic : « parking Charlie », « apron ROMEO » — ce sont les
+         repères que l'équipage nomme à voix haute, et leur nom n'était écrit
+         nulle part : la liste `lab` ci-dessus ne connaît que taxiways et
+         pistes. Elles sont peu nombreuses et rarement nommées dans OSM (12 %
+         des 2 819 aires du dossier layouts, 6 sur 36 à LFBO), donc pas de
+         seuil de zoom : elles passent AVANT les taxiways éteints dans
+         l'anti-chevauchement — à l'échelle d'ouverture, le nom d'un parking
+         vaut mieux qu'une lettre de bretelle. */
+      const aprLab = S.filter(s => s.t === "apr" && s.r)
+        // les GRANDES d'abord : l'anti-chevauchement sert le premier arrivé, et
+        // à l'échelle d'ouverture il n'y a pas la place pour toutes. Sans cet
+        // ordre, c'est l'ordre du fichier OSM qui décidait — donc le hasard.
+        .sort((a, b) => planAprArea(b) - planAprArea(a));
+      for (const s of aprLab) {
+        const st = st_.get(s);
+        planAprLabel(ctx, s.r, s.segs,
+          st ? planA(st.col, st.labelAlpha) : planPal().off, st ? st.state : "off");
+      }
       // éteints : PISTES toujours (peu nombreuses, repères clés) ; taxiways dès
       // qu'on zoome un peu, sinon des dizaines d'étiquettes feraient une bouillie.
       for (const s of lab) if (!st_.get(s) && (s.t === "rwy" || plan.view.k > 1.15))
@@ -15777,10 +15965,16 @@ window.addEventListener("scroll", hidePop, true);
 
       /* Postes : 130 à LFBO, 519 à LFPG. À l'échelle d'ouverture, tout étiqueter
          serait une bouillie — mais l'utilisateur doit pouvoir TOUS les voir en
-         zoomant. Un poste touché reçoit son nom dès k>=2 (4 crans du bouton
-         "+", ×1.6 chacun, plus tôt que la version précédente — un poste
-         concerné par un NOTAM doit se voir vite) ; les autres dès k>=6,4
-         (2 crans plus tôt).
+         zoomant. Un poste touché reçoit son nom dès k>=2 (2 crans du bouton
+         "+", ×1.6 chacun : k=2,56 — un poste concerné par un NOTAM doit se
+         voir vite) ; les autres dès k>=3,2.
+         Ce second seuil valait 6,4, soit QUATRE crans : à l'ouverture et
+         pendant les trois premiers, aucun nom de poste n'apparaissait et le
+         plan semblait n'en porter aucun. 3,2 est exactement le zoom du
+         double-tap (cf. le gestionnaire pointerup), donc un double-tap sur un
+         parking en révèle maintenant les noms d'un seul geste — et c'est
+         toujours un cran au-dessus des postes cités par un NOTAM, qui gardent
+         leur avance.
          L'anti-chevauchement + l'échelle sous-linéaire font qu'en zoomant sur une
          zone, ses postes se révèlent un à un.
          Le nom se pose EN BOUT de la ligne de guidage, côté bâtiment (le plus
@@ -15798,7 +15992,7 @@ window.addEventListener("scroll", hidePop, true);
         for (const s of S) {
           if (s.t !== "std" || !s.r || isComboRef(s.r)) continue;
           const st = st_.get(s);
-          if (!st && plan.view.k < 6.4) continue;
+          if (!st && plan.view.k < 3.2) continue;
           // Ancre et direction viennent de planBuild (s.lab) : le nez du poste,
           // choisi sur TOUS ses segments. Ici on ne fait que projeter.
           const L = s.lab; if (!L) continue;
