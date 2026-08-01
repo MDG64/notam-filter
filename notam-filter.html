@@ -1731,6 +1731,60 @@
       white-space: nowrap
     }
 
+    /* Portée du plan : « QUOI ». Rangée à part de la barre temps, qui répond à
+       « QUAND » — mêlés, les cinq boutons se liraient comme un seul jeu où
+       « Tomorrow » et « All » s'excluraient. Boutons un cran plus grands que
+       ceux du temps : c'est par eux qu'on passe d'un NOTAM au terrain entier,
+       le geste doit se voir sans être cherché. */
+    .plan-scope {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      flex-wrap: wrap;
+      margin-bottom: 10px
+    }
+
+    .plan-scope .btn {
+      padding: 7px 15px;
+      font-size: 12px
+    }
+
+    /* Sur téléphone les trois passaient à la ligne, et « All » se retrouvait
+       seul en dessous — il se lisait alors comme un bouton à part, pas comme le
+       troisième choix du même groupe. On les resserre pour tenir sur une ligne :
+       ce sont trois options d'une même question, elles doivent se voir ensemble. */
+    @media (max-width: 640px) {
+      .plan-scope {
+        gap: 5px
+      }
+
+      .plan-scope .btn {
+        padding: 7px 9px;
+        font-size: 11px
+      }
+    }
+
+    /* .plan-time est en display:flex : sans cette règle, l'attribut hidden posé
+       par planSetScope n'aurait aucun effet. */
+    .plan-time[hidden] {
+      display: none
+    }
+
+    .modal.plan .plan-topbar .plan-scope {
+      margin: 8px 0 0
+    }
+
+    /* Titre de la liste complète sous le plan. Sans lui, la liste se confondrait
+       avec la fiche d'une surface qu'on vient de cliquer — même gabarit, sens
+       différent. */
+    .plan-list-h {
+      font: 600 10px/1.4 var(--mono);
+      letter-spacing: .07em;
+      text-transform: uppercase;
+      color: var(--muted2);
+      margin: 2px 0 8px
+    }
+
     .plan-cvwrap {
       position: relative;
       margin: 0 auto
@@ -1766,22 +1820,6 @@
     }
 
     .plan-zoom button:hover {
-      border-color: var(--cyan);
-      color: var(--cyan)
-    }
-
-    /* Bouton « All » : il vit dans la même colonne que les zooms, mais porte un
-       mot et non un signe — il lui faut sa propre largeur. Il n'apparaît que
-       lorsque le plan a été ouvert depuis un NOTAM (voir planSyncNamesBtn). */
-    .plan-zoom button.plan-names {
-      width: auto;
-      min-width: 34px;
-      padding: 0 8px;
-      font: 600 12px/1 var(--sans);
-      letter-spacing: .04em
-    }
-
-    .plan-zoom button.plan-names.on {
       border-color: var(--cyan);
       color: var(--cyan)
     }
@@ -14545,6 +14583,11 @@ window.addEventListener("scroll", hidePop, true);
       apr: 1,
       std: 0
     };
+    /* Trame : opacité du fond de carte SOUS ce qu'aucun NOTAM ne cite (pistes de
+       repère dans tous les modes, reste du terrain en portée 'all'). Assez pour
+       situer, pas assez pour disputer l'œil au surlignage — un décor qui pèse
+       autant que l'alerte finit par la cacher. */
+    const PLAN_BASE_DIM = .4;
 
     const PLAN_CENTER_W = 0.72;
     /* Étiquettes taxiway/piste : grotesque gras (Helvetica/Arial), la police des
@@ -15187,30 +15230,35 @@ window.addEventListener("scroll", hidePop, true);
        il ne peint RIEN. */
     let planFocusWin = null;
 
-    /* Noms affichés. Ouvert depuis la LISTE, le plan répond à une question
-       précise : « où est ce NOTAM ? ». Un terrain comme LFPG écrit alors des
-       centaines de noms autour de la réponse, et l'élément cherché se perd au
-       milieu de voisins qui ne le concernent pas. Tant qu'on est dans ce mode,
-       seuls les éléments que CE NOTAM cite portent leur nom — la géométrie et
-       les couleurs, elles, ne changent pas d'un pouce : le reste du terrain
-       reste dessiné, il se tait simplement.
-       Le bouton « All » rend tous les noms, parce qu'un plan qui cache
-       définitivement ses repères ne se lit plus (« ce taxiway rouge, c'est
-       lequel par rapport à moi ? »). Ouvert par le bouton du bandeau, sans
-       NOTAM de départ, rien ne change : tous les noms, pas de bouton. */
-    let planFocusSurfs = null;   // Set des surfaces citées par le NOTAM ouvert
-    let planNamesAll = false;    // « All » enfoncé
-    const planNameFocus = () => (planFocusSurfs && !planNamesAll) ? planFocusSurfs : null;
+    /* PORTÉE — « QUOI », à ne pas confondre avec la période, qui répond « QUAND ».
+       Deux questions distinctes, deux rangées de boutons.
+         'notam'  : le seul NOTAM ouvert depuis la liste. C'est le mode d'entrée
+                    par défaut quand on arrive d'un clic sur une fiche, parce que
+                    c'est ce que l'équipage vient chercher : « celui-là, il est où
+                    sur le terrain ? ». Tout le reste — les autres NOTAMs du jour,
+                    leurs surfaces, leurs refs manquantes — est écarté. Un
+                    avertissement portant sur un taxiway dont le NOTAM ouvert ne
+                    parle pas ne s'explique pas : il fait douter de l'outil au
+                    moment précis où il faut le croire.
+         'ground' : tous les NOTAMs sol de la période, et la liste complète sous
+                    le plan. C'est le mode d'entrée quand on ouvre le plan par le
+                    bouton du terrain, sans NOTAM désigné.
+         'all'    : le mode 'ground' PLUS le reste du terrain, en trame atténuée.
+       Les trois portées ne changent JAMAIS la période affichée : passer de l'une
+       à l'autre ne doit pas déplacer la journée sous les pieds de l'utilisateur.
 
-    function planSyncNamesBtn() {
-      const b = $("#planNames"); if (!b) return;
-      b.hidden = !planFocusSurfs;
-      b.classList.toggle("on", planNamesAll);
-      b.setAttribute("aria-pressed", planNamesAll ? "true" : "false");
-      b.title = planNamesAll
-        ? "All names shown — tap to show only what this NOTAM names"
-        : "Only what this NOTAM names is labelled — tap to show every name";
-    }
+       Cette portée REMPLACE le filtre de noms qui la précédait (bouton « All »
+       dans la colonne des zooms) : il répondait au même besoin — ne pas noyer la
+       réponse sous les voisins — mais en taisant seulement les NOMS, alors que
+       la géométrie, elle, continuait d'affirmer. Une chaussée grise dessinée à
+       côté d'une chaussée rouge se lit « ouverte » ; muette, elle le dit encore.
+       Ne pas la tracer du tout est la seule façon de n'affirmer rien. */
+    let planScope = "ground";       // 'notam' | 'ground' | 'all'
+    let planFocusNotam = null;      // le NOTAM ouvert depuis la liste, s'il y en a un
+    // Surfaces que ce NOTAM cite : elles franchissent les seuils de zoom des
+    // étiquettes. Un poste ou un taxiway qu'on est VENU voir se nomme quel que
+    // soit le zoom — les seuils désencombrent, ils ne cachent pas la réponse.
+    let planFocusSurfs = null;
 
     function planSetTime(mode) {
       if (mode === "notam" && !planFocusWin) mode = "today";
@@ -15226,6 +15274,34 @@ window.addEventListener("scroll", hidePop, true);
         if (b) b.classList.toggle("on", m === mode);
       }
       if (plan) { planDraw(); planTally(); planShowPick(plan.sel); }
+    }
+
+    /* Changement de portée. La PÉRIODE ne bouge pas : on répond à « quoi », pas
+       à « quand ». */
+    function planSetScope(scope) {
+      if (scope === "notam" && !planFocusNotam) scope = "ground";
+      planScope = scope;
+      for (const m of ["notam", "ground", "all"]) {
+        const b = $("#planS-" + m);
+        if (b) b.classList.toggle("on", m === scope);
+      }
+      /* En portée « ce NOTAM », la barre Now/Today/Tomorrow disparaît : le NOTAM
+         porte ses propres dates (la bulle les affiche), et proposer de changer de
+         journée dans un mode qui ne montre qu'un NOTAM invite à le faire
+         disparaître de l'écran sans rien dire d'utile en échange. */
+      const tr = document.querySelector("#planTimeSlot .plan-time");
+      if (tr) tr.hidden = (scope === "notam");
+      if (!plan) return;
+      /* La sélection suit la portée. En sortant de « ce NOTAM », on la relâche :
+         sans cela, le panneau garderait la fiche d'UNE surface alors qu'on vient
+         justement de demander la liste complète. En y entrant, on la pose sur la
+         surface du NOTAM ouvert — c'est la seule qui reste cliquable. */
+      if (scope !== "notam") plan.sel = null;
+      else { const s = planSurfacesFor(planFocusNotam.id); plan.sel = s.length ? s[0] : null; }
+      planTally(); planShowPick(plan.sel);
+      // la barre temps apparaît ou disparaît : le canvas doit se remesurer avant
+      // d'être redessiné, sinon il garde la hauteur de l'autre mode.
+      planResize(); planDraw();
     }
 
     /* Une levée (NOTAM CNL/VOID, « RESUMED NORMAL OPERATION ») est un ÉVÉNEMENT
@@ -15251,7 +15327,17 @@ window.addEventListener("scroll", hidePop, true);
       // (activeAt garantit déjà l'autre côté, b <= win.end).
       return end >= (planTWin ? planTWin.start : Date.now());
     }
-    const planShown = n => (!planTWin || activeAt(n, planTWin)) && planReopenFresh(n);
+    /* Deux filtres, gardés séparés parce qu'ils ne répondent pas de la même
+       chose : planInWin() dit « ce NOTAM est-il actif dans la période
+       regardée ? », planInScope() dit « le plan le montre-t-il ? ». Le compteur
+       a besoin des deux séparément — c'est ainsi qu'il peut annoncer combien de
+       NOTAMs de la journée la portée en cours laisse de côté, au lieu de les
+       taire. planShown reste la porte unique par où passent le rendu
+       (planState), le compteur, l'avertissement de refs manquantes et le
+       panneau : une seule définition de « montré », pas quatre. */
+    const planInWin = n => (!planTWin || activeAt(n, planTWin)) && planReopenFresh(n);
+    const planInScope = n => planScope !== "notam" || !planFocusNotam || n.id === planFocusNotam.id;
+    const planShown = n => planInScope(n) && planInWin(n);
 
     /* Plein = fermé sur TOUTE la période regardée. Pointillé = fermé seulement
        une PARTIE de cette période (horaire récurrent, ou fenêtre B-C qui ne
@@ -15892,6 +15978,29 @@ window.addEventListener("scroll", hidePop, true);
       ctx.clearRect(0, 0, cv.width, cv.height);
       planBoxes = [];
       const S = plan.SURF;
+      /* CE QUE LE FOND DE CARTE MONTRE, selon la portée (cf. planSetScope).
+         · 'notam' / 'ground' — seules les surfaces citées par un NOTAM affiché
+           sont tracées. Le reste du terrain n'est pas éteint, il est ABSENT :
+           une chaussée grise posée à côté d'une chaussée rouge se lit
+           « ouverte », alors que le plan, dans ces modes, ne l'a pas regardée.
+           Ne rien dessiner n'affirme rien ; dessiner au repos affirme.
+         · 'all' — tout le terrain, mais ce qu'aucun NOTAM ne cite passe en trame
+           atténuée : ça situe, ça ne concurrence pas.
+         LES PISTES ÉCHAPPENT À LA RÈGLE et restent tracées dans les trois modes,
+         en trame : un taxiway fermé flottant sur du vide n'est pas localisable,
+         et la piste est le repère de toute carte d'aérodrome — c'est par elle
+         qu'on sait de quel bout du terrain on parle.
+         `drawn` est calculé ICI, avant le décor, parce que c'est lui qui dit
+         quelles surfaces sont concernées ; il resservait plus bas pour le
+         surlignage, il est simplement remonté. */
+      const drawn = S.map(s => ({ s, st: planState(s) })).filter(x => x.st);
+      const hit = new Set(drawn.map(x => x.s));
+      const showBase = s => planScope === "all" || s.t === "rwy" || hit.has(s);
+      // opacité de la trame : pleine sous une surface concernée (le surlignage
+      // s'y appuie), atténuée partout ailleurs. planA compose l'opacité DANS la
+      // couleur — cf. son commentaire, globalAlpha ne survivrait pas aux
+      // `continue` semés dans ces boucles.
+      const dimBase = s => hit.has(s) ? null : PLAN_BASE_DIM;
       const BASE = planPal().base;
       /* Décor « façon carte » : chaque voie est CERNÉE (contour sombre puis
          remplissage clair), comme le rendu OSM. On passe tous les liserés d'une
@@ -15906,30 +16015,32 @@ window.addEventListener("scroll", hidePop, true);
         const outerWidth = t === "twy" ? w + 1.5 : w + 0.9;
 
         for (const s of S) {
-          if (s.t !== t) continue;
+          if (s.t !== t || !showBase(s)) continue;
 
           for (const g of s.segs) {
-            planStroke(ctx, g, outerWidth, EDGE[t], false);
+            planStroke(ctx, g, outerWidth, planA(EDGE[t], dimBase(s)), false);
           }
         }
 
         for (const s of S) {
-          if (s.t !== t) continue;
+          if (s.t !== t || !showBase(s)) continue;
 
           for (const g of s.segs) {
-            planStroke(ctx, g, w, BASE[t], false);
+            planStroke(ctx, g, w, planA(BASE[t], dimBase(s)), false);
           }
         }
       };
       /* Bâtiments : pur décor, jamais cités par un NOTAM. Dessinés EN PREMIER
          pour rester sous tout le reste. Leur ton est volontairement neutre : ils
          situent le terrain sans concurrencer le rouge d'une fermeture. */
-      const BLD = planPal().bld, BLDE = planPal().bldEdge;
-      for (const s of S) if (s.t === "bld") for (const g of s.segs) {
+      // Décor pur : aucun NOTAM ne les cite, donc ils n'existent qu'en 'all',
+      // et toujours en trame.
+      const BLD = planA(planPal().bld, PLAN_BASE_DIM), BLDE = planA(planPal().bldEdge, PLAN_BASE_DIM);
+      for (const s of S) if (s.t === "bld" && showBase(s)) for (const g of s.segs) {
         planFill(ctx, g, BLD); planStroke(ctx, g, 0.8, BLDE, false);
       }
-      for (const s of S) if (s.t === "apr") for (const g of s.segs) planFill(ctx, g, BASE.apr);
-      for (const s of S) if (s.t === "apr") for (const g of s.segs) planStroke(ctx, g, 1, EDGE.apr, false);
+      for (const s of S) if (s.t === "apr" && showBase(s)) for (const g of s.segs) planFill(ctx, g, planA(BASE.apr, dimBase(s)));
+      for (const s of S) if (s.t === "apr" && showBase(s)) for (const g of s.segs) planStroke(ctx, g, 1, planA(EDGE.apr, dimBase(s)), false);
       cased("rwy", PLAN_W.rwy);
       cased("twy", PLAN_W.twy);
       /* Axe jaune des taxiways, par-dessus la chaussée : c'est LE repère des
@@ -15942,14 +16053,14 @@ window.addEventListener("scroll", hidePop, true);
          * continues dans les courbes et aux intersections.
          */
         for (const s of S) {
-          if (s.t !== "twy") continue;
+          if (s.t !== "twy" || !showBase(s)) continue;
 
           for (const g of s.segs) {
             planStroke(
               ctx,
               g,
               PLAN_CENTER_W,
-              planPal().center,
+              planA(planPal().center, dimBase(s)),
               false
             );
           }
@@ -15962,18 +16073,18 @@ window.addEventListener("scroll", hidePop, true);
       /* Points d'attente : ils marquent les entrées de piste et apparaissent
          réellement dans les NOTAMs sol. Un petit carré suffit — assez visible
          pour servir de repère, assez discret pour ne rien voler au surlignage. */
-      for (const s of S) if (s.t === "hld") for (const g of s.segs) {
+      for (const s of S) if (s.t === "hld" && showBase(s)) for (const g of s.segs) {
         const p = planSC(g[0]), r = 1.9 * planDPR * Math.min(plan.view.k, 2);
         ctx.beginPath(); ctx.rect(p[0] - r, p[1] - r, 2 * r, 2 * r);
-        ctx.fillStyle = planPal().hold; ctx.fill();
+        ctx.fillStyle = planA(planPal().hold, PLAN_BASE_DIM); ctx.fill();
       }
-      for (const s of S) if (s.t === "std") for (const g of s.segs) {
-        if (g.length >= 2) { planStroke(ctx, g, 1.3, BASE.std, false); continue; }
+      for (const s of S) if (s.t === "std" && showBase(s)) for (const g of s.segs) {
+        const col = planA(BASE.std, dimBase(s));
+        if (g.length >= 2) { planStroke(ctx, g, 1.3, col, false); continue; }
         const p = planSC(g[0]); ctx.beginPath();
         ctx.arc(p[0], p[1], 1.8 * planDPR * Math.min(plan.view.k, 2), 0, 7);
-        ctx.fillStyle = BASE.std; ctx.fill();
+        ctx.fillStyle = col; ctx.fill();
       }
-      const drawn = S.map(s => ({ s, st: planState(s) })).filter(x => x.st);
       for (const { s, st } of drawn) {
         // st.alpha n'est posé que par l'état « rouvert » ; partout ailleurs
         // planA() rend la couleur telle quelle.
@@ -16052,15 +16163,13 @@ window.addEventListener("scroll", hidePop, true);
       }
       const lab = S.filter(s => s.r && (s.t === "twy" || s.t === "rwy"));
       const st_ = new Map(drawn.map(x => [x.s, x.st]));
-      /* Filtre des noms quand le plan est ouvert sur un NOTAM précis (voir
-         planNameFocus). Il ne touche QUE les étiquettes : tout ce qui est
-         au-dessus — chaussées, surlignages, marqueurs — est déjà peint. */
-      const NF = planNameFocus();
-      const nameOK = s => !NF || NF.has(s);
-      const focused = s => NF != null && NF.has(s);
+      /* Surfaces que le NOTAM ouvert cite : elles franchissent les seuils de
+         zoom des étiquettes. Le tri de ce qui est DESSINÉ, lui, est fait plus
+         haut par la portée (showBase) — ici on ne parle que des noms. */
+      const focused = s => planFocusSurfs != null && planFocusSurfs.has(s);
       // touchés par un NOTAM : toujours étiquetés. Le NOM garde sa propre
       // opacité (labelAlpha), plus forte que le tracé : cf. PLAN_THEME.
-      for (const s of lab) if (st_.get(s) && nameOK(s))
+      for (const s of lab) if (st_.get(s))
         planLabel(ctx, s.r, s.segs, planA(st_.get(s).col, st_.get(s).labelAlpha), st_.get(s).state);
       /* Aires de trafic : « parking Charlie », « apron ROMEO » — ce sont les
          repères que l'équipage nomme à voix haute, et leur nom n'était écrit
@@ -16076,17 +16185,18 @@ window.addEventListener("scroll", hidePop, true);
         // ordre, c'est l'ordre du fichier OSM qui décidait — donc le hasard.
         .sort((a, b) => planAprArea(b) - planAprArea(a));
       for (const s of aprLab) {
-        if (!nameOK(s)) continue;
         const st = st_.get(s);
+        if (!st && !showBase(s)) continue;      // aire non dessinée : pas de nom en l'air
         planAprLabel(ctx, s.r, s.segs,
           st ? planA(st.col, st.labelAlpha) : planPal().off, st ? st.state : "off");
       }
       // éteints : PISTES toujours (peu nombreuses, repères clés) ; taxiways dès
       // qu'on zoome un peu, sinon des dizaines d'étiquettes feraient une bouillie.
+      // Un nom n'est jamais posé sur une surface que la portée n'a pas tracée.
       // Une surface CITÉE par le NOTAM ouvert passe le seuil quoi qu'il arrive :
       // elle peut être éteinte (NOTAM inactif dans la période affichée) et rester
       // la seule chose qu'on est venu voir.
-      for (const s of lab) if (!st_.get(s) && nameOK(s) && (s.t === "rwy" || plan.view.k > 1.15 || focused(s)))
+      for (const s of lab) if (!st_.get(s) && showBase(s) && (s.t === "rwy" || plan.view.k > 1.15 || focused(s)))
         planLabel(ctx, s.r, s.segs, planPal().off, "off");
 
       /* Postes : 130 à LFBO, 519 à LFPG. À l'échelle d'ouverture, tout étiqueter
@@ -16114,18 +16224,17 @@ window.addEventListener("scroll", hidePop, true);
       // l'impression d'un poste qui n'existe pas — sa géométrie reste
       // dessinée (courbe ci-dessus), seul le nom est tu.
       const isComboRef = r => /^[A-Z]{0,2}\d{1,3}-[A-Z]{0,2}\d{1,3}$/.test(r);
-      // Le seuil de zoom garde son raccourci : hors mode « un seul NOTAM », rien
-      // à écrire sous k=2, on ne parcourt même pas les postes.
-      if (plan.view.k >= 2 || NF) {
+      // Le seuil de zoom garde son raccourci : sans poste CITÉ à écrire coûte que
+      // coûte, rien à faire sous k=2, on ne parcourt même pas la liste.
+      if (plan.view.k >= 2 || planFocusSurfs) {
         for (const s of S) {
           if (s.t !== "std" || !s.r || isComboRef(s.r)) continue;
-          if (!nameOK(s)) continue;
           const st = st_.get(s);
           // le poste que le NOTAM ouvert désigne se nomme à tout zoom : les
           // seuils ci-dessus servent à désencombrer, pas à cacher la réponse.
           if (!focused(s)) {
             if (plan.view.k < 2) continue;
-            if (!st && plan.view.k < 3.2) continue;
+            if (!st && (plan.view.k < 3.2 || !showBase(s))) continue;
           }
           // Ancre et direction viennent de planBuild (s.lab) : le nez du poste,
           // choisi sur TOUS ses segments. Ici on ne fait que projeter.
@@ -16282,16 +16391,20 @@ window.addEventListener("scroll", hidePop, true);
       };
     }
 
+    /* Comment se nomme la période affichée, en toutes lettres. Le compteur et la
+       liste sous le plan la citent tous les deux — une seule formulation. */
+    const planWinLabel = () => planTMode === "today" ? "today"
+                            : planTMode === "tomorrow" ? "tomorrow"
+                            : planTMode === "notam" ? "on " + dateLabel(planTWin.start)
+                            : "right now";
+
     /* ---------- compteur d'honnêteté ---------- */
     function planTally() {
       const g = plan.ground.filter(planShown);
       const loc = g.filter(n => plan.located.has(n.id)).length;
       const un = g.length - loc;
       const el = $("#planTally"); if (!el) return;
-      const scope = planTMode === "today" ? "today"
-                  : planTMode === "tomorrow" ? "tomorrow"
-                  : planTMode === "notam" ? "on " + dateLabel(planTWin.start)
-                  : "right now";
+      const scope = planWinLabel();
       /* Refs nommées par un NOTAM de la période affichée mais absentes du fond de
          carte (cf. MISS dans planBuild). On ne peut nommer que ce que
          refsFromNotam() a su lire : une FATO, un seuil décalé ne sont pas des
@@ -16305,8 +16418,25 @@ window.addEventListener("scroll", hidePop, true);
          citée dans le panneau d'aide). Nommer un fournisseur inviterait à lui
          adresser la correction, alors que le bouton ci-dessous fait le trajet
          tout seul — un clic, rien à saisir. */
-      el.innerHTML = `<b>${loc}</b> of <b>${g.length}</b> ground NOTAM${g.length === 1 ? "" : "s"} shown on the layout ${scope}.` +
-        (un ? ` <span class="warn">${un} could not be placed</span> — read the full list.` : "") +
+      /* En portée « ce NOTAM », « 6 of 8 » ne veut plus rien dire : sept de ces
+         huit ne sont pas à l'écran, et par choix. Le compteur dit alors la même
+         chose sur le seul NOTAM montré — placé ou non — et, surtout, il DIT
+         COMBIEN IL EN LAISSE DE CÔTÉ. C'est la raison d'être de cette ligne : un
+         plan qui tait ses angles morts ment, et se restreindre à un NOTAM est un
+         angle mort volontaire, donc à déclarer comme les autres. */
+      const head = (planScope === "notam" && planFocusNotam)
+        ? (() => {
+            const f = planFocusNotam;
+            const others = plan.ground.filter(n => n.id !== f.id && planInWin(n)).length;
+            return `Showing <b>${esc(f.id)}</b> only` +
+              (plan.located.has(f.id)
+                ? ` — its surfaces are highlighted on the layout.`
+                : `, and it <span class="warn">could not be placed</span> on the layout — read it below.`) +
+              (others ? ` ${others} other ground NOTAM${others === 1 ? "" : "s"} ${scope} ${others === 1 ? "is" : "are"} not shown — use <b>All ground NOTAMs</b>.` : "");
+          })()
+        : `<b>${loc}</b> of <b>${g.length}</b> ground NOTAM${g.length === 1 ? "" : "s"} shown on the layout ${scope}.` +
+          (un ? ` <span class="warn">${un} could not be placed</span> — read the full list.` : "");
+      el.innerHTML = head +
         (miss.length ? `<div class="plan-miss">⚠ <b>${miss.map(esc).join(" · ")}</b> ${miss.length === 1 ? "is" : "are"} named by a NOTAM but ${miss.length === 1 ? "is" : "are"} missing from this layout — the drawing is incomplete here. Read ${miss.length === 1 ? "that NOTAM" : "those NOTAMs"} in the list, and do not read the blank surface as open.
           <div class="plan-miss-act">
             <button type="button" class="plan-report" id="planReport">Report missing surface</button>
@@ -16366,18 +16496,17 @@ window.addEventListener("scroll", hidePop, true);
       const overflow = p.bottom - b.bottom;
       if (overflow > 4) box.scrollBy({ top: overflow + 16, behavior: "smooth" });
     }
-    function planShowPick(s) {
-      const el = $("#planPick"); if (!el) return;
-      if (!s) { el.innerHTML = ""; return; }
-      const st = planState(s); if (!st) { el.innerHTML = ""; return; }
-      const T = { twy: "TWY", rwy: "RWY", std: "STAND", apr: "APRON" }[s.t] || s.t;
-      el.innerHTML = st.ns.map(n => `<article class="strip ${n.severity}" style="margin-bottom:8px">
+    // Une fiche NOTAM sous le plan. `tag` nomme la surface quand la fiche
+    // répond à un clic dessus ; la liste d'ensemble, elle, ne désigne aucune
+    // surface en particulier et s'en passe.
+    function planCard(n, tag) {
+      return `<article class="strip ${n.severity}" style="margin-bottom:8px">
         <div class="rail"></div>
         <div class="body">
           <div class="shead">
             <span class="sled"></span><span class="nid">${esc(n.id)}</span>
             <span class="qc">${esc(n.qcode || "—")}</span>
-            <div class="tags"><span class="tag sol">${T} ${esc(s.r || "")}</span></div>
+            ${tag ? `<div class="tags"><span class="tag sol">${esc(tag)}</span></div>` : ""}
           </div>
           <div class="etext">${esc(n.e || n.raw)}</div>
           <div class="meta">
@@ -16385,7 +16514,31 @@ window.addEventListener("scroll", hidePop, true);
             <span><b>End</b> <span class="v">${fmtDate(n.c)}</span></span>
             ${n.d ? `<span><b>Schedule</b> <span class="v">${esc(n.d)}</span></span>` : ""}
           </div>
-        </div></article>`).join("");
+        </div></article>`;
+    }
+
+    /* Ce que le panneau porte quand AUCUNE surface n'est sélectionnée : la liste
+       de ce que le plan montre. En portée « ce NOTAM », c'est ce NOTAM — même
+       s'il ne s'est pas placé sur le dessin, et c'est justement là qu'il faut
+       pouvoir le lire. Sinon, tous les NOTAMs sol de la période, sous un titre
+       qui dit ce qu'on lit : sans lui, la liste complète se confondrait avec la
+       fiche d'une surface qu'on vient de cliquer. */
+    function planListHtml() {
+      if (!plan) return "";
+      if (planScope === "notam")
+        return planFocusNotam ? planCard(planFocusNotam, "") : "";
+      const g = plan.ground.filter(planShown);
+      if (!g.length) return "";
+      return `<div class="plan-list-h">All ground NOTAMs · ${esc(planWinLabel())} · ${g.length}</div>` +
+        g.map(n => planCard(n, "")).join("");
+    }
+
+    function planShowPick(s) {
+      const el = $("#planPick"); if (!el) return;
+      if (!s) { el.innerHTML = planListHtml(); return; }
+      const st = planState(s); if (!st) { el.innerHTML = planListHtml(); return; }
+      const T = { twy: "TWY", rwy: "RWY", std: "STAND", apr: "APRON" }[s.t] || s.t;
+      el.innerHTML = st.ns.map(n => planCard(n, T + " " + (s.r || ""))).join("");
     }
 
     /* ---------- ouverture ---------- */
@@ -16475,8 +16628,6 @@ window.addEventListener("scroll", hidePop, true);
       z("#planZin",  () => planZoomAt(...mid(), plan.view.k * 1.6));
       z("#planZout", () => planZoomAt(...mid(), plan.view.k / 1.6));
       z("#planZfit", () => planFit());
-      z("#planNames", () => { planNamesAll = !planNamesAll; planSyncNamesBtn(); planDraw(); });
-      planSyncNamesBtn();   // caché par défaut : sans NOTAM de départ, rien à filtrer
     }
 
     /* Le bouton ne promet que ce qui existe. L'index est chargé une fois et dit
@@ -16547,11 +16698,14 @@ window.addEventListener("scroll", hidePop, true);
          lacune OSM. */
       planFocusWin = null;
       planFocusSurfs = null;
-      planNamesAll = false;
-      let focusBadge = "";
+      let focusBadge = "", startMode = "today";
       if (focusNotam) {
         const b = ts(focusNotam.b);
         const d0 = dayWindow(0), d1 = dayWindow(1);
+        /* Un NOTAM actif DEMAIN et pas aujourd'hui ouvrait sur Today, où il ne
+           peint rien : le même écran muet que ci-dessus, pour une raison encore
+           plus banale. On ouvre sur la journée où il est actif. */
+        if (b != null && !activeAt(focusNotam, d0) && activeAt(focusNotam, d1)) startMode = "tomorrow";
         if (b != null && !activeAt(focusNotam, d0) && !activeAt(focusNotam, d1)) {
           const d = new Date(b);
           const start = Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), 0, 0);
@@ -16559,6 +16713,7 @@ window.addEventListener("scroll", hidePop, true);
           // commence aujourd'hui ou demain sans y être actif, elle n'apprend rien.
           if (start !== d0.start && start !== d1.start) {
             planFocusWin = { start, end: start + 86340000 };
+            startMode = "notam";
             /* Fin de validité : PERM ou C) absent -> pas de date de fin à
                annoncer. Un C) qui tombe le jour même se dit « le 04 AUG », pas
                « du 04 au 04 ». On compare les JOURS, pas les instants — un
@@ -16577,17 +16732,30 @@ window.addEventListener("scroll", hidePop, true);
         }
       }
 
+      /* Deux rangées, deux questions. « Quand » d'abord (la barre historique),
+         « quoi » ensuite — la portée. Les mêler ferait lire cinq boutons comme
+         un seul jeu où « Tomorrow » et « All » s'excluraient, ce qui est faux.
+         Le bouton « This NOTAM » n'existe que si on est arrivé par une fiche :
+         proposer de se restreindre à un NOTAM qu'on n'a pas désigné n'a pas de
+         sens. */
       $("#planTimeSlot").innerHTML = `<div class="plan-time">
           <button class="btn ghost" id="planT-now">Now</button>
           <button class="btn ghost" id="planT-today">Today</button>
           <button class="btn ghost" id="planT-tomorrow">Tomorrow</button>
           ${focusBadge}
           <span class="plan-time-note" id="planTNote"></span>
+        </div>
+        <div class="plan-scope" role="group" aria-label="What the layout shows">
+          ${focusNotam ? `<button class="btn ghost" id="planS-notam"
+            title="Only the NOTAM you opened">This NOTAM</button>` : ""}
+          <button class="btn ghost" id="planS-ground"
+            title="Every ground NOTAM of the displayed period, and the full list below">All ground NOTAMs</button>
+          <button class="btn ghost" id="planS-all"
+            title="Same, plus the rest of the aerodrome as a faint backdrop">All</button>
         </div>`;
       body.innerHTML = `<div class="plan-cvwrap">
           <canvas id="planCv"></canvas>
           <div class="plan-zoom">
-            <button id="planNames" class="plan-names" hidden aria-pressed="false" aria-label="Show all names">All</button>
             <button id="planZin"  aria-label="Zoom in"  title="Zoom in">+</button>
             <button id="planZout" aria-label="Zoom out" title="Zoom out">−</button>
             <button id="planZfit" aria-label="Fit"      title="Fit to screen">⤢</button>
@@ -16601,11 +16769,23 @@ window.addEventListener("scroll", hidePop, true);
         const b = $("#planT-" + m);
         if (b) b.onclick = () => planSetTime(m);
       }
+      for (const m of ["notam", "ground", "all"]) {
+        const b = $("#planS-" + m);
+        if (b) b.onclick = () => planSetScope(m);
+      }
+      /* La portée est posée AVANT le premier dessin : planSetTime dessine, et
+         ces deux variables survivent d'une ouverture à l'autre (portée module).
+         Sans cette remise à plat, un plan ouvert par le bouton du terrain
+         hériterait du « ce NOTAM » de la fois d'avant et n'afficherait presque
+         rien. */
+      planFocusNotam = focusNotam || null;
+      planScope = focusNotam ? "notam" : "ground";
       // planSetTime d'abord : il remplit le compteur, dont planResize mesure la
       // hauteur pour savoir combien de place il reste au canvas.
       // Le plan repart de Today quoi que dise la liste — sauf si le NOTAM
       // qu'on vient d'ouvrir n'y est pas actif (voir planFocusWin ci-dessus).
-      planSetTime(planFocusWin ? "notam" : "today");
+      planSetTime(startMode);
+      planSetScope(planScope);      // allume le bouton, cache la barre temps, remesure
       planResize();
       // Clic depuis la liste principale sur un NOTAM sol : on centre la vue
       // sur l'élément qu'il touche, au lieu de laisser l'utilisateur le
@@ -16616,10 +16796,9 @@ window.addEventListener("scroll", hidePop, true);
         if (surfs.length) {
           plan.sel = surfs[0];
           planShowPick(surfs[0]);
-          // seuls ces éléments-là portent leur nom, jusqu'à ce qu'on demande
-          // « All » (voir planNameFocus). planFocus redessine juste après.
+          // ces surfaces-là se nomment quel que soit le zoom : c'est la réponse
+          // qu'on est venu chercher. planFocus redessine juste après.
           planFocusSurfs = new Set(surfs);
-          planSyncNamesBtn();
           planFocus(surfs, focusNotam.id);
         }
       }
