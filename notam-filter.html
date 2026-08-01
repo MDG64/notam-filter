@@ -14583,11 +14583,6 @@ window.addEventListener("scroll", hidePop, true);
       apr: 1,
       std: 0
     };
-    /* Trame : opacité du fond de carte SOUS ce qu'aucun NOTAM ne cite (pistes de
-       repère dans tous les modes, reste du terrain en portée 'all'). Assez pour
-       situer, pas assez pour disputer l'œil au surlignage — un décor qui pèse
-       autant que l'alerte finit par la cacher. */
-    const PLAN_BASE_DIM = .4;
 
     const PLAN_CENTER_W = 0.72;
     /* Étiquettes taxiway/piste : grotesque gras (Helvetica/Arial), la police des
@@ -15236,23 +15231,25 @@ window.addEventListener("scroll", hidePop, true);
                     par défaut quand on arrive d'un clic sur une fiche, parce que
                     c'est ce que l'équipage vient chercher : « celui-là, il est où
                     sur le terrain ? ». Tout le reste — les autres NOTAMs du jour,
-                    leurs surfaces, leurs refs manquantes — est écarté. Un
+                    leurs noms, leurs refs manquantes — est écarté. Un
                     avertissement portant sur un taxiway dont le NOTAM ouvert ne
                     parle pas ne s'explique pas : il fait douter de l'outil au
                     moment précis où il faut le croire.
          'ground' : tous les NOTAMs sol de la période, et la liste complète sous
                     le plan. C'est le mode d'entrée quand on ouvre le plan par le
                     bouton du terrain, sans NOTAM désigné.
-         'all'    : le mode 'ground' PLUS le reste du terrain, en trame atténuée.
-       Les trois portées ne changent JAMAIS la période affichée : passer de l'une
-       à l'autre ne doit pas déplacer la journée sous les pieds de l'utilisateur.
+         'all'    : le mode 'ground' PLUS le nom de tout le reste du terrain, en
+                    gris « éteint » — plus discret que le nom coloré d'un NOTAM.
 
-       Cette portée REMPLACE le filtre de noms qui la précédait (bouton « All »
-       dans la colonne des zooms) : il répondait au même besoin — ne pas noyer la
-       réponse sous les voisins — mais en taisant seulement les NOMS, alors que
-       la géométrie, elle, continuait d'affirmer. Une chaussée grise dessinée à
-       côté d'une chaussée rouge se lit « ouverte » ; muette, elle le dit encore.
-       Ne pas la tracer du tout est la seule façon de n'affirmer rien. */
+       CE QUE LA PORTÉE NE TOUCHE PAS : le DESSIN. Le terrain entier est tracé
+       dans les trois modes, avec les mêmes couleurs — seuls les NOMS se
+       raréfient. Sur un terrain dense (LFPG en écrit des centaines), c'est le
+       bruit des noms voisins qui noie la réponse, pas le tracé ; et retirer le
+       tracé priverait l'équipage du réseau par lequel il se rend jusqu'à
+       l'élément cherché.
+       Les trois portées ne changent JAMAIS la période affichée non plus : passer
+       de l'une à l'autre ne doit pas déplacer la journée sous les pieds de
+       l'utilisateur. */
     let planScope = "ground";       // 'notam' | 'ground' | 'all'
     let planFocusNotam = null;      // le NOTAM ouvert depuis la liste, s'il y en a un
     // Surfaces que ce NOTAM cite : elles franchissent les seuils de zoom des
@@ -15978,29 +15975,10 @@ window.addEventListener("scroll", hidePop, true);
       ctx.clearRect(0, 0, cv.width, cv.height);
       planBoxes = [];
       const S = plan.SURF;
-      /* CE QUE LE FOND DE CARTE MONTRE, selon la portée (cf. planSetScope).
-         · 'notam' / 'ground' — seules les surfaces citées par un NOTAM affiché
-           sont tracées. Le reste du terrain n'est pas éteint, il est ABSENT :
-           une chaussée grise posée à côté d'une chaussée rouge se lit
-           « ouverte », alors que le plan, dans ces modes, ne l'a pas regardée.
-           Ne rien dessiner n'affirme rien ; dessiner au repos affirme.
-         · 'all' — tout le terrain, mais ce qu'aucun NOTAM ne cite passe en trame
-           atténuée : ça situe, ça ne concurrence pas.
-         LES PISTES ÉCHAPPENT À LA RÈGLE et restent tracées dans les trois modes,
-         en trame : un taxiway fermé flottant sur du vide n'est pas localisable,
-         et la piste est le repère de toute carte d'aérodrome — c'est par elle
-         qu'on sait de quel bout du terrain on parle.
-         `drawn` est calculé ICI, avant le décor, parce que c'est lui qui dit
-         quelles surfaces sont concernées ; il resservait plus bas pour le
-         surlignage, il est simplement remonté. */
-      const drawn = S.map(s => ({ s, st: planState(s) })).filter(x => x.st);
-      const hit = new Set(drawn.map(x => x.s));
-      const showBase = s => planScope === "all" || s.t === "rwy" || hit.has(s);
-      // opacité de la trame : pleine sous une surface concernée (le surlignage
-      // s'y appuie), atténuée partout ailleurs. planA compose l'opacité DANS la
-      // couleur — cf. son commentaire, globalAlpha ne survivrait pas aux
-      // `continue` semés dans ces boucles.
-      const dimBase = s => hit.has(s) ? null : PLAN_BASE_DIM;
+      /* LA PORTÉE NE TOUCHE QUE LES NOMS (cf. planSetScope) : la géométrie et
+         les couleurs sont les mêmes dans les trois modes. Le terrain entier
+         reste dessiné — le retirer priverait l'équipage du réseau autour de la
+         réponse, or c'est justement par lui qu'il s'y rend. */
       const BASE = planPal().base;
       /* Décor « façon carte » : chaque voie est CERNÉE (contour sombre puis
          remplissage clair), comme le rendu OSM. On passe tous les liserés d'une
@@ -16015,32 +15993,30 @@ window.addEventListener("scroll", hidePop, true);
         const outerWidth = t === "twy" ? w + 1.5 : w + 0.9;
 
         for (const s of S) {
-          if (s.t !== t || !showBase(s)) continue;
+          if (s.t !== t) continue;
 
           for (const g of s.segs) {
-            planStroke(ctx, g, outerWidth, planA(EDGE[t], dimBase(s)), false);
+            planStroke(ctx, g, outerWidth, EDGE[t], false);
           }
         }
 
         for (const s of S) {
-          if (s.t !== t || !showBase(s)) continue;
+          if (s.t !== t) continue;
 
           for (const g of s.segs) {
-            planStroke(ctx, g, w, planA(BASE[t], dimBase(s)), false);
+            planStroke(ctx, g, w, BASE[t], false);
           }
         }
       };
       /* Bâtiments : pur décor, jamais cités par un NOTAM. Dessinés EN PREMIER
          pour rester sous tout le reste. Leur ton est volontairement neutre : ils
          situent le terrain sans concurrencer le rouge d'une fermeture. */
-      // Décor pur : aucun NOTAM ne les cite, donc ils n'existent qu'en 'all',
-      // et toujours en trame.
-      const BLD = planA(planPal().bld, PLAN_BASE_DIM), BLDE = planA(planPal().bldEdge, PLAN_BASE_DIM);
-      for (const s of S) if (s.t === "bld" && showBase(s)) for (const g of s.segs) {
+      const BLD = planPal().bld, BLDE = planPal().bldEdge;
+      for (const s of S) if (s.t === "bld") for (const g of s.segs) {
         planFill(ctx, g, BLD); planStroke(ctx, g, 0.8, BLDE, false);
       }
-      for (const s of S) if (s.t === "apr" && showBase(s)) for (const g of s.segs) planFill(ctx, g, planA(BASE.apr, dimBase(s)));
-      for (const s of S) if (s.t === "apr" && showBase(s)) for (const g of s.segs) planStroke(ctx, g, 1, planA(EDGE.apr, dimBase(s)), false);
+      for (const s of S) if (s.t === "apr") for (const g of s.segs) planFill(ctx, g, BASE.apr);
+      for (const s of S) if (s.t === "apr") for (const g of s.segs) planStroke(ctx, g, 1, EDGE.apr, false);
       cased("rwy", PLAN_W.rwy);
       cased("twy", PLAN_W.twy);
       /* Axe jaune des taxiways, par-dessus la chaussée : c'est LE repère des
@@ -16053,14 +16029,14 @@ window.addEventListener("scroll", hidePop, true);
          * continues dans les courbes et aux intersections.
          */
         for (const s of S) {
-          if (s.t !== "twy" || !showBase(s)) continue;
+          if (s.t !== "twy") continue;
 
           for (const g of s.segs) {
             planStroke(
               ctx,
               g,
               PLAN_CENTER_W,
-              planA(planPal().center, dimBase(s)),
+              planPal().center,
               false
             );
           }
@@ -16073,18 +16049,18 @@ window.addEventListener("scroll", hidePop, true);
       /* Points d'attente : ils marquent les entrées de piste et apparaissent
          réellement dans les NOTAMs sol. Un petit carré suffit — assez visible
          pour servir de repère, assez discret pour ne rien voler au surlignage. */
-      for (const s of S) if (s.t === "hld" && showBase(s)) for (const g of s.segs) {
+      for (const s of S) if (s.t === "hld") for (const g of s.segs) {
         const p = planSC(g[0]), r = 1.9 * planDPR * Math.min(plan.view.k, 2);
         ctx.beginPath(); ctx.rect(p[0] - r, p[1] - r, 2 * r, 2 * r);
-        ctx.fillStyle = planA(planPal().hold, PLAN_BASE_DIM); ctx.fill();
+        ctx.fillStyle = planPal().hold; ctx.fill();
       }
-      for (const s of S) if (s.t === "std" && showBase(s)) for (const g of s.segs) {
-        const col = planA(BASE.std, dimBase(s));
-        if (g.length >= 2) { planStroke(ctx, g, 1.3, col, false); continue; }
+      for (const s of S) if (s.t === "std") for (const g of s.segs) {
+        if (g.length >= 2) { planStroke(ctx, g, 1.3, BASE.std, false); continue; }
         const p = planSC(g[0]); ctx.beginPath();
         ctx.arc(p[0], p[1], 1.8 * planDPR * Math.min(plan.view.k, 2), 0, 7);
-        ctx.fillStyle = col; ctx.fill();
+        ctx.fillStyle = BASE.std; ctx.fill();
       }
+      const drawn = S.map(s => ({ s, st: planState(s) })).filter(x => x.st);
       for (const { s, st } of drawn) {
         // st.alpha n'est posé que par l'état « rouvert » ; partout ailleurs
         // planA() rend la couleur telle quelle.
@@ -16163,13 +16139,33 @@ window.addEventListener("scroll", hidePop, true);
       }
       const lab = S.filter(s => s.r && (s.t === "twy" || s.t === "rwy"));
       const st_ = new Map(drawn.map(x => [x.s, x.st]));
-      /* Surfaces que le NOTAM ouvert cite : elles franchissent les seuils de
-         zoom des étiquettes. Le tri de ce qui est DESSINÉ, lui, est fait plus
-         haut par la portée (showBase) — ici on ne parle que des noms. */
+      /* LA PORTÉE VIT ICI, et nulle part ailleurs dans le rendu : elle décide
+         quels ÉLÉMENTS SONT NOMMÉS. Le terrain reste dessiné en entier dans les
+         trois modes — c'est le réseau par lequel on se rend jusqu'à la réponse,
+         le retirer reviendrait à répondre « où ? » en effaçant le chemin.
+           · 'notam'  — seules les surfaces que CE NOTAM cite. Sur un terrain
+                        dense, les noms voisins noient la réponse : on vient
+                        chercher « où est W50 », pas la liste des bretelles.
+           · 'ground' — toutes celles qu'un NOTAM affiché touche.
+           · 'all'    — plus tous les autres noms, en gris « éteint » : plus
+                        discrets que ceux d'un NOTAM, qui gardent leur couleur.
+         `focused` porte en plus une dérogation aux seuils de zoom : une surface
+         citée peut être ÉTEINTE (NOTAM inactif dans la période affichée) et
+         rester la seule chose qu'on est venu voir. */
       const focused = s => planFocusSurfs != null && planFocusSurfs.has(s);
+      /* Filtrer suppose qu'il RESTE quelque chose à nommer. Un NOTAM qui ne s'est
+         pas placé (ref absente du fond de carte), une période sans aucun NOTAM
+         sol : le filtre ne laisserait pas un seul nom sur le terrain, et un plan
+         muet ne se lit plus. Dans ces deux cas on ne filtre pas — il n'y a rien
+         à désencombrer. */
+      const anyName = planScope === "notam" ? !!(planFocusSurfs && planFocusSurfs.size)
+                                            : drawn.length > 0;
+      const nameOK = s => (planScope === "all" || !anyName) ? true
+                        : planScope === "ground" ? !!st_.get(s)
+                        : focused(s);
       // touchés par un NOTAM : toujours étiquetés. Le NOM garde sa propre
       // opacité (labelAlpha), plus forte que le tracé : cf. PLAN_THEME.
-      for (const s of lab) if (st_.get(s))
+      for (const s of lab) if (st_.get(s) && nameOK(s))
         planLabel(ctx, s.r, s.segs, planA(st_.get(s).col, st_.get(s).labelAlpha), st_.get(s).state);
       /* Aires de trafic : « parking Charlie », « apron ROMEO » — ce sont les
          repères que l'équipage nomme à voix haute, et leur nom n'était écrit
@@ -16185,18 +16181,16 @@ window.addEventListener("scroll", hidePop, true);
         // ordre, c'est l'ordre du fichier OSM qui décidait — donc le hasard.
         .sort((a, b) => planAprArea(b) - planAprArea(a));
       for (const s of aprLab) {
+        if (!nameOK(s)) continue;
         const st = st_.get(s);
-        if (!st && !showBase(s)) continue;      // aire non dessinée : pas de nom en l'air
         planAprLabel(ctx, s.r, s.segs,
           st ? planA(st.col, st.labelAlpha) : planPal().off, st ? st.state : "off");
       }
       // éteints : PISTES toujours (peu nombreuses, repères clés) ; taxiways dès
       // qu'on zoome un peu, sinon des dizaines d'étiquettes feraient une bouillie.
-      // Un nom n'est jamais posé sur une surface que la portée n'a pas tracée.
-      // Une surface CITÉE par le NOTAM ouvert passe le seuil quoi qu'il arrive :
-      // elle peut être éteinte (NOTAM inactif dans la période affichée) et rester
-      // la seule chose qu'on est venu voir.
-      for (const s of lab) if (!st_.get(s) && showBase(s) && (s.t === "rwy" || plan.view.k > 1.15 || focused(s)))
+      // Ils ne s'écrivent qu'en portée 'all' — sauf une surface CITÉE par le
+      // NOTAM ouvert, qui passe le seuil quoi qu'il arrive (cf. `focused`).
+      for (const s of lab) if (!st_.get(s) && nameOK(s) && (s.t === "rwy" || plan.view.k > 1.15 || focused(s)))
         planLabel(ctx, s.r, s.segs, planPal().off, "off");
 
       /* Postes : 130 à LFBO, 519 à LFPG. À l'échelle d'ouverture, tout étiqueter
@@ -16229,12 +16223,13 @@ window.addEventListener("scroll", hidePop, true);
       if (plan.view.k >= 2 || planFocusSurfs) {
         for (const s of S) {
           if (s.t !== "std" || !s.r || isComboRef(s.r)) continue;
+          if (!nameOK(s)) continue;
           const st = st_.get(s);
           // le poste que le NOTAM ouvert désigne se nomme à tout zoom : les
           // seuils ci-dessus servent à désencombrer, pas à cacher la réponse.
           if (!focused(s)) {
             if (plan.view.k < 2) continue;
-            if (!st && (plan.view.k < 3.2 || !showBase(s))) continue;
+            if (!st && plan.view.k < 3.2) continue;
           }
           // Ancre et direction viennent de planBuild (s.lab) : le nez du poste,
           // choisi sur TOUS ses segments. Ici on ne fait que projeter.
@@ -16430,7 +16425,7 @@ window.addEventListener("scroll", hidePop, true);
             const others = plan.ground.filter(n => n.id !== f.id && planInWin(n)).length;
             return `Showing <b>${esc(f.id)}</b> only` +
               (plan.located.has(f.id)
-                ? ` — its surfaces are highlighted on the layout.`
+                ? ` — on the layout, only what it refers to is named.`
                 : `, and it <span class="warn">could not be placed</span> on the layout — read it below.`) +
               (others ? ` ${others} other ground NOTAM${others === 1 ? "" : "s"} ${scope} ${others === 1 ? "is" : "are"} not shown — use <b>All ground NOTAMs</b>.` : "");
           })()
@@ -16747,11 +16742,11 @@ window.addEventListener("scroll", hidePop, true);
         </div>
         <div class="plan-scope" role="group" aria-label="What the layout shows">
           ${focusNotam ? `<button class="btn ghost" id="planS-notam"
-            title="Only the NOTAM you opened">This NOTAM</button>` : ""}
+            title="Name only what the NOTAM you opened refers to">This NOTAM</button>` : ""}
           <button class="btn ghost" id="planS-ground"
-            title="Every ground NOTAM of the displayed period, and the full list below">All ground NOTAMs</button>
+            title="Name what every ground NOTAM of the displayed period refers to, and list them below">All ground NOTAMs</button>
           <button class="btn ghost" id="planS-all"
-            title="Same, plus the rest of the aerodrome as a faint backdrop">All</button>
+            title="Name every element of the aerodrome, the untouched ones more discreetly">All</button>
         </div>`;
       body.innerHTML = `<div class="plan-cvwrap">
           <canvas id="planCv"></canvas>
