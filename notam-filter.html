@@ -1766,6 +1766,22 @@
       color: var(--cyan)
     }
 
+    /* Bouton « All » : il vit dans la même colonne que les zooms, mais porte un
+       mot et non un signe — il lui faut sa propre largeur. Il n'apparaît que
+       lorsque le plan a été ouvert depuis un NOTAM (voir planSyncNamesBtn). */
+    .plan-zoom button.plan-names {
+      width: auto;
+      min-width: 34px;
+      padding: 0 8px;
+      font: 600 12px/1 var(--sans);
+      letter-spacing: .04em
+    }
+
+    .plan-zoom button.plan-names.on {
+      border-color: var(--cyan);
+      color: var(--cyan)
+    }
+
     .plan-zoom button:focus-visible {
       outline: 2px solid var(--cyan);
       outline-offset: 2px
@@ -15167,6 +15183,31 @@ window.addEventListener("scroll", hidePop, true);
        il ne peint RIEN. */
     let planFocusWin = null;
 
+    /* Noms affichés. Ouvert depuis la LISTE, le plan répond à une question
+       précise : « où est ce NOTAM ? ». Un terrain comme LFPG écrit alors des
+       centaines de noms autour de la réponse, et l'élément cherché se perd au
+       milieu de voisins qui ne le concernent pas. Tant qu'on est dans ce mode,
+       seuls les éléments que CE NOTAM cite portent leur nom — la géométrie et
+       les couleurs, elles, ne changent pas d'un pouce : le reste du terrain
+       reste dessiné, il se tait simplement.
+       Le bouton « All » rend tous les noms, parce qu'un plan qui cache
+       définitivement ses repères ne se lit plus (« ce taxiway rouge, c'est
+       lequel par rapport à moi ? »). Ouvert par le bouton du bandeau, sans
+       NOTAM de départ, rien ne change : tous les noms, pas de bouton. */
+    let planFocusSurfs = null;   // Set des surfaces citées par le NOTAM ouvert
+    let planNamesAll = false;    // « All » enfoncé
+    const planNameFocus = () => (planFocusSurfs && !planNamesAll) ? planFocusSurfs : null;
+
+    function planSyncNamesBtn() {
+      const b = $("#planNames"); if (!b) return;
+      b.hidden = !planFocusSurfs;
+      b.classList.toggle("on", planNamesAll);
+      b.setAttribute("aria-pressed", planNamesAll ? "true" : "false");
+      b.title = planNamesAll
+        ? "All names shown — tap to show only what this NOTAM names"
+        : "Only what this NOTAM names is labelled — tap to show every name";
+    }
+
     function planSetTime(mode) {
       if (mode === "notam" && !planFocusWin) mode = "today";
       planTMode = mode;
@@ -16007,9 +16048,15 @@ window.addEventListener("scroll", hidePop, true);
       }
       const lab = S.filter(s => s.r && (s.t === "twy" || s.t === "rwy"));
       const st_ = new Map(drawn.map(x => [x.s, x.st]));
+      /* Filtre des noms quand le plan est ouvert sur un NOTAM précis (voir
+         planNameFocus). Il ne touche QUE les étiquettes : tout ce qui est
+         au-dessus — chaussées, surlignages, marqueurs — est déjà peint. */
+      const NF = planNameFocus();
+      const nameOK = s => !NF || NF.has(s);
+      const focused = s => NF != null && NF.has(s);
       // touchés par un NOTAM : toujours étiquetés. Le NOM garde sa propre
       // opacité (labelAlpha), plus forte que le tracé : cf. PLAN_THEME.
-      for (const s of lab) if (st_.get(s))
+      for (const s of lab) if (st_.get(s) && nameOK(s))
         planLabel(ctx, s.r, s.segs, planA(st_.get(s).col, st_.get(s).labelAlpha), st_.get(s).state);
       /* Aires de trafic : « parking Charlie », « apron ROMEO » — ce sont les
          repères que l'équipage nomme à voix haute, et leur nom n'était écrit
@@ -16025,13 +16072,17 @@ window.addEventListener("scroll", hidePop, true);
         // ordre, c'est l'ordre du fichier OSM qui décidait — donc le hasard.
         .sort((a, b) => planAprArea(b) - planAprArea(a));
       for (const s of aprLab) {
+        if (!nameOK(s)) continue;
         const st = st_.get(s);
         planAprLabel(ctx, s.r, s.segs,
           st ? planA(st.col, st.labelAlpha) : planPal().off, st ? st.state : "off");
       }
       // éteints : PISTES toujours (peu nombreuses, repères clés) ; taxiways dès
       // qu'on zoome un peu, sinon des dizaines d'étiquettes feraient une bouillie.
-      for (const s of lab) if (!st_.get(s) && (s.t === "rwy" || plan.view.k > 1.15))
+      // Une surface CITÉE par le NOTAM ouvert passe le seuil quoi qu'il arrive :
+      // elle peut être éteinte (NOTAM inactif dans la période affichée) et rester
+      // la seule chose qu'on est venu voir.
+      for (const s of lab) if (!st_.get(s) && nameOK(s) && (s.t === "rwy" || plan.view.k > 1.15 || focused(s)))
         planLabel(ctx, s.r, s.segs, planPal().off, "off");
 
       /* Postes : 130 à LFBO, 519 à LFPG. À l'échelle d'ouverture, tout étiqueter
@@ -16059,11 +16110,19 @@ window.addEventListener("scroll", hidePop, true);
       // l'impression d'un poste qui n'existe pas — sa géométrie reste
       // dessinée (courbe ci-dessus), seul le nom est tu.
       const isComboRef = r => /^[A-Z]{0,2}\d{1,3}-[A-Z]{0,2}\d{1,3}$/.test(r);
-      if (plan.view.k >= 2) {
+      // Le seuil de zoom garde son raccourci : hors mode « un seul NOTAM », rien
+      // à écrire sous k=2, on ne parcourt même pas les postes.
+      if (plan.view.k >= 2 || NF) {
         for (const s of S) {
           if (s.t !== "std" || !s.r || isComboRef(s.r)) continue;
+          if (!nameOK(s)) continue;
           const st = st_.get(s);
-          if (!st && plan.view.k < 3.2) continue;
+          // le poste que le NOTAM ouvert désigne se nomme à tout zoom : les
+          // seuils ci-dessus servent à désencombrer, pas à cacher la réponse.
+          if (!focused(s)) {
+            if (plan.view.k < 2) continue;
+            if (!st && plan.view.k < 3.2) continue;
+          }
           // Ancre et direction viennent de planBuild (s.lab) : le nez du poste,
           // choisi sur TOUS ses segments. Ici on ne fait que projeter.
           const L = s.lab; if (!L) continue;
@@ -16412,6 +16471,8 @@ window.addEventListener("scroll", hidePop, true);
       z("#planZin",  () => planZoomAt(...mid(), plan.view.k * 1.6));
       z("#planZout", () => planZoomAt(...mid(), plan.view.k / 1.6));
       z("#planZfit", () => planFit());
+      z("#planNames", () => { planNamesAll = !planNamesAll; planSyncNamesBtn(); planDraw(); });
+      planSyncNamesBtn();   // caché par défaut : sans NOTAM de départ, rien à filtrer
     }
 
     /* Le bouton ne promet que ce qui existe. L'index est chargé une fois et dit
@@ -16481,6 +16542,8 @@ window.addEventListener("scroll", hidePop, true);
          N1 et N6 existent bien dans le layout LFBO — c'est ce cas-là, pas une
          lacune OSM. */
       planFocusWin = null;
+      planFocusSurfs = null;
+      planNamesAll = false;
       let focusBadge = "";
       if (focusNotam) {
         const b = ts(focusNotam.b);
@@ -16520,6 +16583,7 @@ window.addEventListener("scroll", hidePop, true);
       body.innerHTML = `<div class="plan-cvwrap">
           <canvas id="planCv"></canvas>
           <div class="plan-zoom">
+            <button id="planNames" class="plan-names" hidden aria-pressed="false" aria-label="Show all names">All</button>
             <button id="planZin"  aria-label="Zoom in"  title="Zoom in">+</button>
             <button id="planZout" aria-label="Zoom out" title="Zoom out">−</button>
             <button id="planZfit" aria-label="Fit"      title="Fit to screen">⤢</button>
@@ -16548,6 +16612,10 @@ window.addEventListener("scroll", hidePop, true);
         if (surfs.length) {
           plan.sel = surfs[0];
           planShowPick(surfs[0]);
+          // seuls ces éléments-là portent leur nom, jusqu'à ce qu'on demande
+          // « All » (voir planNameFocus). planFocus redessine juste après.
+          planFocusSurfs = new Set(surfs);
+          planSyncNamesBtn();
           planFocus(surfs, focusNotam.id);
         }
       }
