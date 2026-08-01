@@ -14177,16 +14177,47 @@ window.addEventListener("scroll", hidePop, true);
       const range2=s=>{const m=s.match(/^([A-Z]{0,2})(\d{1,3})-([A-Z]{0,2})(\d{1,3})$/);
         return m?range(m[1]+m[2],m[3]+m[4]):null;};
 
-      function refsFromNotam(e,heads){
+      // Mots qui introduisent une AIRE. Sur-ensemble d'APR_KW : voir la branche
+      // AREA_KW de refsFromNotam pour ce que « AREA », générique, autorise.
+      const AREA_KW=new Set([...APR_KW,"APRONS","AREA","AREAS"]);
+      const unquote=t=>t.replace(/^['"«»`]+|['"«»`]+$/g,"");
+      function refsFromNotam(e,heads,aprons){
         const w=lex(e), T=" "+(e||"").toUpperCase()+" ";
         const twy=new Set(),twyHits=[],rwy=new Set(),stand=new Set(),apron=new Set(),partial=[];
         const okT=t=>TWY_REF.test(t), okS=t=>/^[A-Z]{0,2}\d{1,3}$/.test(t);
+        /* AIRE NOMMÉE EN TOUTES LETTRES, cherchée dans le voisinage du mot-clé et
+           comparée aux noms d'aires DU TERRAIN. Deux jetons d'abord (« TARMAC
+           NORD », « BLAGNAC 2 »), puis un seul ; après le mot-clé, puis avant
+           (« APRON ROMEO » aussi bien que « ROMEO APRON »). Guillemets retirés. */
+        const nameAt=(i,len)=>{ if(i<0||!aprons||!aprons.size) return null; const p=[];
+          for(let k=0;k<len;k++){ const t=unquote(w[i+k]||""); if(!t||HARD.has(t)||SEP.has(t)) return null; p.push(t); }
+          const s=p.join(" "); return aprons.has(s)?s:null; };
         for(let i=0;i<w.length;i++){
           const k=w[i];
           if(TWY_KW.has(k))  series(w,i,TWY_KW,okT,heads).forEach(h=>{ twy.add(h.ref); twyHits.push(h); });
           if(STD_KW.has(k))  series(w,i,STD_KW,okS).forEach(h=>stand.add(h.ref));
-          if(APR_KW.has(k)){ let t=w[i+1]; if(t&&!STOP.has(t)){ if(NATO[t])apron.add(NATO[t]);
-            else if(/^[A-Z]{1,2}\d{0,2}$/.test(t))apron.add(t); } }
+          /* Cas réel LFBO A5036/26 : « PUSH BACK AREA 'ROMEO' CLSD. » — l'aire
+             ROMEO est bien dans le layout, et rien ne la trouvait, pour DEUX
+             raisons cumulées :
+               · le mot-clé était « AREA », absent d'APR_KW (APRON/APN/RAMP) ;
+               · et même reconnu, la branche OTAN ci-dessous aurait traduit
+                 ROMEO en « R » — or l'aire s'appelle ROMEO en toutes lettres
+                 dans OSM. La traduction OTAN vaut pour les taxiways (« TWY
+                 ALPHA » = TWY A), pas pour une aire qui porte un nom.
+             Le nom du terrain PASSE DONC EN PREMIER, et il exclut la branche
+             OTAN : sinon « APRON ALPHA » sortirait à la fois « ALPHA » (trouvé)
+             et « A » (introuvable), et le plan déclarerait à tort une aire A
+             manquante du fond de carte.
+             « AREA » ne sert de mot-clé QUE par ce chemin — le nom qui suit doit
+             figurer dans la liste du terrain, sinon « MOVEMENT AREA CLSD » ou
+             « WORK AREA » glaneraient n'importe quoi. Même principe que HEADS :
+             le vocabulaire vient du layout, pas d'une liste câblée. */
+          if(AREA_KW.has(k)){
+            const f=nameAt(i+1,2)||nameAt(i+1,1)||nameAt(i-2,2)||nameAt(i-1,1);
+            if(f) apron.add(f);
+            else if(APR_KW.has(k)){ const t=w[i+1]; if(t&&!STOP.has(t)){ if(NATO[t])apron.add(NATO[t]);
+              else if(/^[A-Z]{1,2}\d{0,2}$/.test(t))apron.add(t); } }
+          }
         }
         // pistes : forme espacée ET collée (RWY21L, RWY03R)
         let m; const rw=/\bRWY\s*(\d{2}[LRC]?)(?:\/(\d{2}[LRC]?))?/g;
@@ -14656,10 +14687,16 @@ window.addEventListener("scroll", hidePop, true);
          sur des tronçons différents de la même voie), l'alias les réunit sous
          « A » : une fermeture peint enfin la voie ENTIÈRE. */
       const STRIP = /^(?:TAXIWAYS?|TAXILANES?|TWYS?)\s+/;
+      /* Un nom d'aire vient d'OSM avec ses accents (« Vendée », « Pyrénées ») ;
+         un NOTAM est en ASCII majuscule et écrira VENDEE. Sans clé dépouillée,
+         l'aire est dessinée et nommée sur le plan mais introuvable à l'index. */
+      const COMBINING = new RegExp("[\\u0300-\\u036f]", "g");
+      const deacc = s => s.normalize("NFD").replace(COMBINING, "");
       for (const s of SURF) if (s.r) {
         idx(s.t + ":" + s.r, s);
         const U = String(s.r).toUpperCase();
         if (U !== s.r) idx(s.t + ":" + U, s);
+        if (s.t === "apr") { const D = deacc(U); if (D !== U) idx("apr:" + D, s); }
         if (s.t === "twy") {
           const short = U.replace(STRIP, "");
           if (short && short !== U) idx("twy:" + short, s);
@@ -14684,6 +14721,16 @@ window.addEventListener("scroll", hidePop, true);
          une voie « Bay 3 » ferait sinon lire « BAY 3 CLSD » deux fois, comme
          voie ET comme poste, et peindrait deux surfaces là où le NOTAM n'en
          nomme qu'une. */
+      /* Noms d'aires du terrain, sous les deux graphies (accentuée et dépouillée) :
+         c'est ce vocabulaire qui autorise refsFromNotam à lire « AREA <nom> »
+         sans glaner. Les noms d'UNE lettre en sont exclus : « AREA A » est déjà
+         couvert par la branche APR_KW, et une aire nommée « A » ferait lire
+         « MOVEMENT AREA A CLSD » comme une fermeture d'aire. */
+      const APRONS = new Set();
+      for (const s of SURF) if (s.r && s.t === "apr") {
+        const U = String(s.r).toUpperCase();
+        if (U.length > 1) { APRONS.add(U); APRONS.add(deacc(U)); }
+      }
       const HEADS = new Set();
       for (const s of SURF) if (s.r && s.t === "twy") {
         const m = String(s.r).toUpperCase().match(/^([A-Z]{2,})\s+\S/);
@@ -14930,7 +14977,7 @@ window.addEventListener("scroll", hidePop, true);
       const MISSLBL = { twy: "TWY", rwy: "RWY", stand: "STAND", apron: "APRON" };
 
       for (const n of ground) {
-        const refs = refsFromNotam(n.e || "", HEADS);
+        const refs = refsFromNotam(n.e || "", HEADS, APRONS);
         for (const kind of ["twy", "rwy", "stand", "apron"]) {
           for (const ref of refs[kind]) {
             const hits = INDEX.get(KIND2T[kind] + ":" + ref);
@@ -15015,7 +15062,7 @@ window.addEventListener("scroll", hidePop, true);
          retirer ce bloc ne change pas le rendu. Voir le harnais tests/plan-invariants. */
       const segLen = gp => { let l = 0; for (let i = 1; i < gp.length; i++) l += Math.hypot(gp[i][0] - gp[i - 1][0], gp[i][1] - gp[i - 1][1]); return l; };
       for (const n of ground) {
-        const rf = refsFromNotam(n.e || "", HEADS);
+        const rf = refsFromNotam(n.e || "", HEADS, APRONS);
         if (!rf.partial.length) continue;
         for (const [rx, ry] of rf.partial) {
           const hostRef = (rf.twy || []).find(r => r !== rx && r !== ry);
@@ -16159,9 +16206,10 @@ window.addEventListener("scroll", hidePop, true);
                   : "right now";
       /* Refs nommées par un NOTAM de la période affichée mais absentes du fond de
          carte (cf. MISS dans planBuild). On ne peut nommer que ce que
-         refsFromNotam() a su lire : une « PUSH BACK AREA ROMEO » ou une FATO
-         n'est pas une ref de surface et ne sort donc que dans le compte
-         « could not be placed » ci-dessus, sans être listée ici. */
+         refsFromNotam() a su lire : une FATO, un seuil décalé ne sont pas des
+         refs de surface et ne sortent donc que dans le compte « could not be
+         placed » ci-dessus, sans être listés ici. (Les aires nommées en toutes
+         lettres — « PUSH BACK AREA 'ROMEO' » — le sont depuis AREA_KW/APRONS.) */
       const pairs = [...plan.MISS].filter(([, ns]) => ns.some(planShown));
       const miss = pairs.map(([k]) => k);
       /* Le fond de carte n'est pas nommé : ce qui compte pour l'équipage est
