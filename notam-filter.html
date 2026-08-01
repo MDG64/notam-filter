@@ -15145,14 +15145,20 @@ window.addEventListener("scroll", hidePop, true);
        que soit la liste derrière.
        La sévérité et la catégorie, elles, n'agissent sur le plan ni de près ni
        de loin : un taxiway fermé reste fermé même en filtre « Information ». */
-    let planTMode = "today";        // 'now' | 'today' | 'tomorrow'
+    let planTMode = "today";        // 'now' | 'today' | 'tomorrow' | 'notam'
     let planTWin = null;
+    /* Journée du NOTAM ouvert depuis la liste, quand elle n'est ni aujourd'hui
+       ni demain. Voir openPlan : sans elle, un NOTAM à venir ouvre un plan où
+       il ne peint RIEN. */
+    let planFocusWin = null;
 
     function planSetTime(mode) {
+      if (mode === "notam" && !planFocusWin) mode = "today";
       planTMode = mode;
       if (mode === "now") { const d = new Date(); planTWin = windowFor(d.getUTCHours(), d.getUTCMinutes()); }
+      else if (mode === "notam") planTWin = planFocusWin;
       else planTWin = dayWindow(mode === "tomorrow" ? 1 : 0);
-      for (const m of ["now", "today", "tomorrow"]) {
+      for (const m of ["now", "today", "tomorrow", "notam"]) {
         const b = $("#planT-" + m);
         if (b) b.classList.toggle("on", m === mode);
       }
@@ -16203,6 +16209,7 @@ window.addEventListener("scroll", hidePop, true);
       const el = $("#planTally"); if (!el) return;
       const scope = planTMode === "today" ? "today"
                   : planTMode === "tomorrow" ? "tomorrow"
+                  : planTMode === "notam" ? "on " + dateLabel(planTWin.start)
                   : "right now";
       /* Refs nommées par un NOTAM de la période affichée mais absentes du fond de
          carte (cf. MISS dans planBuild). On ne peut nommer que ce que
@@ -16435,10 +16442,42 @@ window.addEventListener("scroll", hidePop, true);
       const nTwy = plan.SURF.filter(s => s.t === "twy" && s.r).length;
       const nRwy = plan.SURF.filter(s => s.t === "rwy" && s.r).length;
       $("#planSub").textContent = `${nRwy} runway${nRwy === 1 ? "" : "s"} · ${nTwy} named taxiway${nTwy === 1 ? "" : "s"}`;
+
+      /* Un NOTAM ouvert depuis la liste peut n'être actif NI aujourd'hui NI
+         demain — la liste, elle, montre tout ce qui est en vigueur. Cas réel
+         LFBO A5071/26 « TWY N1 N6 CLSD », valable du 4 au 5 août, ouvert le 1er :
+         le plan repartait de Today, où ce NOTAM ne peint rien, et le taxiway
+         restait de la couleur du fond. Or l'absence de couleur se lit
+         exactement comme « cette surface est inconnue du fond de carte » — et
+         le bandeau d'avertissement + le bouton de signalement, filtrés eux
+         aussi sur la période affichée (planTally), restaient muets. Deux
+         situations opposées (donnée manquante / NOTAM pas encore actif)
+         rendaient le même écran vide.
+         On ouvre donc sur LA JOURNÉE OÙ CE NOTAM COMMENCE, et un quatrième
+         bouton daté le dit. Today/Tomorrow restent à un clic : on ne remplace
+         pas la question habituelle, on ajoute celle que le clic vient de poser.
+         N1 et N6 existent bien dans le layout LFBO — c'est ce cas-là, pas une
+         lacune OSM. */
+      planFocusWin = null;
+      if (focusNotam) {
+        const b = ts(focusNotam.b);
+        const d0 = dayWindow(0), d1 = dayWindow(1);
+        if (b != null && !activeAt(focusNotam, d0) && !activeAt(focusNotam, d1)) {
+          const d = new Date(b);
+          const start = Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), 0, 0);
+          // inutile de dupliquer un bouton existant : si le NOTAM commence
+          // aujourd'hui ou demain sans y être actif, sa journée n'apprend rien.
+          if (start !== d0.start && start !== d1.start) planFocusWin = { start, end: start + 86340000 };
+        }
+      }
+
       $("#planTimeSlot").innerHTML = `<div class="plan-time">
           <button class="btn ghost" id="planT-now">Now</button>
           <button class="btn ghost" id="planT-today">Today</button>
           <button class="btn ghost" id="planT-tomorrow">Tomorrow</button>
+          ${planFocusWin ? `<button class="btn ghost" id="planT-notam"
+             title="Period of the NOTAM you opened — it is active neither today nor tomorrow"
+             >${esc(dateLabel(planFocusWin.start))}</button>` : ""}
           <span class="plan-time-note" id="planTNote"></span>
         </div>`;
       body.innerHTML = `<div class="plan-cvwrap">
@@ -16453,13 +16492,15 @@ window.addEventListener("scroll", hidePop, true);
         <div class="plan-pick" id="planPick"></div>
         <div class="plan-foot">INDICATIVE · NOT AIP-COMPLIANT · NOT FOR NAVIGATION</div>`;
       planWire();
-      for (const m of ["now", "today", "tomorrow"]) {
+      for (const m of ["now", "today", "tomorrow", "notam"]) {
         const b = $("#planT-" + m);
         if (b) b.onclick = () => planSetTime(m);
       }
       // planSetTime d'abord : il remplit le compteur, dont planResize mesure la
       // hauteur pour savoir combien de place il reste au canvas.
-      planSetTime("today");   // le plan repart toujours de Today, quoi que dise la liste
+      // Le plan repart de Today quoi que dise la liste — sauf si le NOTAM
+      // qu'on vient d'ouvrir n'y est pas actif (voir planFocusWin ci-dessus).
+      planSetTime(planFocusWin ? "notam" : "today");
       planResize();
       // Clic depuis la liste principale sur un NOTAM sol : on centre la vue
       // sur l'élément qu'il touche, au lieu de laisser l'utilisateur le
