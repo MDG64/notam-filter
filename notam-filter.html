@@ -1749,6 +1749,21 @@
       font-size: 12px
     }
 
+    /* Sur téléphone les trois passaient à la ligne, et « All » se retrouvait
+       seul en dessous — il se lisait alors comme un bouton à part, pas comme le
+       troisième choix du même groupe. On les resserre pour tenir sur une ligne :
+       ce sont trois options d'une même question, elles doivent se voir ensemble. */
+    @media (max-width: 640px) {
+      .plan-scope {
+        gap: 5px
+      }
+
+      .plan-scope .btn {
+        padding: 7px 9px;
+        font-size: 11px
+      }
+    }
+
     /* .plan-time est en display:flex : sans cette règle, l'attribut hidden posé
        par planSetScope n'aurait aucun effet. */
     .plan-time[hidden] {
