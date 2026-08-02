@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link
-    href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap"
+    href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap"
     rel="stylesheet">
   <link rel="manifest" href="manifest.json">
   <meta name="mobile-web-app-capable" content="yes">
@@ -44,10 +44,13 @@
       --elev-hi: 0 1px 0 rgba(255, 255, 255, .06) inset, 0 5px 16px -4px rgba(0, 0, 0, .6), 0 16px 34px -14px rgba(0, 0, 0, .65);
       --mono: 'IBM Plex Mono', ui-monospace, Menlo, Consolas, monospace;
       --sans: 'IBM Plex Sans', system-ui, -apple-system, sans-serif;
-      /* Chiffres des compteurs (sévérité + phases de vol) : condensée, plus haute
-         que large, elle remplit la carte sans manger de largeur. Une seule graisse
-         existe — toujours l'appeler en 400, sinon le navigateur graisse à la volée. */
-      --num: 'Bebas Neue', 'IBM Plex Mono', ui-monospace, monospace;
+      /* Chiffres des compteurs (sévérité + phases de vol) : SF Pro.
+         Elle ne se télécharge pas (licence Apple, pas de webfont) — on la demande
+         par la pile système, qui la résout nativement sur iPad / iPhone / Mac.
+         Ailleurs (Windows, Android) le repli prend le relais : Segoe UI, Roboto.
+         Les cibles EFB étant des iPad, c'est bien SF Pro qui s'affiche en vol. */
+      --num: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text',
+             system-ui, 'Segoe UI', Roboto, sans-serif;
     }
 
     /* ---------- thème clair (mode jour) ---------- */
@@ -688,7 +691,10 @@
     }
 
     .stat .n {
-      font: 400 34px/1 var(--num);
+      font: 600 26px/1 var(--num);
+      /* SF Pro a de vrais chiffres tabulaires : le compteur ne se décale plus
+         au passage de 9 à 13 quand on change de filtre. */
+      font-variant-numeric: tabular-nums;
       letter-spacing: .02em
     }
 
@@ -868,7 +874,8 @@
     }
 
     .cat .cnt {
-      font: 400 21px/1 var(--num);
+      font: 600 16px/1 var(--num);
+      font-variant-numeric: tabular-nums;
       color: #29b6f6
     }
 
@@ -937,7 +944,7 @@
       }
 
       .stat .n {
-        font-size: 24px;
+        font-size: 18px;
         line-height: 1;
       }
 
@@ -979,7 +986,7 @@
       }
 
       .cat .cnt {
-        font-size: 12px;
+        font-size: 9px;
         line-height: 1;
       }
 
@@ -1041,7 +1048,7 @@
       }
 
       .cat .cnt {
-        font-size: 17px;
+        font-size: 13px;
       }
 
       .filters,
@@ -3439,8 +3446,8 @@ body .cat-label{
   letter-spacing:.04em !important;
 }
 body .cat .cnt{
-  font-size:26px !important;
-  font-weight:400 !important;
+  font-size:20px !important;
+  font-weight:700 !important;
 }
 body .cat .cat-ico{
   height:26px !important;
@@ -3450,7 +3457,7 @@ body .cat .cat-ico{
 @media (max-width:640px){
   body .cat{height:40px !important;}
   body .cat-label{font-size:10px !important;}
-  body .cat .cnt{font-size:20px !important;}
+  body .cat .cnt{font-size:15px !important;}
   body .cat .cat-ico{height:18px !important;}
 }
 
