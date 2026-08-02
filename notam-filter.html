@@ -15539,6 +15539,24 @@ window.addEventListener("scroll", hidePop, true);
        Rien de touché (période sans NOTAM sol, refs absentes du fond de carte) :
        on garde la vue d'ensemble, il n'y a rien à cadrer. */
     const PLAN_ZFIT_MAX = 6;
+    /* Place qu'il faut réserver autour du cadrage pour que les NOMS y tiennent,
+       et pas seulement les traits. Une étiquette est CENTRÉE sur son ancre, et
+       l'ancre peut tomber n'importe où sur la surface — y compris sur son bord :
+       il faut donc sa demi-largeur de dégagement tout autour. On mesure le plus
+       long des noms concernés, à l'échelle qu'auront les étiquettes au zoom k.
+       Borné à 15 % du cadre : un nom à rallonge ne doit pas faire reculer le
+       zoom au point qu'on ne distingue plus rien. */
+    function planLabelRoom(surfs, k) {
+      const cv = $("#planCv"); if (!cv) return 0;
+      const ctx = cv.getContext("2d"), prev = ctx.font;
+      const LS = Math.min(1 + (k - 1) * 0.4, 2.2);       // mêmes tailles que planPlace
+      ctx.font = "italic 700 " + (12.5 * LS * planDPR) + "px " + PLAN_LBL_FONT;
+      let w = 0;
+      for (const s of surfs) if (s.r) w = Math.max(w, ctx.measureText(String(s.r)).width);
+      ctx.font = prev;
+      if (!w) return 0;
+      return Math.min(w / 2 + 3 * LS * planDPR, Math.min(cv.width, cv.height) * 0.15);
+    }
     function planFitScope() {
       const cv = $("#planCv"); if (!cv || !plan) return;
       const surfs = plan.SURF.filter(s => planState(s));
@@ -15563,16 +15581,36 @@ window.addEventListener("scroll", hidePop, true);
          monde pour un coin. Centrer DANS le cadre retenu suffit à garantir le
          dégagement : ce qui n'entre pas dans la colonne n'atteint pas le coin. */
       const g = planGutter();
-      let best = null;
-      for (const c of [{ W: cv.width - g.r, H: cv.height },
-                       { W: cv.width, H: cv.height - g.b }]) {
-        const kk = Math.min(c.W / (w * PAD), c.H / (h * PAD));
-        if (!best || kk > best.k) best = { k: kk, W: c.W, H: c.H };
-      }
-      const k = Math.max(1, Math.min(PLAN_ZFIT_MAX, best.k));
+      const kfit = kk => Math.max(1, Math.min(PLAN_ZFIT_MAX, kk));
+      const frame = M => {
+        let b = null;
+        for (const c of [{ W: cv.width - g.r, H: cv.height },
+                         { W: cv.width, H: cv.height - g.b }]) {
+          const kk = Math.min(Math.max(40, c.W - M * 2) / (w * PAD),
+                              Math.max(40, c.H - M * 2) / (h * PAD));
+          if (!b || kk > b.k) b = { k: kk, W: c.W, H: c.H };
+        }
+        return b;
+      };
+      /* … et de quoi ÉCRIRE les noms. Le cadre ne se calait que sur la géométrie :
+         à LFBO, l'aire ROMEO tenait tout juste dedans, mais son nom — deux fois
+         plus large qu'elle à ce zoom — perdait son R au bord de l'écran. Une
+         surface peinte dont le nom est coupé ne dit pas de quoi on parle.
+         Deux passes, car les étiquettes grossissent avec le zoom et le zoom
+         dépend de la place qu'on leur réserve : on les mesure à l'échelle du
+         cadrage SANS réserve, qui est la borne supérieure du zoom final. Les
+         noms ne dépasseront donc jamais la réserve, et on ne recule pas le plan
+         pour des noms qu'il finira par écrire en petit. */
+      const M = planLabelRoom(surfs, kfit(frame(0).k));
+      const best = frame(M);
+      const k = kfit(best.k);
       plan.view.k = k;
-      plan.view.tx = best.W / 2 - (cx * f.s + f.ox) * k;
-      plan.view.ty = best.H / 2 - (cy * f.s + f.oy) * k;
+      /* Décalage BORNÉ. Centrer dans un cadre plus petit que ce qu'on y met —
+         k butant sur son plancher de 1, le terrain entier — pousserait le bord
+         gauche hors champ : le cadrage doit reculer, pas déborder. La priorité
+         va au haut-gauche, où commence la lecture. */
+      plan.view.tx = Math.max(best.W / 2 - (cx * f.s + f.ox) * k, M - (bx.x0 * f.s + f.ox) * k);
+      plan.view.ty = Math.max(best.H / 2 - (cy * f.s + f.oy) * k, M - (bx.y0 * f.s + f.oy) * k);
       planClamp(); planDraw();
     }
 
