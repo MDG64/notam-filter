@@ -2778,6 +2778,55 @@
       background: transparent
     }
 
+    /* ---------- bandeau « nouvelle version » ----------
+       Caché par défaut : il n'apparaît que si le serveur porte une version
+       plus récente que celle qui tourne. z-index au-dessus des overlays
+       carte (60) et FIR, sinon il resterait invisible pendant un vol. */
+    #buildBar {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      z-index: 200;
+      display: none;
+      align-items: center;
+      gap: 10px;
+      padding: 9px 12px;
+      padding-top: calc(9px + env(safe-area-inset-top));
+      background: var(--panel2);
+      border-bottom: 1px solid var(--line2);
+      font: 500 12px/1.35 var(--sans);
+      color: var(--text);
+      box-shadow: 0 2px 14px rgba(0, 0, 0, .3)
+    }
+
+    #buildBar.show {
+      display: flex
+    }
+
+    #buildBar span {
+      flex: 1;
+      min-width: 0
+    }
+
+    #buildBar button {
+      flex: none;
+      font: 600 11px/1 var(--sans);
+      letter-spacing: .05em;
+      border-radius: 7px;
+      padding: 8px 13px;
+      cursor: pointer;
+      border: 1px solid var(--cyan);
+      background: transparent;
+      color: var(--cyan)
+    }
+
+    #buildBar button.x {
+      border-color: var(--line2);
+      color: var(--muted);
+      padding: 8px 11px
+    }
+
     /* ---------- overlay carte ---------- */
     .map-ov {
       position: fixed;
@@ -17371,6 +17420,76 @@ window.addEventListener("scroll", hidePop, true);
     if ("serviceWorker" in navigator) {
       navigator.serviceWorker.register("./sw.js").catch(() => { });
     }
+
+    /* ================= DÉTECTION D'UNE NOUVELLE VERSION =====================
+       Un EFB reste ouvert des heures. La règle 2 du service worker va déjà
+       chercher le HTML en réseau à chaque NAVIGATION, donc un vrai lancement
+       est toujours à jour — mais une app jamais rechargée peut tourner des
+       jours sur une version périmée sans que rien ne le signale.
+
+       On ne vérifie donc RIEN au démarrage : coût au lancement strictement
+       nul. La sonde part au retour au premier plan, au retour du réseau, et
+       au plus une fois par quart d'heure tant que l'app reste visible.
+
+       Comment on connaît sa propre version, sans numéro à maintenir :
+       `document.lastModified` reflète l'en-tête Last-Modified de la réponse
+       qui a servi la page. Servi depuis le cache du service worker, il donne
+       la date de LA COPIE QU'ON EXÉCUTE — exactement ce qu'on veut comparer.
+
+       Pourquoi le paramètre `?v=` dans l'URL sondée, et pas une simple sonde
+       sur ./notam-filter.html : la règle 2 du service worker attrape tout ce
+       qui finit par « .html » et RECONSTRUIT la requête en GET. Mesuré sur la
+       version en ligne : un HEAD sans paramètre rapatrie 2 522 959 octets de
+       corps, avec paramètre 0 octet. Le paramètre fait tomber la requête dans
+       la règle 5, qui laisse passer le HEAD intact. C'est aussi pour ça que ce
+       correctif ne demande AUCUNE modification de sw.js. */
+    (() => {
+      const CHECK_MS = 15 * 60 * 1000;        // au plus une sonde par quart d'heure
+      const MARGE_MS = 2000;                  // tolérance : horloges et arrondis HTTP
+      let dernier = 0, enCours = false, ignoree = 0;
+
+      const bar = document.createElement("div");
+      bar.id = "buildBar";
+      bar.innerHTML = '<span></span>'
+        + '<button type="button" data-a="reload">Recharger</button>'
+        + '<button type="button" class="x" data-a="close" aria-label="Ignorer">✕</button>';
+      document.body.appendChild(bar);
+      bar.addEventListener("click", e => {
+        const a = e.target.getAttribute && e.target.getAttribute("data-a");
+        if (a === "reload") location.reload();
+        else if (a === "close") { ignoree = bar._date || 0; bar.classList.remove("show"); }
+      });
+
+      function moi() {                        // date de la copie en cours d'exécution
+        const t = Date.parse(document.lastModified);
+        return isNaN(t) ? 0 : t;
+      }
+      async function verifier() {
+        if (enCours || !navigator.onLine) return;
+        const now = Date.now();
+        if (now - dernier < 60000) return;    // jamais plus d'une sonde par minute
+        enCours = true; dernier = now;
+        try {
+          const r = await fetch("./notam-filter.html?v=" + now, { method: "HEAD", cache: "no-store" });
+          if (!r.ok) return;
+          const lm = Date.parse(r.headers.get("last-modified") || "");
+          const local = moi();
+          if (!lm || !local) return;          // en-tête absent : on ne dit rien plutôt que mentir
+          if (lm > local + MARGE_MS && lm > ignoree) {
+            bar._date = lm;
+            bar.querySelector("span").textContent =
+              "Nouvelle version disponible (" + new Date(lm).toLocaleString("fr-FR",
+                { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }) + ")";
+            bar.classList.add("show");
+          }
+        } catch (e) { /* hors ligne ou sonde bloquée : on ne signale rien */ }
+        finally { enCours = false; }
+      }
+      document.addEventListener("visibilitychange", () => { if (!document.hidden) verifier(); });
+      window.addEventListener("online", verifier);
+      setInterval(() => { if (!document.hidden) verifier(); }, CHECK_MS);
+      window.__checkBuild = verifier;         // sonde manuelle, pour diagnostic
+    })();
   </script>
 </body>
 
