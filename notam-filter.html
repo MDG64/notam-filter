@@ -15669,13 +15669,21 @@ window.addEventListener("scroll", hidePop, true);
                     le plan — mais SEULS les éléments qu'ils touchent se nomment.
                     Portée à demander, pas portée d'arrivée : c'est « montre-moi
                     ce qui est concerné, et rien d'autre ».
-         'all'    : le mode 'ground' PLUS le nom de tout le reste du terrain, en
-                    gris « éteint » — plus discret que le nom coloré d'un NOTAM.
-                    C'est le mode d'entrée quand on ouvre le plan par le bouton
-                    du terrain, sans NOTAM désigné : à cet instant on ne cherche
-                    pas UN élément, on regarde le terrain — et un plan de terrain
-                    se lit avec ses noms, cadré en entier. Rien à voir avec
-                    l'arrivée depuis une fiche NOTAM, qui elle vise.
+         'all'    : TOUT le terrain se nomme, et tous les noms se valent — le
+                    gris « éteint » d'un bout à l'autre, y compris sur les
+                    éléments qu'un NOTAM touche. C'est le mode d'entrée quand on
+                    ouvre le plan par le bouton du terrain, sans NOTAM désigné :
+                    à cet instant on ne cherche pas UN élément, on regarde le
+                    terrain — et un plan de terrain se lit comme une carte AD 2,
+                    pas comme une alarme. Un seul nom en rouge au milieu de
+                    cinquante noms gris DÉSIGNE, et désigner est la réponse des
+                    deux autres portées ; ici la question n'a pas été posée.
+                    La couleur n'est pas perdue pour autant : elle reste sur la
+                    GÉOMÉTRIE (une aire fermée est peinte en rouge sous son nom
+                    gris), et « All ground NOTAMs » est à un tap. Seule exception,
+                    les surfaces que cite le NOTAM ouvert depuis la liste :
+                    passer en 'all' depuis 'notam' élargit la vue, ça n'efface
+                    pas la cible qu'on est venu voir.
 
        CE QUE LA PORTÉE NE TOUCHE PAS : le DESSIN. Le terrain entier est tracé
        dans les trois modes, avec les mêmes couleurs — seuls les NOMS se
@@ -16195,6 +16203,12 @@ window.addEventListener("scroll", hidePop, true);
       }
       return false;
     }
+    /* `mode` prend QUATRE valeurs, pas trois : aux deux états d'un élément
+       touché ("instant", "span") et au neutre "off" s'ajoute "plain" — un
+       élément bel et bien touché, mais que la portée 'all' a décidé de ne pas
+       mettre en avant (cf. quietName dans planDraw). Il se DESSINE comme "off",
+       et c'est voulu : ici on ne fait que rendre. Ce qui le distingue de "off"
+       vit chez les appelants, qui lui gardent ses privilèges de placement. */
     function planPlace(ctx, text, x, y, col, mode, force, italic, angle) {
       const on = mode === "instant", pend = mode === "span";
       const P = planPal();
@@ -16302,6 +16316,8 @@ window.addEventListener("scroll", hidePop, true);
         const p = vis[Math.min(vis.length - 1, Math.round(t * (vis.length - 1)))];
         if (planPlace(ctx, text, p[0], p[1], col, mode, false)) return;
       }
+      // Le forçage suit l'élément, pas sa couleur : "plain" (touché, mais tu en
+      // portée 'all') y a droit comme "instant" — cf. planPlace.
       if (mode !== "off") { const p = vis[Math.floor(vis.length / 2)]; planPlace(ctx, text, p[0], p[1], col, mode, true); }
     }
     /* ---------- nom d'une aire de trafic ----------
@@ -16726,8 +16742,8 @@ window.addEventListener("scroll", hidePop, true);
                         dense, les noms voisins noient la réponse : on vient
                         chercher « où est W50 », pas la liste des bretelles.
            · 'ground' — toutes celles qu'un NOTAM affiché touche.
-           · 'all'    — plus tous les autres noms, en gris « éteint » : plus
-                        discrets que ceux d'un NOTAM, qui gardent leur couleur.
+           · 'all'    — tout le terrain, et TOUS les noms en gris « éteint » :
+                        aucun n'est mis en avant (voir `quietName`).
          `focused` porte en plus une dérogation aux seuils de zoom : une surface
          citée peut être ÉTEINTE (NOTAM inactif dans la période affichée) et
          rester la seule chose qu'on est venu voir. */
@@ -16754,10 +16770,35 @@ window.addEventListener("scroll", hidePop, true);
       const nameOK = s => planScope === "all" ? true
                         : planScope === "ground" ? !!st_.get(s)
                         : focusNamed ? focused(s) : true;
+
+      const P_ = planPal();
+      /* QUI A LE DROIT DE CRIER. La portée décide quels éléments sont nommés
+         (nameOK) ; elle décide AUSSI comment. En 'all', le plan répond « voici
+         le terrain », pas « voici le problème » : tous les noms sortent en gris
+         éteint, celui d'un poste fermé comme celui de son voisin. Sans cela, la
+         portée d'ARRIVÉE — celle qu'on obtient en tapant simplement le bouton du
+         terrain, sans avoir désigné quoi que ce soit — répondait par-dessus la
+         carte à une question que personne n'avait posée, et le seul nom rouge de
+         l'écran (« ROMEO » à LFBO) tirait l'œil comme le ferait un pointeur.
+         Ce que ce silence ne coûte PAS : l'information. La géométrie garde ses
+         couleurs (aire rouge, poste rouge, marqueurs), le compteur sous le plan
+         garde son décompte, et « All ground NOTAMs » rallume tout d'un tap.
+         Deux exceptions, une par bout de la chaîne :
+           · les surfaces citées par le NOTAM ouvert depuis la liste (`focused`)
+             — élargir la vue n'est pas renoncer à sa cible ;
+           · le mode "plain" plutôt que "off" : côté rendu il est identique au
+             gris neutre, mais planLabel/planAprLabel/drawStandLabel continuent
+             de le traiter comme un élément TOUCHÉ pour le placement — priorité
+             dans l'anti-chevauchement, dérogation aux seuils de zoom, forçage en
+             dernier recours. Un nom qu'on cesse de colorer ne doit pas devenir un
+             nom qu'on cesse d'écrire. */
+      const quietName = s => planScope === "all" && !focused(s);
+      const labCol  = (s, st) => quietName(s) ? P_.off : planA(st.col, st.labelAlpha);
+      const labMode = (s, st) => quietName(s) ? "plain" : st.state;
       // touchés par un NOTAM : toujours étiquetés. Le NOM garde sa propre
       // opacité (labelAlpha), plus forte que le tracé : cf. PLAN_THEME.
       for (const s of lab) if (st_.get(s) && nameOK(s))
-        planLabel(ctx, s.r, s.segs, planA(st_.get(s).col, st_.get(s).labelAlpha), st_.get(s).state);
+        planLabel(ctx, s.r, s.segs, labCol(s, st_.get(s)), labMode(s, st_.get(s)));
 
       /* UN ÉLÉMENT TOUCHÉ SE NOMME, QUEL QUE SOIT LE ZOOM. C'est la règle qui
          gouverne les quatre familles d'étiquettes, et elle prime sur tous les
@@ -16771,7 +16812,6 @@ window.addEventListener("scroll", hidePop, true);
               prendraient la place
            3. aires de trafic
            4. le décor : pistes/taxiways éteints, puis postes éteints au seuil */
-      const P_ = planPal();
       // Un ref « R01-P42» n'est pas un poste : c'est un tronc commun OSM qui
       // sert de tronc d'accès à DEUX postes distincts (R01 ET P42), tagué
       // avec les deux refs collées faute de mieux. L'étiqueter donnerait
@@ -16785,7 +16825,7 @@ window.addEventListener("scroll", hidePop, true);
       function planStandName(s) {
         const L = s.lab; if (!L) return;
         const st = st_.get(s);
-        const col = st ? planA(st.col, st.labelAlpha) : P_.off, mode = st ? st.state : "off";
+        const col = st ? labCol(s, st) : P_.off, mode = st ? labMode(s, st) : "off";
         const p = planSC(L.p);
         let angle = 0, ux = 1, uy = 0;
         if (L.q) {
@@ -16840,7 +16880,7 @@ window.addEventListener("scroll", hidePop, true);
         // touchée par un NOTAM : son nom est forcé (cf. planAprLabel) — ni le
         // seuil de taille ni l'anti-chevauchement ne peuvent le faire taire.
         planAprLabel(ctx, s.r, s.segs,
-          st ? planA(st.col, st.labelAlpha) : planPal().off, st ? st.state : "off",
+          st ? labCol(s, st) : P_.off, st ? labMode(s, st) : "off",
           !!st || focused(s));
       }
       // éteints : PISTES toujours (peu nombreuses, repères clés) ; taxiways dès
