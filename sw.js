@@ -1,11 +1,21 @@
-// Service Worker — NOTAM Filter PWA
+// Service Worker — NOTAM Lens PWA (fichiers et clé de cache restés "notam-filter-*" :
+// renommer casserait les URL GitHub Pages déjà en circulation)
 // v3 : "réseau d'abord" pour l'app (les MAJ s'affichent au prochain lancement),
 //       "cache d'abord" pour les icônes, les appels API toujours en réseau,
 //       et les PLANS (layouts/*.json) mis en cache à l'usage -> consultables
 //       en vol, sans connexion.
+// La clé de cache reste v5 À DESSEIN. Un service worker se réinstalle dès que
+// ses OCTETS changent, quelle que soit cette clé : la renommer n'apporte donc
+// aucun rafraîchissement, elle ne fait qu'une chose — `activate` supprime tous
+// les caches dont le nom diffère, c'est-à-dire les plans (layouts/*.json) et
+// les frontières FIR que les pilotes ont téléchargés pour consulter EN VOL.
+// Ne la changer que si on veut délibérément purger les appareils.
 const CACHE = "notam-filter-v5";
 const ASSETS = [
   "./notam-filter.html", "./index.html", "./manifest.json",
+  // "./legal.html" retiré tant que la page n'est pas publiée : elle porte
+  // encore « Document non finalisé » et des champs vides. addAll() est
+  // atomique — un seul 404 et TOUT le pré-cache échoue silencieusement.
   "./icon-192.png", "./icon-512.png"
 ];
 
@@ -67,6 +77,26 @@ self.addEventListener("fetch", e => {
     return;
   }
 
-  // 4) Autres ressources (icônes, manifest) : cache d'abord, réseau en repli.
+  // 4) manifest.json : il porte l'identité de l'app (nom sous l'icône, écran
+  //    de démarrage, nom repris par le wrapper store). En cache d'abord il
+  //    restait figé jusqu'au prochain changement de CACHE — un renommage de
+  //    l'app n'atteignait jamais les appareils déjà installés. Réseau d'abord
+  //    donc, et avec {cache:"no-store"} pour la même raison qu'en règle 2 :
+  //    sans lui, le navigateur sert sa propre copie HTTP et le renommage
+  //    reste invisible même avec le réseau.
+  if (url.endsWith("/manifest.json")) {
+    e.respondWith(
+      fetch(url, { cache: "no-store" }).then(r => {
+        if (r && r.ok) {
+          const copy = r.clone();
+          caches.open(CACHE).then(c => c.put(e.request, copy)).catch(() => {});
+        }
+        return r;
+      }).catch(() => caches.match(e.request))
+    );
+    return;
+  }
+
+  // 5) Autres ressources (icônes) : cache d'abord, réseau en repli.
   e.respondWith(caches.match(e.request).then(r => r || fetch(e.request)));
 });
