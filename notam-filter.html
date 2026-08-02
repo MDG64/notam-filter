@@ -15236,10 +15236,16 @@ window.addEventListener("scroll", hidePop, true);
                     parle pas ne s'explique pas : il fait douter de l'outil au
                     moment précis où il faut le croire.
          'ground' : tous les NOTAMs sol de la période, et la liste complète sous
-                    le plan. C'est le mode d'entrée quand on ouvre le plan par le
-                    bouton du terrain, sans NOTAM désigné.
+                    le plan — mais SEULS les éléments qu'ils touchent se nomment.
+                    Portée à demander, pas portée d'arrivée : c'est « montre-moi
+                    ce qui est concerné, et rien d'autre ».
          'all'    : le mode 'ground' PLUS le nom de tout le reste du terrain, en
                     gris « éteint » — plus discret que le nom coloré d'un NOTAM.
+                    C'est le mode d'entrée quand on ouvre le plan par le bouton
+                    du terrain, sans NOTAM désigné : à cet instant on ne cherche
+                    pas UN élément, on regarde le terrain — et un plan de terrain
+                    se lit avec ses noms, cadré en entier. Rien à voir avec
+                    l'arrivée depuis une fiche NOTAM, qui elle vise.
 
        CE QUE LA PORTÉE NE TOUCHE PAS : le DESSIN. Le terrain entier est tracé
        dans les trois modes, avec les mêmes couleurs — seuls les NOMS se
@@ -16952,7 +16958,7 @@ window.addEventListener("scroll", hidePop, true);
          hériterait du « ce NOTAM » de la fois d'avant et n'afficherait presque
          rien. */
       planFocusNotam = focusNotam || null;
-      planScope = focusNotam ? "notam" : "ground";
+      planScope = focusNotam ? "notam" : "all";
       // planSetTime d'abord : il remplit le compteur, dont planResize mesure la
       // hauteur pour savoir combien de place il reste au canvas.
       // Le plan repart de Today quoi que dise la liste — sauf si le NOTAM
@@ -16960,12 +16966,19 @@ window.addEventListener("scroll", hidePop, true);
       planSetTime(startMode);
       planSetScope(planScope);      // allume le bouton, cache la barre temps, remesure
       planResize();
-      /* Ce second planResize peut changer plan.fit (la hauteur du compteur est
-         mesurée pour de bon cette fois) : le cadrage posé par planSetScope
-         reposait sur l'ancienne échelle, on le rejoue. Sans cela, le plan
-         s'ouvre décentré de ce qu'il vient de viser. Le cas focusNotam a son
-         propre centrage juste en dessous. */
-      if (!focusNotam && planScope === "ground") planFitScope();
+      /* Ouverture par le bouton du terrain : LE TERRAIN EN ENTIER, pas un cadrage
+         serré sur les NOTAMs du jour. On n'a désigné personne, donc rien à viser
+         — et un plan qui s'ouvre déjà zoomé sur deux bretelles fait croire que
+         le reste du terrain n'est pas là. planFit() est exactement ce que rend
+         le bouton ⤢, la vue d'ensemble.
+         Le cadrage serré reste ce que fait « All ground NOTAMs » quand on le
+         DEMANDE (planSetScope), et le cas focusNotam a son propre centrage juste
+         en dessous.
+         Ce planFit() vient après le second planResize à dessein : celui-ci peut
+         changer plan.fit (la hauteur du compteur n'est mesurée pour de bon qu'à
+         ce moment), et un cadrage posé sur l'ancienne échelle s'ouvrirait
+         décentré. */
+      if (!focusNotam) planFit();
       // Clic depuis la liste principale sur un NOTAM sol : on centre la vue
       // sur l'élément qu'il touche, au lieu de laisser l'utilisateur le
       // chercher sur tout le terrain. S'il ne se localise pas (ref absente
