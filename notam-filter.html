@@ -15305,7 +15305,14 @@ window.addEventListener("scroll", hidePop, true);
       planTally(); planShowPick(plan.sel);
       // la barre temps apparaît ou disparaît : le canvas doit se remesurer avant
       // d'être redessiné, sinon il garde la hauteur de l'autre mode.
-      planResize(); planDraw();
+      planResize();
+      /* « All ground NOTAMs » RECADRE : demander à voir tous les NOTAMs sol et
+         rester au cadrage précédent — un poste au zoom 12, ou le terrain entier
+         — laisse la question sans réponse. Les deux autres portées gardent la
+         vue en cours : « This NOTAM » a son propre centrage (planFocus), et
+         « All » n'ajoute que des noms, ce n'est pas un déplacement.
+         planFitScope redessine ; planResize l'a déjà fait pour les autres. */
+      if (scope === "ground") planFitScope();
     }
 
     /* Une levée (NOTAM CNL/VOID, « RESUMED NORMAL OPERATION ») est un ÉVÉNEMENT
@@ -15485,6 +15492,42 @@ window.addEventListener("scroll", hidePop, true);
       const PAD = 2.6;
       let k = Math.min(cv.width / (w * PAD), cv.height / (h * PAD));
       k = Math.max(2.6, Math.min(PLAN_KMAX, k, 6));
+      plan.view.k = k;
+      plan.view.tx = cv.width / 2 - (cx * f.s + f.ox) * k;
+      plan.view.ty = cv.height / 2 - (cy * f.s + f.oy) * k;
+      planClamp(); planDraw();
+    }
+
+    /* Cadrage sur CE QUI EST TOUCHÉ — la réponse de « All ground NOTAMs ».
+       La question posée par ce bouton est « où sont les NOTAMs sol de la
+       période ? ». Ouvrir sur le terrain entier oblige l'équipage à les y
+       chercher, alors que le plan sait déjà où ils sont : on prend l'emprise de
+       toutes les surfaces qu'un NOTAM affiché touche, et on s'y ajuste.
+       Trois garde-fous :
+         · jamais PLUS zoomé qu'il ne faut pour les tenir toutes — c'est un
+           cadrage, pas un gros plan ;
+         · jamais au-delà de PLAN_ZFIT_MAX : un unique poste fermé ne doit pas
+           remplir l'écran sans un mètre de contexte autour, sinon on ne sait
+           plus de quel bout du terrain on parle ;
+         · jamais en dessous de k=1, qui EST déjà « tout le terrain » (plan.fit)
+           — donc ce cadrage n'est jamais plus large que l'ouverture par défaut.
+       Rien de touché (période sans NOTAM sol, refs absentes du fond de carte) :
+       on garde la vue d'ensemble, il n'y a rien à cadrer. */
+    const PLAN_ZFIT_MAX = 6;
+    function planFitScope() {
+      const cv = $("#planCv"); if (!cv || !plan) return;
+      const surfs = plan.SURF.filter(s => planState(s));
+      if (!surfs.length) { planDraw(); return; }
+      /* Emprise des surfaces ENTIÈRES, sans passer d'id de NOTAM : une portion
+         « BTN X AND Y » se cadre avec son taxiway hôte. Plus large que le strict
+         nécessaire, et c'est voulu — mieux vaut montrer un peu trop que couper
+         un élément concerné au bord du cadre. */
+      const bx = planBBoxOf(surfs), f = plan.fit;
+      const cx = (bx.x0 + bx.x1) / 2, cy = (bx.y0 + bx.y1) / 2;
+      const w = (bx.x1 - bx.x0) * f.s, h = (bx.y1 - bx.y0) * f.s;
+      const PAD = 1.18;                  // une marge autour, pas un cadre au trait
+      let k = Math.min(cv.width / (w * PAD), cv.height / (h * PAD));
+      k = Math.max(1, Math.min(PLAN_ZFIT_MAX, k));
       plan.view.k = k;
       plan.view.tx = cv.width / 2 - (cx * f.s + f.ox) * k;
       plan.view.ty = cv.height / 2 - (cy * f.s + f.oy) * k;
@@ -15848,10 +15891,17 @@ window.addEventListener("scroll", hidePop, true);
       }
       return p ? { p, d: best } : null;
     }
-    function planAprLabel(ctx, text, segs, col, mode) {
+    function planAprLabel(ctx, text, segs, col, mode, force) {
       const cv = ctx.canvas, W = cv.width, H = cv.height, M = 8 * planDPR;
       const APR_MIN = 26 * planDPR;           // diagonale visible minimale
       let best = null, bestD = 0, bestR = null;
+      /* Repli, réservé aux aires TOUCHÉES (`force`) : le centre de ce qu'on voit
+         de la plus grande. Une aire concernée par un NOTAM est PEINTE ; la
+         laisser peinte et anonyme parce qu'elle est trop petite ou trop
+         biscornue pour qu'on lui trouve un point « au large » revient à montrer
+         un problème sans dire lequel. Un point approximatif à l'intérieur du
+         cadre vaut mieux que pas de nom. */
+      let fb = null, fbD = 0;
       for (const g of segs) {
         if (g.length < 3) continue;
         const R = g.map(planSC);
@@ -15865,7 +15915,9 @@ window.addEventListener("scroll", hidePop, true);
         const vx0 = Math.max(x0, M), vy0 = Math.max(y0, M);
         const vx1 = Math.min(x1, W - M), vy1 = Math.min(y1, H - M);
         if (vx1 <= vx0 || vy1 <= vy0) continue;
-        if (Math.hypot(vx1 - vx0, vy1 - vy0) < APR_MIN) continue;   // un grain de poussière
+        const diag = Math.hypot(vx1 - vx0, vy1 - vy0);
+        if (diag > fbD) { fbD = diag; fb = [(vx0 + vx1) / 2, (vy0 + vy1) / 2]; }
+        if (!force && diag < APR_MIN) continue;   // un grain de poussière
         let hit = planRingSpot(R, vx0, vy0, vx1, vy1, 8);
         if (!hit) continue;
         const cx = (vx1 - vx0) / 8, cy = (vy1 - vy0) / 8;
@@ -15873,13 +15925,17 @@ window.addEventListener("scroll", hidePop, true);
         if (fine && fine.d > hit.d) hit = fine;
         if (hit.d > bestD) { bestD = hit.d; best = hit.p; bestR = R; }
       }
-      if (!best) return;
+      if (!best) {
+        if (!force || !fb) return;
+        best = fb; bestR = null;                 // repli : pas de contour à consulter
+      }
       // Mêmes tailles que planPlace : on mesure pour choisir l'orientation.
       const LS = Math.min(1 + (plan.view.k - 1) * 0.4, 2.2);
       const fs = (mode === "instant" ? 12.5 : 11.5) * LS * planDPR;
       ctx.font = "italic 700 " + fs + "px " + PLAN_LBL_FONT;
       const half = ctx.measureText(text).width / 2;
       const fits = a => {
+        if (!bestR) return true;                 // repli : on écrit droit
         const dx = half * Math.cos(a), dy = half * Math.sin(a);
         return planInRing(bestR, best[0] - dx, best[1] - dy) &&
                planInRing(bestR, best[0] + dx, best[1] + dy);
@@ -15891,7 +15947,7 @@ window.addEventListener("scroll", hidePop, true);
         // franchement allongée — sinon le nom reste droit, quitte à déborder.
         if (fits(ax.a) || ax.elong > 1.5) angle = ax.a;
       }
-      planPlace(ctx, text, best[0], best[1], col, mode, false, true, angle);
+      planPlace(ctx, text, best[0], best[1], col, mode, force, true, angle);
     }
     // planSC travaille en lat/lon ; les découpes sont en projeté. planSCp fait
     // le même écran-mapping en partant du projeté.
@@ -16174,6 +16230,69 @@ window.addEventListener("scroll", hidePop, true);
       // opacité (labelAlpha), plus forte que le tracé : cf. PLAN_THEME.
       for (const s of lab) if (st_.get(s) && nameOK(s))
         planLabel(ctx, s.r, s.segs, planA(st_.get(s).col, st_.get(s).labelAlpha), st_.get(s).state);
+
+      /* UN ÉLÉMENT TOUCHÉ SE NOMME, QUEL QUE SOIT LE ZOOM. C'est la règle qui
+         gouverne les quatre familles d'étiquettes, et elle prime sur tous les
+         seuils : ceux-ci existent pour désencombrer une foule d'éléments SANS
+         NOTAM (519 postes à LFPG), pas pour taire la réponse qu'on est venu
+         chercher. Un taxiway peint en rouge et anonyme est pire qu'inutile —
+         il montre un problème sans dire lequel.
+         D'où l'ordre de pose, l'anti-chevauchement servant le premier arrivé :
+           1. taxiways et pistes touchés (ci-dessus)
+           2. postes touchés (ici) — AVANT les noms de décor, qui leur
+              prendraient la place
+           3. aires de trafic
+           4. le décor : pistes/taxiways éteints, puis postes éteints au seuil */
+      const P_ = planPal();
+      // Un ref « R01-P42» n'est pas un poste : c'est un tronc commun OSM qui
+      // sert de tronc d'accès à DEUX postes distincts (R01 ET P42), tagué
+      // avec les deux refs collées faute de mieux. L'étiqueter donnerait
+      // l'impression d'un poste qui n'existe pas — sa géométrie reste
+      // dessinée (courbe plus haut), seul le nom est tu.
+      const isComboRef = r => /^[A-Z]{0,2}\d{1,3}-[A-Z]{0,2}\d{1,3}$/.test(r);
+      /* Nom d'un poste. Ancre et direction viennent de planBuild (s.lab) : le
+         nez du poste, choisi sur TOUS ses segments, et la direction de sa ligne
+         de guidage à cet endroit — pas une position arbitraire au-dessus du
+         poste. Ici on ne fait que projeter. */
+      function planStandName(s) {
+        const L = s.lab; if (!L) return;
+        const st = st_.get(s);
+        const col = st ? planA(st.col, st.labelAlpha) : P_.off, mode = st ? st.state : "off";
+        const p = planSC(L.p);
+        let angle = 0, ux = 1, uy = 0;
+        if (L.q) {
+          const q = planSC(L.q);
+          const dx = p[0] - q[0], dy = p[1] - q[1], len = Math.hypot(dx, dy) || 1;
+          ux = dx / len; uy = dy / len; angle = Math.atan2(dy, dx);
+        }
+        /* Des postes voisins (ex. U40/U41/U42 à LFBO) ont parfois leurs
+           extrémités très rapprochées : le libellé du premier posé
+           chevauche celui du suivant. Plutôt que de le faire disparaître,
+           on le GLISSE en arrière le long de SA PROPRE ligne (toujours
+           parallèle, toujours ancré dessus) jusqu'à trouver une place
+           libre — jamais dans le vide à côté.
+           Le recul est BORNÉ à 80 % de la ligne : le pas est en pixels
+           écran, il ne sait rien de la longueur du poste, et sur les lignes
+           courtes il faisait sortir le libellé de sa propre géométrie. */
+        const far = L.far ? planSC(L.far) : null;
+        const run = far ? Math.hypot(far[0] - p[0], far[1] - p[1]) : 0;
+        const step = Math.min(14 * Math.min(1 + (plan.view.k - 1) * 0.4, 2.2) * planDPR, run * 0.8 / 5);
+        let placed = false;
+        for (let i = 0; i < 6 && !placed; i++) {
+          const back = i * step;
+          placed = drawStandLabel(ctx, p[0] - ux * back, p[1] - uy * back, angle, s.r, col, mode, false);
+        }
+        /* Six reculs sans place libre : un poste TOUCHÉ (ou cité par le NOTAM
+           ouvert) est écrit quand même, à son ancre. Un nom qui en frôle un
+           autre reste lisible ; un nom absent laisse croire que le poste n'est
+           pas concerné. Les postes sans NOTAM, eux, cèdent la place. */
+        if (!placed && (st || focused(s)))
+          drawStandLabel(ctx, p[0], p[1], angle, s.r, col, mode, true);
+      }
+      for (const s of S)
+        if (s.t === "std" && s.r && !isComboRef(s.r) && (st_.get(s) || focused(s)) && nameOK(s))
+          planStandName(s);
+
       /* Aires de trafic : « parking Charlie », « apron ROMEO » — ce sont les
          repères que l'équipage nomme à voix haute, et leur nom n'était écrit
          nulle part : la liste `lab` ci-dessus ne connaît que taxiways et
@@ -16190,8 +16309,11 @@ window.addEventListener("scroll", hidePop, true);
       for (const s of aprLab) {
         if (!nameOK(s)) continue;
         const st = st_.get(s);
+        // touchée par un NOTAM : son nom est forcé (cf. planAprLabel) — ni le
+        // seuil de taille ni l'anti-chevauchement ne peuvent le faire taire.
         planAprLabel(ctx, s.r, s.segs,
-          st ? planA(st.col, st.labelAlpha) : planPal().off, st ? st.state : "off");
+          st ? planA(st.col, st.labelAlpha) : planPal().off, st ? st.state : "off",
+          !!st || focused(s));
       }
       // éteints : PISTES toujours (peu nombreuses, repères clés) ; taxiways dès
       // qu'on zoome un peu, sinon des dizaines d'étiquettes feraient une bouillie.
@@ -16200,71 +16322,25 @@ window.addEventListener("scroll", hidePop, true);
       for (const s of lab) if (!st_.get(s) && nameOK(s) && (s.t === "rwy" || plan.view.k > 1.15 || focused(s)))
         planLabel(ctx, s.r, s.segs, planPal().off, "off");
 
-      /* Postes : 130 à LFBO, 519 à LFPG. À l'échelle d'ouverture, tout étiqueter
-         serait une bouillie — mais l'utilisateur doit pouvoir TOUS les voir en
-         zoomant. Un poste touché reçoit son nom dès k>=2 (2 crans du bouton
-         "+", ×1.6 chacun : k=2,56 — un poste concerné par un NOTAM doit se
-         voir vite) ; les autres dès k>=3,2.
-         Ce second seuil valait 6,4, soit QUATRE crans : à l'ouverture et
-         pendant les trois premiers, aucun nom de poste n'apparaissait et le
-         plan semblait n'en porter aucun. 3,2 est exactement le zoom du
-         double-tap (cf. le gestionnaire pointerup), donc un double-tap sur un
-         parking en révèle maintenant les noms d'un seul geste — et c'est
-         toujours un cran au-dessus des postes cités par un NOTAM, qui gardent
-         leur avance.
+      /* Postes SANS NOTAM : 130 à LFBO, 519 à LFPG. Ceux-là seulement gardent un
+         seuil — à l'échelle d'ouverture, tout étiqueter serait une bouillie,
+         mais l'utilisateur doit pouvoir TOUS les voir en zoomant. Les postes
+         touchés, eux, sont déjà écrits plus haut à n'importe quel zoom.
+         Le seuil valait 6,4, soit QUATRE crans du bouton « + » (×1,6 chacun) :
+         à l'ouverture et pendant les trois premiers, aucun nom de poste
+         n'apparaissait et le plan semblait n'en porter aucun. 3,2 est exactement
+         le zoom du double-tap (cf. le gestionnaire pointerup), donc un
+         double-tap sur un parking en révèle les noms d'un seul geste.
          L'anti-chevauchement + l'échelle sous-linéaire font qu'en zoomant sur une
          zone, ses postes se révèlent un à un.
-         Le nom se pose EN BOUT de la ligne de guidage, côté bâtiment (le plus
-         loin des taxiways, réordonné une fois pour toutes dans planBuild()),
-         et PARALLÈLE à cette ligne — pas une position arbitraire au-dessus
-         du poste. */
-      const P_ = planPal();
-      // Un ref « R01-P42» n'est pas un poste : c'est un tronc commun OSM qui
-      // sert de tronc d'accès à DEUX postes distincts (R01 ET P42), tagué
-      // avec les deux refs collées faute de mieux. L'étiqueter donnerait
-      // l'impression d'un poste qui n'existe pas — sa géométrie reste
-      // dessinée (courbe ci-dessus), seul le nom est tu.
-      const isComboRef = r => /^[A-Z]{0,2}\d{1,3}-[A-Z]{0,2}\d{1,3}$/.test(r);
-      // Le seuil de zoom garde son raccourci : sans poste CITÉ à écrire coûte que
-      // coûte, rien à faire sous k=2, on ne parcourt même pas la liste.
-      if (plan.view.k >= 2 || planFocusSurfs) {
+         Le raccourci reste : sous le seuil, rien à écrire ici, on ne parcourt
+         même pas la liste. */
+      if (plan.view.k >= 3.2) {
         for (const s of S) {
           if (s.t !== "std" || !s.r || isComboRef(s.r)) continue;
+          if (st_.get(s) || focused(s)) continue;      // déjà nommé, sans seuil
           if (!nameOK(s)) continue;
-          const st = st_.get(s);
-          // le poste que le NOTAM ouvert désigne se nomme à tout zoom : les
-          // seuils ci-dessus servent à désencombrer, pas à cacher la réponse.
-          if (!focused(s)) {
-            if (plan.view.k < 2) continue;
-            if (!st && plan.view.k < 3.2) continue;
-          }
-          // Ancre et direction viennent de planBuild (s.lab) : le nez du poste,
-          // choisi sur TOUS ses segments. Ici on ne fait que projeter.
-          const L = s.lab; if (!L) continue;
-          const col = st ? planA(st.col, st.labelAlpha) : P_.off, mode = st ? st.state : "off";
-          const p = planSC(L.p);
-          let angle = 0, ux = 1, uy = 0;
-          if (L.q) {
-            const q = planSC(L.q);
-            const dx = p[0] - q[0], dy = p[1] - q[1], len = Math.hypot(dx, dy) || 1;
-            ux = dx / len; uy = dy / len; angle = Math.atan2(dy, dx);
-          }
-          /* Des postes voisins (ex. U40/U41/U42 à LFBO) ont parfois leurs
-             extrémités très rapprochées : le libellé du premier posé
-             chevauche celui du suivant. Plutôt que de le faire disparaître,
-             on le GLISSE en arrière le long de SA PROPRE ligne (toujours
-             parallèle, toujours ancré dessus) jusqu'à trouver une place
-             libre — jamais dans le vide à côté.
-             Le recul est BORNÉ à 80 % de la ligne : le pas est en pixels
-             écran, il ne sait rien de la longueur du poste, et sur les lignes
-             courtes il faisait sortir le libellé de sa propre géométrie. */
-          const far = L.far ? planSC(L.far) : null;
-          const run = far ? Math.hypot(far[0] - p[0], far[1] - p[1]) : 0;
-          const step = Math.min(14 * Math.min(1 + (plan.view.k - 1) * 0.4, 2.2) * planDPR, run * 0.8 / 5);
-          for (let i = 0; i < 6; i++) {
-            const back = i * step;
-            if (drawStandLabel(ctx, p[0] - ux * back, p[1] - uy * back, angle, s.r, col, mode, false)) break;
-          }
+          planStandName(s);
         }
       }
     }
@@ -16789,6 +16865,12 @@ window.addEventListener("scroll", hidePop, true);
       planSetTime(startMode);
       planSetScope(planScope);      // allume le bouton, cache la barre temps, remesure
       planResize();
+      /* Ce second planResize peut changer plan.fit (la hauteur du compteur est
+         mesurée pour de bon cette fois) : le cadrage posé par planSetScope
+         reposait sur l'ancienne échelle, on le rejoue. Sans cela, le plan
+         s'ouvre décentré de ce qu'il vient de viser. Le cas focusNotam a son
+         propre centrage juste en dessous. */
+      if (!focusNotam && planScope === "ground") planFitScope();
       // Clic depuis la liste principale sur un NOTAM sol : on centre la vue
       // sur l'élément qu'il touche, au lieu de laisser l'utilisateur le
       // chercher sur tout le terrain. S'il ne se localise pas (ref absente
