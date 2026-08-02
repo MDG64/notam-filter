@@ -17492,13 +17492,15 @@ window.addEventListener("scroll", hidePop, true);
         } catch (e) { /* hors ligne ou sonde bloquée : on ne signale rien */ }
         finally { enCours = false; }
       }
-      // iOS ne navigue PAS quand on rouvre une app installée depuis l'écran
-      // d'accueil : il reprend la page suspendue. La règle 2 du service worker
-      // (réseau d'abord) n'est donc jamais sollicitée et l'app peut tourner des
-      // jours sur une version périmée. Les chemins de reprise ne sont pas les
-      // mêmes partout — `visibilitychange` ne suffit pas quand la page revient
-      // du bfcache — donc on écoute les trois, l'anti-rebond d'une minute
-      // absorbant les déclenchements multiples.
+      // Rouvrir une PWA installée depuis l'écran d'accueil ne NAVIGUE pas : le
+      // système reprend la page suspendue. Vrai sur iOS comme sur Android —
+      // Chrome aussi restaure l'onglet depuis les récents sans renavigation.
+      // La règle 2 du service worker (réseau d'abord) n'est donc jamais
+      // sollicitée et l'app peut tourner des jours sur une version périmée.
+      // Les chemins de reprise diffèrent selon les plateformes —
+      // `visibilitychange` ne suffit pas quand la page revient du bfcache —
+      // donc on écoute les trois, l'anti-rebond d'une minute absorbant les
+      // déclenchements multiples.
       document.addEventListener("visibilitychange", () => { if (!document.hidden) verifier(); });
       // `persisted` distingue une VRAIE reprise (bfcache) d'un chargement
       // normal, où pageshow se déclenche aussi et n'a rien à vérifier.
