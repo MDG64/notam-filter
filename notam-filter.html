@@ -17446,6 +17446,8 @@ window.addEventListener("scroll", hidePop, true);
     (() => {
       const CHECK_MS = 15 * 60 * 1000;        // au plus une sonde par quart d'heure
       const MARGE_MS = 2000;                  // tolérance : horloges et arrondis HTTP
+      const CALME_MS = 5000;                  // silence garanti après le démarrage
+      const demarrage = Date.now();
       let dernier = 0, enCours = false, ignoree = 0;
 
       const bar = document.createElement("div");
@@ -17467,6 +17469,11 @@ window.addEventListener("scroll", hidePop, true);
       async function verifier() {
         if (enCours || !navigator.onLine) return;
         const now = Date.now();
+        // Garde-fou du démarrage : QUEL QUE SOIT le déclencheur, rien ne part
+        // dans les premières secondes. `pageshow` et `focus` se déclenchent
+        // aussi au chargement — sans ce verrou, la promesse « aucun coût au
+        // lancement » tombait sans que ça se voie.
+        if (now - demarrage < CALME_MS) return;
         if (now - dernier < 60000) return;    // jamais plus d'une sonde par minute
         enCours = true; dernier = now;
         try {
@@ -17485,7 +17492,18 @@ window.addEventListener("scroll", hidePop, true);
         } catch (e) { /* hors ligne ou sonde bloquée : on ne signale rien */ }
         finally { enCours = false; }
       }
+      // iOS ne navigue PAS quand on rouvre une app installée depuis l'écran
+      // d'accueil : il reprend la page suspendue. La règle 2 du service worker
+      // (réseau d'abord) n'est donc jamais sollicitée et l'app peut tourner des
+      // jours sur une version périmée. Les chemins de reprise ne sont pas les
+      // mêmes partout — `visibilitychange` ne suffit pas quand la page revient
+      // du bfcache — donc on écoute les trois, l'anti-rebond d'une minute
+      // absorbant les déclenchements multiples.
       document.addEventListener("visibilitychange", () => { if (!document.hidden) verifier(); });
+      // `persisted` distingue une VRAIE reprise (bfcache) d'un chargement
+      // normal, où pageshow se déclenche aussi et n'a rien à vérifier.
+      window.addEventListener("pageshow", e => { if (e.persisted) verifier(); });
+      window.addEventListener("focus", verifier);        // retour au premier plan
       window.addEventListener("online", verifier);
       setInterval(() => { if (!document.hidden) verifier(); }, CHECK_MS);
       window.__checkBuild = verifier;         // sonde manuelle, pour diagnostic
