@@ -16216,16 +16216,28 @@ window.addEventListener("scroll", hidePop, true);
          citée peut être ÉTEINTE (NOTAM inactif dans la période affichée) et
          rester la seule chose qu'on est venu voir. */
       const focused = s => planFocusSurfs != null && planFocusSurfs.has(s);
-      /* Filtrer suppose qu'il RESTE quelque chose à nommer. Un NOTAM qui ne s'est
-         pas placé (ref absente du fond de carte), une période sans aucun NOTAM
-         sol : le filtre ne laisserait pas un seul nom sur le terrain, et un plan
-         muet ne se lit plus. Dans ces deux cas on ne filtre pas — il n'y a rien
-         à désencombrer. */
-      const anyName = planScope === "notam" ? !!(planFocusSurfs && planFocusSurfs.size)
-                                            : drawn.length > 0;
-      const nameOK = s => (planScope === "all" || !anyName) ? true
+      /* « Rien à nommer, donc on nomme tout » : ce repli ne vaut QUE pour la
+         portée « ce NOTAM ». Là il a une raison — le NOTAM ouvert ne s'est pas
+         placé (ref absente du fond de carte), on ne peut pas le montrer du
+         doigt, et écrire tous les noms laisse au moins l'équipage chercher son
+         taxiway à la main pendant que l'avertissement, juste sous le plan, dit
+         ce qui manque.
+         En portée « All ground NOTAMs », le même repli était un piège : sur un
+         terrain sans NOTAM sol placé — le cas ORDINAIRE, pas le cas limite — il
+         nommait le terrain entier, c'est-à-dire qu'il rendait un dessin
+         RIGOUREUSEMENT identique à la portée « All » (vérifié pixel pour pixel
+         sur LFBZ) en laissant « All ground NOTAMs » allumé par-dessus. Le bouton
+         disait une chose, l'écran en montrait une autre.
+         Cette portée nomme donc ce qu'un NOTAM sol montré touche, et rien
+         d'autre — y compris quand cela ne fait rien du tout. C'est déjà la règle
+         qui s'applique à une piste que personne ne touche quand quatre NOTAMs se
+         placent : il n'y a pas de raison qu'elle change parce qu'il n'y en a
+         aucun. Le compteur dit alors pourquoi le plan est nu, et « All » est à
+         un tap. */
+      const focusNamed = !!(planFocusSurfs && planFocusSurfs.size);
+      const nameOK = s => planScope === "all" ? true
                         : planScope === "ground" ? !!st_.get(s)
-                        : focused(s);
+                        : focusNamed ? focused(s) : true;
       // touchés par un NOTAM : toujours étiquetés. Le NOM garde sa propre
       // opacité (labelAlpha), plus forte que le tracé : cf. PLAN_THEME.
       for (const s of lab) if (st_.get(s) && nameOK(s))
@@ -16513,7 +16525,14 @@ window.addEventListener("scroll", hidePop, true);
               (others ? ` ${others} other ground NOTAM${others === 1 ? "" : "s"} ${scope} ${others === 1 ? "is" : "are"} not shown — use <b>All ground NOTAMs</b>.` : "");
           })()
         : `<b>${loc}</b> of <b>${g.length}</b> ground NOTAM${g.length === 1 ? "" : "s"} shown on the layout ${scope}.` +
-          (un ? ` <span class="warn">${un} could not be placed</span> — read the full list.` : "");
+          (un ? ` <span class="warn">${un} could not be placed</span> — read the full list.` : "") +
+          /* Aucun NOTAM sol placé : cette portée ne nomme donc RIEN, et un plan
+             sans une seule étiquette se lit d'abord comme un plan cassé. On dit
+             les deux choses dans le même souffle — pourquoi il est nu, et le
+             bouton qui le remplit. Réservé à « All ground NOTAMs » : en portée
+             « All », tout est déjà nommé, la phrase n'aurait aucun sens. */
+          (planScope === "ground" && !loc
+            ? ` Nothing is named — use <b>All</b> to name the aerodrome.` : "");
       el.innerHTML = head +
         (miss.length ? `<div class="plan-miss">⚠ <b>${miss.map(esc).join(" · ")}</b> ${miss.length === 1 ? "is" : "are"} named by a NOTAM but ${miss.length === 1 ? "is" : "are"} missing from this layout — the drawing is incomplete here. Read ${miss.length === 1 ? "that NOTAM" : "those NOTAMs"} in the list, and do not read the blank surface as open.
           <div class="plan-miss-act">
