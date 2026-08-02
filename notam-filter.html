@@ -4032,7 +4032,15 @@ body .stat .k{
       approche: ["ILS", "LLZ", "LOC", "LOCALIZER", "LOCALISER", "GLIDE", " GP ", "DME", "VOR", "NDB",
         "TACAN", "VORTAC", "MARKER", "RNAV", "RNP", "GLS", "LPV", "LNAV", "VNAV", "IAP", "APCH",
         "APPROACH", "STAR", "MISSED", "MINIMA", "MINIMUM", "RVR", "PAPI", "VASI",
-        "APCH LGT", "RWY LGT", "RUNWAY LIGHT", "RCLL", "REDL", "HOLDING", "TRANSITION",
+        "APCH LGT", "RWY LGT", "RUNWAY LIGHT", "RCLL", "REDL", "TRANSITION",
+        // « HOLDING » tout court valait approche jusqu'au 2026-08-02 : il
+        // attrapait le POINT D'ATTENTE, qui est une position au sol (rangé en
+        // « sol » plus bas). Cas réel B2380/26 « HOLDING POINT E NOT AVBL, USE
+        // E1. » (QMRXX) affiché Ground + Arrival. Seule l'attente EN VOL relève
+        // de l'approche, d'où les formes explicites ci-dessous ; le NOTAM
+        // d'attente en route porte de toute façon un Q-code QPH… (PH ->
+        // approche), le mot-clé n'est qu'un filet de sécurité.
+        "HOLDING PATTERN", "HOLDING PROCEDURE", "HOLDING FIX", "HOLDING STACK",
         "OBST", "OBSTACLE", "CRANE", "BIRD", "BASH",
         "WINDCONE", "WIND CONE", "WDI", "WIND DIRECTION INDICATOR"],
       // BIRD (concentration/activité aviaire) : gêne décollage ET approche à la
@@ -4051,6 +4059,11 @@ body .stat .k{
       depart: ["SID", "DEPARTURE", "CLB GRADIENT", "CLIMB GRADIENT", "INITIAL CLIMB", "NADP", "BIRD", "BASH",
         "WINDCONE", "WIND CONE", "WDI", "WIND DIRECTION INDICATOR"],
       sol: ["TWY", "TAXIWAY", "APRON", "STAND", "PARKING", "RAMP", "STOPWAY", "SWY", "SHOULDER",
+        // Points/positions d'attente : marquages et aires de la surface, on les
+        // franchit en roulant. Ajoutés le 2026-08-02 avec le retrait du
+        // « HOLDING » générique de la liste « approche » (voir son commentaire).
+        "HOLDING POINT", "HOLDING PT", "HLDG POINT", "HLDG PT", "HOLDING POSITION",
+        "HOLDING BAY", "HOLD SHORT",
         "MOVEMENT AREA", "STOP BAR", "STOPBAR", "WIP", "WORK IN PROGRESS", "CONSTRUCTION",
         "MAINT", "GRASS CUTTING", "DE-ICING", "DEICING", "PUSHBACK", "DOCKING",
         "BRAKING ACTION", "FRICTION", "CONTAMINATED", "SNOW", "SLUSH", "FOD",

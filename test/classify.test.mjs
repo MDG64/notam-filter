@@ -60,6 +60,20 @@ test("les 9 NOTAM de terrain relus sont classés conformément à la revue", asy
   assert.deepEqual(ecarts, []);
 });
 
+test("le point d'attente est au sol, l'attente en vol reste en approche", async () => {
+  const { classifyNotam } = await chargerClassificateur();
+  // Cas réel B2380/26 : sortait Ground + Arrival, le mot « HOLDING » suffisant
+  // à le ranger aussi en approche. Un point d'attente est une position au sol.
+  assert.deepEqual(classifyNotam("QMRXX", "HOLDING POINT E NOT AVBL, USE E1.").categories.sort(),
+    ["sol"]);
+  assert.deepEqual(classifyNotam("QMXLC", "TWY B HOLDING POSITION MARKINGS U/S").categories.sort(),
+    ["sol"]);
+  // L'attente EN VOL reste bien de l'approche, par le Q-code (QPH…) comme par
+  // le texte quand le Q-code ne dit rien.
+  assert.ok(classifyNotam("QPHCS", "HOLDING PROCEDURE RWY 32L REVISED").categories.includes("approche"));
+  assert.ok(classifyNotam("QXXXX", "HOLDING PATTERN OVER TOU NDB NOT AVBL").categories.includes("approche"));
+});
+
 test("une annulation qui recopie son en-tête n'est jamais soumise au LLM", () => {
   // Ces NOTAMC ONT un item E) — il recopie l'en-tête, mot pour mot. Le filtre
   // `n.e` de proposeUnclassified() les laissait donc passer : 5 appels LLM sur
