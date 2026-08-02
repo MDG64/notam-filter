@@ -74,6 +74,64 @@ test("le point d'attente est au sol, l'attente en vol reste en approche", async 
   assert.ok(classifyNotam("QXXXX", "HOLDING PATTERN OVER TOU NDB NOT AVBL").categories.includes("approche"));
 });
 
+test("un NOTAM d'ILS est en approche seule, jamais au sol", async () => {
+  const { classifyNotam } = await chargerClassificateur();
+  // Cas réel B3282/26 : sortait Arrival + Ground, le « (MAINT) » de la cause
+  // suffisant à le ranger aussi au sol.
+  assert.deepEqual(classifyNotam("QICAS", "ILS RWY 25 U/S (MAINT): DO NOT USE, POSSIBLE FALSE INDICATIONS.").categories,
+    ["approche"]);
+  // Les composantes de l'ILS suivent le même régime, par leur seul Q-code.
+  for (const q of ["QIGAS", "QILAS", "QIDAS", "QIOAS", "QIUAS"])
+    assert.deepEqual(classifyNotam(q, "GP RWY 07 U/S DUE MAINT, WIP ON TWY A").categories, ["approche"],
+      `${q} devrait être en approche seule`);
+  // Sans Q-code exploitable, le texte prend le relais.
+  assert.deepEqual(classifyNotam("QXXXX", "ILS RWY 25 U/S (MAINT)").categories, ["approche"]);
+  assert.deepEqual(classifyNotam(null, "ILS RWY 25 U/S (MAINT)").categories, ["approche"]);
+  // Mais l'ILS cité comme CAUSE ne doit pas dépouiller une fermeture de piste :
+  // là c'est le Q-code qui tranche, et il ne parle pas d'ILS.
+  assert.ok(classifyNotam("QMRLC", "RWY 25 CLSD DUE ILS MAINT").categories.includes("sol"));
+  // Et « ILS » en sous-chaîne d'un autre mot ne déclenche pas le forçage : le
+  // « sol » de ce NOTAM de taxiway survit. (Il repart quand même AUSSI en
+  // approche — le mot-clé historique « ILS » de FREETEXT_KEYWORDS attrape
+  // « DETAILS » par sous-chaîne ; c'est un faux positif antérieur, additif,
+  // qu'on se contente de ne pas aggraver ici.)
+  assert.ok(classifyNotam("QXXXX", "TWY A CLSD, SEE AIP FOR DETAILS").categories.includes("sol"));
+});
+
+test("la famille VOR/TACAN sert au départ autant qu'à l'arrivée", async () => {
+  const { classifyNotam } = await chargerClassificateur();
+  // Cas réel F1570/26 : sortait Arrival + Ground. Le TACAN sert aussi les SID,
+  // et le « (MAINT) » de la cause n'en fait pas un NOTAM de surface.
+  assert.deepEqual(classifyNotam("QNNAS", "TACAN LOR CH105X U/S (MAINT): DO NOT USE, POSSIBLE FALSE INDICATIONS").categories.sort(),
+    ["approche", "depart"]);
+  // Les quatre codes de la famille vont ensemble : VOR/DME, TACAN, VORTAC, VOR.
+  for (const q of ["QNMAS", "QNNAS", "QNTAS", "QNVAS"])
+    assert.deepEqual(classifyNotam(q, "U/S DUE TO MAINT").categories.sort(), ["approche", "depart"],
+      `${q} devrait être en approche + départ`);
+  // Sans Q-code exploitable, le texte donne les deux phases lui aussi.
+  assert.deepEqual(classifyNotam("QXXXX", "VOR TOU U/S").categories.sort(), ["approche", "depart"]);
+  // Les autres aides restent en approche seule : ni le NDB ni le DME ne sont
+  // devenus des aides de départ au passage.
+  assert.deepEqual(classifyNotam("QNBAS", "NDB U/S").categories, ["approche"]);
+  assert.deepEqual(classifyNotam("QNDAS", "DME U/S").categories, ["approche"]);
+});
+
+test("le PAR reste en arrivée seule, et « MAINT » ne classe plus rien à lui seul", async () => {
+  const { classifyNotam } = await chargerClassificateur();
+  // Cas réel M2497/26 : sortait Arrival + Ground, sur le seul « DUE TO MAINT ».
+  assert.deepEqual(classifyNotam("QCPAS", "PAR RWY 25, 07 AND 20 U/S DUE TO MAINT.").categories,
+    ["approche"]);
+  // « MAINT » ne s'ajoute plus à un classement existant…
+  assert.deepEqual(classifyNotam("QPDAS", "SID XYZ 2A SUSPENDED DUE TO MAINT").categories, ["depart"]);
+  // …mais il garde toute sa valeur en dernier recours, quand rien d'autre ne
+  // classe : c'est le cas des NOTAM américains en QXXXX.
+  assert.deepEqual(classifyNotam("QXXXX", "MAINT IN PROGRESS").categories, ["sol"]);
+  assert.deepEqual(classifyNotam(null, "SCHEDULED MAINT").categories, ["sol"]);
+  // Et une surface citée reste au sol, la maintenance n'y change rien.
+  assert.ok(classifyNotam("QMXLC", "TWY B CLSD DUE TO MAINT").categories.includes("sol"));
+  assert.ok(classifyNotam("QXXXX", "APRON MAINT IN PROGRESS").categories.includes("sol"));
+});
+
 test("une annulation qui recopie son en-tête n'est jamais soumise au LLM", () => {
   // Ces NOTAMC ONT un item E) — il recopie l'en-tête, mot pour mot. Le filtre
   // `n.e` de proposeUnclassified() les laissait donc passer : 5 appels LLM sur

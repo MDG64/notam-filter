@@ -3998,8 +3998,14 @@ body .stat .k{
       MM: ["sol"], MN: ["sol"], MO: ["sol"], MP: ["sol"], MR: ["vol", "sol"], MS: ["vol", "sol"],
       MT: ["approche", "vol"], MU: ["sol"], MW: ["sol"], MX: ["sol"], MY: ["sol"],
       NA: ["approche", "vol"], NB: ["approche"], NC: ["vol"], ND: ["approche"], NF: ["approche"],
-      NL: ["approche"], NM: ["approche"], NN: ["approche"], NO: ["vol"], NT: ["approche"],
-      NV: ["approche"], NX: ["approche"],
+      NL: ["approche"],
+      // La famille VOR/TACAN (NM VOR/DME, NN TACAN, NT VORTAC, NV VOR) sert
+      // AUSSI au départ : les SID s'appuient sur ces mêmes stations (radiales,
+      // DME de virage). La ranger en approche seule laissait un TACAN U/S
+      // invisible au briefing départ — corrigé le 2026-08-02. Les quatre codes
+      // vont ensemble : un VORTAC EST un VOR + un TACAN, un VOR/DME EST un VOR.
+      NM: ["approche", "depart"], NN: ["approche", "depart"], NO: ["vol"],
+      NT: ["approche", "depart"], NV: ["approche", "depart"], NX: ["approche"],
       OA: ["vol"], OB: ["approche", "vol"], OC: ["vol"], OE: ["vol"], OL: ["approche"], OR: ["vol"],
       PA: ["approche"], PB: ["approche"], PC: ["vol"], PD: ["depart"], PE: ["depart"],
       PF: ["vol"], PH: ["approche"], PI: ["approche"], PK: ["approche"], PL: ["vol"],
@@ -4056,7 +4062,13 @@ body .stat .k{
       // version précédente était par ailleurs incohérente avec elle-même —
       // « BIRD » valait déjà départ+approche, or BASH désigne exactement le même
       // danger.
+      // VOR / TACAN / VORTAC : mêmes stations que les SID utilisent au départ,
+      // d'où leur présence dans les DEUX listes — pendant textuel des sujets
+      // Q NM/NN/NT/NV passés en approche+départ le 2026-08-02 (voir leur
+      // commentaire dans SUBJECT_CATEGORIES). Sert quand le Q-code est absent
+      // ou en QXXXX, fréquent côté FAA.
       depart: ["SID", "DEPARTURE", "CLB GRADIENT", "CLIMB GRADIENT", "INITIAL CLIMB", "NADP", "BIRD", "BASH",
+        "VOR", "TACAN", "VORTAC",
         "WINDCONE", "WIND CONE", "WDI", "WIND DIRECTION INDICATOR"],
       sol: ["TWY", "TAXIWAY", "APRON", "STAND", "PARKING", "RAMP", "STOPWAY", "SWY", "SHOULDER",
         // Points/positions d'attente : marquages et aires de la surface, on les
@@ -4065,13 +4077,29 @@ body .stat .k{
         "HOLDING POINT", "HOLDING PT", "HLDG POINT", "HLDG PT", "HOLDING POSITION",
         "HOLDING BAY", "HOLD SHORT",
         "MOVEMENT AREA", "STOP BAR", "STOPBAR", "WIP", "WORK IN PROGRESS", "CONSTRUCTION",
-        "MAINT", "GRASS CUTTING", "DE-ICING", "DEICING", "PUSHBACK", "DOCKING",
+        // « MAINT » figurait ici jusqu'au 2026-08-02 : il rangeait au sol tout
+        // ce qui se répare, y compris une station de navigation ou un radar.
+        // Déplacé dans WEAK_KEYWORDS ci-dessous — voir son commentaire.
+        "GRASS CUTTING", "DE-ICING", "DEICING", "PUSHBACK", "DOCKING",
         "BRAKING ACTION", "FRICTION", "CONTAMINATED", "SNOW", "SLUSH", "FOD",
         // Essais moteur au point fixe : régime d'activité qui se gère au sol,
         // sur les aires. Revue du 2026-07-28 (KSKA). « BASH » figurait ici
         // jusqu'au 2026-07-31 — déplacé en départ+approche, voir le commentaire
         // de ces deux listes.
         "ENGINE RUN", "ENG RUN"],
+    };
+    // Mots-clés de CAUSE : ils disent ce qui se passe, pas OÙ. « MAINT » n'est
+    // pas un lieu — on répare aussi bien un balisage qu'un TACAN ou un radar —
+    // et il apparaît le plus souvent en incise (« (MAINT) », « DUE TO MAINT »).
+    // Rangé dans la liste « sol » jusqu'au 2026-08-02, il collait un badge
+    // Ground à tout NOTAM citant une maintenance : cas réels F1570/26 « TACAN
+    // LOR CH105X U/S (MAINT) » et M2497/26 « PAR RWY 25, 07 AND 20 U/S DUE TO
+    // MAINT. », tous deux affichés Arrival + Ground. On ne le consulte donc
+    // qu'en DERNIER RECOURS, quand ni le Q-code ni les mots-clés de lieu n'ont
+    // rien donné — c'est là qu'il garde sa valeur (NOTAM américains en QXXXX dont le
+    // seul indice est le mot « maintenance »).
+    const WEAK_KEYWORDS = {
+      sol: ["MAINT"],
     };
     const CRITICAL_TEXT = ["CLSD", "CLOSED", "U/S", "UNSERVICEABLE", "UNSERV", "NOT AVBL",
       "NOT AVAILABLE", "UNSAFE", "WITHDRAWN"];
@@ -4084,6 +4112,14 @@ body .stat .k{
       "AEROBATIC", "PARADROP", "PARACHUT", "GLIDER", "GLIDING", "BANNER TOW",
       "AERIAL DISPLAY", "AIR DISPLAY", "FORMATION FLYING", "DISPLAY FLYING"
     ];
+
+    // ILS : sujets Q-code de l'ILS et de ses composantes (localizer, glide,
+    // markers, DME et locators associés) — tous libellés « (ILS) » dans la table
+    // des sujets, plus bas. IN (localizer NON associé à un ILS) et IW (MLS) n'en
+    // font pas partie : ce ne sont pas des ILS, ils gardent le régime commun.
+    const ILS_SUBJECTS = new Set(["IC", "ID", "IG", "II", "IL", "IM", "IO", "IS", "IT", "IU", "IX", "IY"]);
+    // Mot entier : un simple includes("ILS") attraperait DETAILS, TRAILS, RAILS…
+    const ILS_TEXT_RE = /\bILS\b/;
 
     function qcodeParts(q) {
       if (!q) return [null, null];
@@ -4102,6 +4138,13 @@ body .stat .k{
       const t = " " + e.toUpperCase() + " ", found = new Set();
       for (const c in FREETEXT_KEYWORDS)
         if (FREETEXT_KEYWORDS[c].some(k => t.includes(k))) found.add(c);
+      return found;
+    }
+    function categoriesFromWeakText(e) {
+      if (!e) return new Set();
+      const t = " " + e.toUpperCase() + " ", found = new Set();
+      for (const c in WEAK_KEYWORDS)
+        if (WEAK_KEYWORDS[c].some(k => t.includes(k))) found.add(c);
       return found;
     }
     // Mots-clés grues / mâts / obstacles -> toujours Information
@@ -4171,6 +4214,28 @@ body .stat .k{
       // priment sur le sujet du Q-code et sont classées Flight uniquement.
       const T = " " + (e || "").toUpperCase() + " ";
       if (FORCE_FLIGHT.some(k => T.includes(k))) { cats = new Set(["vol"]); source = "text"; }
+      // Forçage Arrival : un NOTAM dont le SUJET est l'ILS ne concerne que
+      // l'approche, quoi que raconte le reste du texte. Sans ça, « ILS RWY 25
+      // U/S (MAINT) » (B3282/26, QICAS) ressortait Arrival + Ground — « MAINT »
+      // figure dans les mots-clés « sol », or la maintenance n'est ici que la
+      // CAUSE de la panne, pas l'objet du NOTAM.
+      // Le repli par le texte est réservé aux NOTAM sans Q-code exploitable
+      // (FAA : QXXXX, ou pas de ligne Q du tout). Partout ailleurs c'est le
+      // Q-code qui tranche, sinon une fermeture de piste du genre « RWY 25 CLSD
+      // DUE ILS MAINT » (QMRLC) perdrait son Ground sur une mention de cause.
+      const [ilsSubj] = qcodeParts(q);
+      const ilsParQcode = ILS_SUBJECTS.has(ilsSubj);
+      if (ilsParQcode || ((!ilsSubj || ilsSubj === "XX") && ILS_TEXT_RE.test(T))) {
+        cats = new Set(["approche"]);
+        source = ilsParQcode ? "qcode" : "text";
+      }
+      // Dernier recours avant « non classé » : les mots-clés de CAUSE
+      // (WEAK_KEYWORDS, cf. leur commentaire). Ils ne s'AJOUTENT jamais à un
+      // classement existant — ils ne servent que s'il n'y en a aucun.
+      if (!cats.size) {
+        const faibles = categoriesFromWeakText(e);
+        if (faibles.size) { cats = faibles; source = "text"; }
+      }
       if (!cats.size) { cats = new Set(["non_classe"]); source = "unclassified"; }
       return { categories: [...cats], severity: severity(q, e), source };
     }
