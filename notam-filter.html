@@ -2793,6 +2793,50 @@
       cursor: grab
     }
 
+    /* Carte route : le canvas est posé DANS le conteneur MapLibre, en absolu,
+       donc les deux occupent exactement la même boîte. Sans MapLibre, le
+       conteneur est un simple div vide et le canvas se comporte comme avant. */
+    #routeMapGL {
+      flex: 1;
+      position: relative;
+      min-height: 0
+    }
+
+    #routeMapGL>#routeMap {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      flex: none
+    }
+
+    /* Quand MapLibre pilote la vue, le canvas laisse passer les gestes. */
+    #routeMapGL.gl>#routeMap {
+      pointer-events: none;
+      cursor: auto
+    }
+
+    #routeMapAttr {
+      position: absolute;
+      left: 8px;
+      bottom: 7px;
+      z-index: 3;
+      font: 400 9px/1.3 var(--sans);
+      color: var(--muted);
+      background: rgba(8, 11, 14, .62);
+      padding: 3px 6px;
+      border-radius: 5px;
+      pointer-events: auto
+    }
+
+    body.light #routeMapAttr {
+      background: rgba(255, 255, 255, .75)
+    }
+
+    #routeMapAttr a {
+      color: inherit
+    }
+
     .map-toast {
       position: absolute;
       left: 50%;
@@ -3661,7 +3705,14 @@ body .stat .k{
   <!-- ================= OVERLAY CARTE ================= -->
   <div class="map-ov" id="mapOv" hidden>
     <button class="map-x" id="mapClose" aria-label="Back">←</button>
-    <canvas id="routeMap"></canvas>
+    <!-- Fond vectoriel MapLibre SOUS le canvas. Le canvas garde tout le dessin
+         de l'app (route, terrains, capsules) et laisse passer les gestes vers
+         MapLibre, qui gère glisser/zoom/inertie. Si MapLibre ne démarre pas, ce
+         div reste vide et le canvas redessine son fond comme avant. -->
+    <div id="routeMapGL">
+      <canvas id="routeMap"></canvas>
+      <div id="routeMapAttr" hidden>© <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a></div>
+    </div>
   </div>
 
   <!-- ================= OVERLAY CARTE FIR MONDIALE ================= -->
@@ -11933,6 +11984,11 @@ function renderInfo(icao) {
       document.body.classList.toggle("light", t === "light");
       const b = $("#themeBtn");
       if (b) { b.textContent = t === "light" ? "☾" : "☀"; b.title = t === "light" ? "Night mode" : "Day mode"; }
+      // Le fond vectoriel a ses propres couleurs : on lui repasse le style.
+      // try/catch et non `typeof GL` : GL est un `const` déclaré plus bas, donc
+      // en zone morte temporelle au premier applyTheme() — et `typeof` sur une
+      // liaison en TDZ lève, il ne renvoie pas "undefined".
+      try { if (GL.active) GL.setTheme(t === "light"); } catch (e) { }
     }
     let theme = localStorage.getItem(THEME_KEY) || "light";
     applyTheme(theme);
@@ -12743,14 +12799,251 @@ function renderInfo(icao) {
       return cityPlaced;
     }
 
+    /* ================= FOND VECTORIEL MAPLIBRE (carte ROUTE) ================
+       Remplace paintBackground() SUR LA CARTE ROUTE UNIQUEMENT. La surcouche
+       (grand cercle, terrains, capsules, villes) continue d'être dessinée sur
+       le canvas #routeMap par drawMap() : seules X() et Y() changent de
+       projection. La carte FIR n'est pas touchée et garde paintBackground().
+
+       Filet de sécurité EFB : si MapLibre ne démarre pas (pas de WebGL2, script
+       absent hors ligne, archive illisible), GL.active reste faux et TOUT le
+       chemin canvas d'origine — fond compris — continue de fonctionner comme
+       avant. Aucune régression possible sur un appareil non supporté.
+
+       Deux sources, un seul style à cinq couches de géométrie :
+         - en ligne  : OpenFreeMap (schéma OpenMapTiles), jusqu'à z14 ;
+         - hors ligne: tiles/basemap-z6-v1.pmtiles (schéma Protomaps), z0-z6,
+                       au-delà MapLibre sur-zoome — la carte grossit sans
+                       ajouter de détail, ce qui est le comportement voulu.
+       Aucune couche `symbol` : tout le texte reste sur le canvas, donc ni
+       glyphes ni sprites à héberger. C'est aussi pourquoi l'archive hors ligne
+       ne contient pas la couche `places` (l'app a déjà ses villes en dur). */
+
+    const GL_JS  = "./vendor/maplibre-gl-5.6.0.js";
+    const GL_CSS = "./vendor/maplibre-gl-5.6.0.css";
+    const PMTILES_URL = "./tiles/basemap-z6-v1.pmtiles";
+    const OFM_TILES = "https://tiles.openfreemap.org/planet/20260726_080001_pt/{z}/{x}/{y}.pbf";
+
+    // Web Mercator normalisé [0,1] — pré-calculé une fois pour les points fixes.
+    const mercX = lon => (lon + 180) / 360;
+    const mercY = lat => {
+      const s = Math.sin(_rad(Math.max(-85.051129, Math.min(85.051129, lat))));
+      return 0.5 - Math.log((1 + s) / (1 - s)) / (4 * Math.PI);
+    };
+
+    /* --- Lecteur PMTiles minimal --------------------------------------------
+       L'archive est téléchargée UNE fois puis conservée en Blob : les tranches
+       sont lues à la demande avec blob.slice(), donc les 21 Mo ne montent
+       jamais en mémoire. Le service worker (règle 5, cache d'abord) la sert
+       hors ligne sans qu'on ait à le modifier. */
+    function zxyToTileId(z, x, y) {                     // courbe de Hilbert, spec PMTiles v3
+      let acc = 0;
+      for (let t = 0; t < z; t++) acc += (1 << t) * (1 << t);
+      let n = 1 << z, rx, ry, d = 0, px = x, py = y;
+      for (let s = n >> 1; s > 0; s >>= 1) {
+        rx = (px & s) > 0 ? 1 : 0; ry = (py & s) > 0 ? 1 : 0;
+        d += s * s * ((3 * rx) ^ ry);
+        if (ry === 0) { if (rx === 1) { px = s - 1 - px; py = s - 1 - py; } const t = px; px = py; py = t; }
+      }
+      return acc + d;
+    }
+    async function gunzip(buf) {
+      const ds = new DecompressionStream("gzip");
+      return new Response(new Blob([buf]).stream().pipeThrough(ds)).arrayBuffer();
+    }
+    class PMTilesBlob {
+      constructor(blob) { this.blob = blob; }
+      async _slice(off, len) { return new Uint8Array(await this.blob.slice(off, off + len).arrayBuffer()); }
+      static _varint(b, p) { let s = 0, v = 0, by; do { by = b[p.i++]; v += (by & 0x7f) * Math.pow(2, s); s += 7; } while (by & 0x80); return v; }
+      static _deser(b) {
+        const p = { i: 0 }, n = PMTilesBlob._varint(b, p), e = [];
+        let last = 0;
+        for (let i = 0; i < n; i++) { last += PMTilesBlob._varint(b, p); e.push({ id: last, off: 0, len: 0, run: 0 }); }
+        for (let i = 0; i < n; i++) e[i].run = PMTilesBlob._varint(b, p);
+        for (let i = 0; i < n; i++) e[i].len = PMTilesBlob._varint(b, p);
+        for (let i = 0; i < n; i++) { const v = PMTilesBlob._varint(b, p); e[i].off = (v === 0 && i > 0) ? e[i - 1].off + e[i - 1].len : v - 1; }
+        return e;
+      }
+      async open() {
+        const h = await this._slice(0, 127);
+        const dv = new DataView(h.buffer, h.byteOffset, 127);
+        if (String.fromCharCode(...h.subarray(0, 7)) !== "PMTiles") throw new Error("pas un PMTiles");
+        const u64 = at => Number(dv.getBigUint64(at, true));
+        this.dirOff = u64(8); this.dirLen = u64(16);
+        this.dataOff = u64(56);
+        this.maxZoom = dv.getUint8(101);
+        this.entries = PMTilesBlob._deser(new Uint8Array(await gunzip(await this._slice(this.dirOff, this.dirLen))));
+        return this;
+      }
+      _find(id) {                                       // recherche binaire + run-length
+        let lo = 0, hi = this.entries.length - 1, best = -1;
+        while (lo <= hi) { const m = (lo + hi) >> 1; if (this.entries[m].id <= id) { best = m; lo = m + 1; } else hi = m - 1; }
+        if (best < 0) return null;
+        const e = this.entries[best];
+        return (e.run === 0 || id < e.id + e.run) ? e : null;
+      }
+      async tile(z, x, y) {
+        if (z > this.maxZoom) return null;
+        const e = this._find(zxyToTileId(z, x, y));
+        if (!e || !e.len) return null;
+        return gunzip(await this._slice(this.dataOff + e.off, e.len));
+      }
+    }
+
+    /* --- Styles : géométrie seule, deux schémas ---------------------------- */
+    function glStyle(light, offline) {
+      const C = mapPalette(light);
+      const cover = light ? "#f1f5f6" : "#1b222a";
+      const road = light ? "#dde4ea" : "#2b3540", roadHi = light ? "#ccd6de" : "#3a4550";
+      const src = offline
+        ? { type: "vector", url: "pmtiles://local", minzoom: 0, maxzoom: 6 }
+        : { type: "vector", tiles: [OFM_TILES], minzoom: 0, maxzoom: 14 };
+      const L = [{ id: "bg", type: "background", paint: { "background-color": C.land } }];
+      if (offline) {                                     // schéma Protomaps
+        L.push(
+          { id: "earth", type: "fill", source: "o", "source-layer": "earth", paint: { "fill-color": C.land } },
+          { id: "cover", type: "fill", source: "o", "source-layer": "landcover", paint: { "fill-color": cover, "fill-opacity": .85 } },
+          { id: "water", type: "fill", source: "o", "source-layer": "water", paint: { "fill-color": C.sea } },
+          { id: "coast", type: "line", source: "o", "source-layer": "earth", paint: { "line-color": C.coast, "line-width": .9 } },
+          { id: "bnd", type: "line", source: "o", "source-layer": "boundaries", paint: { "line-color": C.border, "line-width": .8, "line-dasharray": [3, 3] } },
+          { id: "roads", type: "line", source: "o", "source-layer": "roads", minzoom: 4,
+            filter: ["in", ["get", "kind"], ["literal", ["highway", "major_road"]]],
+            paint: { "line-color": roadHi, "line-width": ["interpolate", ["linear"], ["zoom"], 4, .4, 6, 1.2] } }
+        );
+      } else {                                           // schéma OpenMapTiles
+        L.push(
+          { id: "cover", type: "fill", source: "o", "source-layer": "landcover", paint: { "fill-color": cover, "fill-opacity": .9 } },
+          { id: "water", type: "fill", source: "o", "source-layer": "water",
+            paint: { "fill-color": ["case", ["==", ["get", "class"], "ocean"], C.sea, C.lake], "fill-outline-color": C.lakeEdge } },
+          { id: "coast", type: "line", source: "o", "source-layer": "water", filter: ["==", ["get", "class"], "ocean"],
+            paint: { "line-color": C.coast, "line-width": ["interpolate", ["linear"], ["zoom"], 3, .6, 8, 1.1] } },
+          { id: "river", type: "line", source: "o", "source-layer": "waterway", minzoom: 5,
+            paint: { "line-color": C.river, "line-width": ["interpolate", ["linear"], ["zoom"], 5, .5, 12, 1.6] } },
+          { id: "bnd", type: "line", source: "o", "source-layer": "boundary", filter: ["<=", ["get", "admin_level"], 2],
+            paint: { "line-color": C.border, "line-width": ["interpolate", ["linear"], ["zoom"], 3, .7, 9, 1.4], "line-dasharray": [3, 3] } },
+          { id: "road-major", type: "line", source: "o", "source-layer": "transportation", minzoom: 5,
+            filter: ["in", ["get", "class"], ["literal", ["motorway", "trunk"]]],
+            paint: { "line-color": roadHi, "line-width": ["interpolate", ["linear"], ["zoom"], 5, .5, 10, 1.6, 14, 3] } },
+          { id: "road-minor", type: "line", source: "o", "source-layer": "transportation", minzoom: 8,
+            filter: ["in", ["get", "class"], ["literal", ["primary", "secondary", "tertiary"]]],
+            paint: { "line-color": road, "line-width": ["interpolate", ["linear"], ["zoom"], 8, .4, 14, 1.8] } },
+          { id: "aero-a", type: "fill", source: "o", "source-layer": "aeroway", minzoom: 10, paint: { "fill-color": C.dot, "fill-opacity": .45 } },
+          { id: "aero-l", type: "line", source: "o", "source-layer": "aeroway", minzoom: 10, paint: { "line-color": C.dot, "line-width": 1.2 } }
+        );
+      }
+      return { version: 8, sources: { o: src }, layers: L };
+    }
+
+    const GL = {
+      active: false, map: null, archive: null, offline: false, _loading: null,
+      // Charge MapLibre à la demande : rien n'alourdit le démarrage de l'app.
+      _script() {
+        if (window.maplibregl) return Promise.resolve(true);
+        return new Promise(res => {
+          const css = document.createElement("link"); css.rel = "stylesheet"; css.href = GL_CSS;
+          document.head.appendChild(css);
+          const s = document.createElement("script"); s.src = GL_JS;
+          s.onload = () => res(true); s.onerror = () => res(false);
+          document.head.appendChild(s);
+        });
+      },
+      async _openArchive() {
+        if (this.archive !== null) return this.archive;
+        try {
+          const r = await fetch(PMTILES_URL);            // SW règle 5 : mis en cache, servi hors ligne
+          if (!r.ok) throw new Error("HTTP " + r.status);
+          this.archive = await new PMTilesBlob(await r.blob()).open();
+        } catch (e) { this.archive = false; }
+        return this.archive;
+      },
+      // Vrai si on peut afficher un fond : réseau, ou archive disponible.
+      async ready() {
+        if (this.active) return true;
+        if (this._loading) return this._loading;
+        this._loading = (async () => {
+          if (!(await this._script())) return false;
+          if (!maplibregl.getRTLTextPluginStatus) { /* build inattendu */ }
+          await this._openArchive();
+          this.offline = !navigator.onLine || !this.archive ? !navigator.onLine : false;
+          if (!navigator.onLine && !this.archive) return false;   // ni réseau ni archive -> canvas d'origine
+          if (this.archive) {
+            maplibregl.addProtocol("pmtiles", async params => {
+              const m = /^pmtiles:\/\/local\/(\d+)\/(\d+)\/(\d+)/.exec(params.url);
+              if (!m) return { data: null };
+              const d = await GL.archive.tile(+m[1], +m[2], +m[3]);
+              return { data: d || new ArrayBuffer(0) };
+            });
+          }
+          const host = $("#routeMapGL");
+          try {
+            this.map = new maplibregl.Map({
+              container: host, style: glStyle(document.body.classList.contains("light"), this.offline),
+              center: [10, 25], zoom: 2, attributionControl: false,
+              dragRotate: false, pitchWithRotate: false, maxZoom: 16, fadeDuration: 0
+            });
+            this.map.touchZoomRotate.disableRotation();
+          } catch (e) { return false; }
+          this.map.on("render", () => drawMap());
+          this.active = true;
+          return true;
+        })();
+        return this._loading;
+      },
+      // Affine écran <- Mercator, calibrée avec DEUX map.project() par image.
+      // Sans rotation ni tangage (désactivés), c'est exact au pixel près.
+      affine() {
+        const m = this.map;
+        if (!m || Math.abs(m.getBearing()) > 1e-6 || Math.abs(m.getPitch()) > 1e-6) return null;
+        const c = m.getCenter(), d = 1 / 64;
+        const pa = m.project([c.lng - d, c.lat - d]), pb = m.project([c.lng + d, c.lat + d]);
+        const ax = mercX(c.lng - d), bx = mercX(c.lng + d), ay = mercY(c.lat - d), by = mercY(c.lat + d);
+        const kx = (pb.x - pa.x) / (bx - ax), ky = (pb.y - pa.y) / (by - ay);
+        return { kx, ky, ox: pa.x - ax * kx, oy: pa.y - ay * ky };
+      },
+      // `scale` de l'app (px CSS par degré de latitude) déduit du zoom MapLibre,
+      // pour que TOUS les seuils existants (v.scale > 58, minRwy...) restent vrais.
+      scale() { return 1.4222 * Math.pow(2, this.map.getZoom()) / Math.cos(_rad(this.map.getCenter().lat)); },
+      setTheme(light) { if (this.map) this.map.setStyle(glStyle(light, this.offline)); },
+      fit(lons, lats) {
+        if (!this.map) return;
+        this.map.fitBounds([[Math.min(...lons), Math.min(...lats)], [Math.max(...lons), Math.max(...lats)]],
+          { padding: 64, duration: 0, maxZoom: 11 });
+      }
+    };
+
     function drawMap() {
       if (!mapView) return;
-      const cv = $("#routeMap"), ctx = cv.getContext("2d"), v = mapView;
+      const cv = $("#routeMap"), ctx = cv.getContext("2d");
+      // Quand MapLibre pilote la vue, mapView en est DÉDUIT à chaque image.
+      // Tous les seuils existants (v.scale > 58, minRwy, showLabels…) restent
+      // exprimés dans l'unité d'origine — px CSS par degré de latitude — donc
+      // aucun d'eux n'a eu à être retouché.
+      if (GL.active && GL.map) {
+        const c = GL.map.getCenter(), d = window.devicePixelRatio || 1;
+        mapView.cx = c.lng; mapView.cy = c.lat; mapView.scale = GL.scale(); mapView.dpr = d;
+        const box = cv.getBoundingClientRect();
+        const w = Math.round(box.width * d), h = Math.round(box.height * d);
+        if (w && h && (cv.width !== w || cv.height !== h)) { cv.width = w; cv.height = h; }
+      }
+      const v = mapView;
       const light = document.body.classList.contains("light");   // la carte suit le thème jour/nuit de l'app
       const C = mapPalette(light);
       const dpr = v.dpr, kx = Math.cos(v.cy * Math.PI / 180);
-      const X = lon => (cv.width / (2 * dpr) + (lon - v.cx) * kx * v.scale) * dpr;
-      const Y = lat => (cv.height / (2 * dpr) - (lat - v.cy) * v.scale) * dpr;
+      // Projection : quand MapLibre pilote la vue, l'écran est une fonction
+      // AFFINE des coordonnées Mercator (ni rotation ni tangage, tous deux
+      // désactivés). On la calibre avec deux map.project() par image au lieu
+      // d'un par point — vérifié exact au pixel près. Sinon, on garde
+      // l'équirectangulaire d'origine, inchangée.
+      const A = GL.active ? GL.affine() : null;
+      const X = A ? (lon => (A.ox + mercX(lon) * A.kx) * dpr)
+        : (lon => (cv.width / (2 * dpr) + (lon - v.cx) * kx * v.scale) * dpr);
+      const Y = A ? (lat => (A.oy + mercY(lat) * A.ky) * dpr)
+        : (lat => (cv.height / (2 * dpr) - (lat - v.cy) * v.scale) * dpr);
+      let zr = 1, dx = 0, dy = 0;
+      if (A) {
+        // MapLibre dessine le fond : le canvas ne porte plus que la surcouche.
+        ctx.clearRect(0, 0, cv.width, cv.height);
+      } else {
       // --- fond mis en cache sur un canvas ÉLARGI (marge autour) ---
       // Pan : translation de l'image (rapide). Zoom : mise à l'échelle de l'image puis
       // recalcul net différé (évite de reconstruire le vecteur à chaque cran de molette).
@@ -12772,16 +13065,17 @@ function renderInfo(icao) {
         _bgZoomTimer = setTimeout(() => { _bg = null; drawMap(); }, 130);
       }
       // recolle le fond, avec mise à l'échelle si le zoom a bougé depuis le rendu
-      const zr = v.scale / _bg.scale;                 // ratio de zoom depuis le rendu du fond
+      zr = v.scale / _bg.scale;                       // ratio de zoom depuis le rendu du fond
       const shiftX = (v.cx - _bg.cx) * kx * v.scale * dpr;
       const shiftY = -(v.cy - _bg.cy) * v.scale * dpr;
       const dw = _bg.bw * zr, dh = _bg.bh * zr;
-      const dx = (cv.width - dw) / 2 - shiftX;
-      const dy = (cv.height - dh) / 2 - shiftY;
+      dx = (cv.width - dw) / 2 - shiftX;
+      dy = (cv.height - dh) / 2 - shiftY;
       ctx.clearRect(0, 0, cv.width, cv.height);
       ctx.imageSmoothingEnabled = true;
       ctx.imageSmoothingQuality = "high";   // fond scalé net (au lieu de flou) pendant le zoom
       ctx.drawImage(_bgCanvas, dx, dy, dw, dh);
+      }
 
       // --- couche mondiale des aérodromes (sous la route) ---
       // Point VERT = NOTAM en cache offline (savedSet), ROUGE = non sauvegardé. Aucune sévérité.
@@ -12941,14 +13235,36 @@ function renderInfo(icao) {
         mapView = { cx, cy, scale, dpr };
       }
       rebuildSavedSet();          // couleurs vert/rouge à jour à l'ouverture
+      // MapLibre disponible : c'est LUI qui cadre, mapView suivra au 1er rendu.
+      if (GL.active && GL.map) {
+        $("#routeMapGL").classList.add("gl");
+        $("#routeMapAttr").hidden = false;
+        GL.map.resize();
+        if (curRoute && curRoute.ok) {
+          const pts = curRoute.airports;
+          GL.fit(pts.map(a => a.lon), pts.map(a => a.lat));
+        } else {
+          GL.map.jumpTo({ center: [10, 25], zoom: 1.6 });
+        }
+      }
       drawMap();
     }
-    $("#mapBtn").onclick = async () => { if (await ensureMapReady()) openMap(); };
+    $("#mapBtn").onclick = async () => {
+      if (!(await ensureMapReady())) return;
+      // Tentative de fond vectoriel. En cas d'échec (pas de WebGL2, script ou
+      // archive absents hors ligne), GL.active reste faux et openMap() rend
+      // exactement la carte d'avant — aucune régression sur ces appareils.
+      try { await GL.ready(); } catch (e) { }
+      openMap();
+    };
     $("#mapClose").onclick = () => { $("#mapOv").hidden = true; };
     (() => { // interactions carte : molette / glisser / pincer / clic sur un terrain
       const cv = $("#routeMap");
       const kx = () => Math.cos(mapView.cy * Math.PI / 180);
+      // Molette / glisser / pincer : quand MapLibre est actif c'est lui qui les
+      // gère (avec inertie), le canvas ne reçoit même plus les événements.
       cv.addEventListener("wheel", e => {
+        if (GL.active) return;
         if (!mapView) return; e.preventDefault();
         mapView.scale = Math.max(3, mapView.scale * (e.deltaY < 0 ? 1.18 : 1 / 1.18)); scheduleDraw();
       }, { passive: false });
@@ -12995,9 +13311,12 @@ function renderInfo(icao) {
       let drag = null, dragStart = null, pinch = null;
       const pos = e => { const r = cv.getBoundingClientRect(); return [e.clientX - r.left, e.clientY - r.top]; };
       const CLICK_TOL = 6;   // tolérance (px CSS) : en-deçà, un pointerup est un clic, pas un glisser
-      cv.addEventListener("pointerdown", e => { drag = pos(e); dragStart = drag; cv.setPointerCapture(e.pointerId); });
+      cv.addEventListener("pointerdown", e => {
+        if (GL.active) return;
+        drag = pos(e); dragStart = drag; cv.setPointerCapture(e.pointerId);
+      });
       cv.addEventListener("pointermove", e => {
-        if (!mapView) return;
+        if (GL.active || !mapView) return;
         const p = pos(e);
         if (drag) {
           mapView.cx -= (p[0] - drag[0]) / (kx() * mapView.scale); mapView.cy += (p[1] - drag[1]) / mapView.scale;
@@ -13007,32 +13326,51 @@ function renderInfo(icao) {
           cv.style.cursor = (hitAirport(px, py) || hitWorld(px, py)) ? "pointer" : "grab";
         }
       });
+      // Action d'un clic à des coordonnées écran (px device) : inchangée, mais
+      // extraite pour être partagée entre le canvas (chemin d'origine) et le
+      // conteneur MapLibre (chemin vectoriel, où le canvas ne reçoit rien).
+      function clickAt(px, py) {
+        const a = hitAirport(px, py);
+        if (a) { $("#mapOv").hidden = true; $("#routeScreen").hidden = true; load(a.icao); return; }
+        const w = hitWorld(px, py);
+        if (!w) return;
+        if (w.saved) {
+          // vert : on charge et on affiche les NOTAM sur la 1re page
+          $("#mapOv").hidden = true; $("#routeScreen").hidden = true; load(w.icao);
+        } else if (navigator.onLine) {
+          // rouge + connecté : ajout à la route puis chargement (load -> fetch + saveOffline -> passe vert)
+          addWorldToRoute(w.icao);
+          $("#mapOv").hidden = true; $("#routeScreen").hidden = true; load(w.icao);
+        } else {
+          mapToast("Connexion requise pour charger " + w.icao);
+        }
+      }
       cv.addEventListener("pointerup", e => {
+        if (GL.active) return;
         if (dragStart && mapView) {
           const p = pos(e), dist = Math.hypot(p[0] - dragStart[0], p[1] - dragStart[1]);
           if (dist <= CLICK_TOL) {
-            const dpr = mapView.dpr, px = p[0] * dpr, py = p[1] * dpr;
-            const a = hitAirport(px, py);
-            if (a) { $("#mapOv").hidden = true; $("#routeScreen").hidden = true; load(a.icao); }
-            else {
-              const w = hitWorld(px, py);
-              if (w) {
-                if (w.saved) {
-                  // vert : on charge et on affiche les NOTAM sur la 1re page
-                  $("#mapOv").hidden = true; $("#routeScreen").hidden = true; load(w.icao);
-                } else if (navigator.onLine) {
-                  // rouge + connecté : ajout à la route puis chargement (load -> fetch + saveOffline -> passe vert)
-                  addWorldToRoute(w.icao);
-                  $("#mapOv").hidden = true; $("#routeScreen").hidden = true; load(w.icao);
-                } else {
-                  mapToast("Connexion requise pour charger " + w.icao);
-                }
-              }
-            }
+            const dpr = mapView.dpr;
+            clickAt(p[0] * dpr, p[1] * dpr);
           }
         }
         drag = null; dragStart = null;
       });
+      // Chemin MapLibre : on écoute le conteneur, et on ne déclenche que si le
+      // geste n'était pas un glisser (même tolérance qu'avant).
+      (() => {
+        const host = $("#routeMapGL");
+        let down = null;
+        host.addEventListener("pointerdown", e => { down = [e.clientX, e.clientY]; });
+        host.addEventListener("pointerup", e => {
+          if (!GL.active || !down || !mapView) { down = null; return; }
+          const moved = Math.hypot(e.clientX - down[0], e.clientY - down[1]);
+          down = null;
+          if (moved > CLICK_TOL) return;
+          const r = $("#routeMap").getBoundingClientRect(), dpr = mapView.dpr;
+          clickAt((e.clientX - r.left) * dpr, (e.clientY - r.top) * dpr);
+        });
+      })();
       cv.addEventListener("touchstart", e => {
         if (e.touches.length === 2) {
           drag = null;
@@ -13040,6 +13378,7 @@ function renderInfo(icao) {
         }
       }, { passive: true });
       cv.addEventListener("touchmove", e => {
+        if (GL.active) return;
         if (pinch && e.touches.length === 2 && mapView) {
           e.preventDefault();
           const d = Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY);

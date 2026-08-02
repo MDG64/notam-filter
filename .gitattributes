@@ -1,0 +1,4 @@
+# Fichiers servis tels quels au navigateur : pas de conversion de fins de ligne,
+# sinon la copie déployée diffère octet pour octet de celle qu'on a testée.
+vendor/** -text
+tiles/**  -text binary
