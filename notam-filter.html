@@ -1694,12 +1694,6 @@
       margin: 0
     }
 
-    .plan-sub {
-      font: 500 11px/1.4 var(--mono);
-      color: var(--muted);
-      letter-spacing: .04em
-    }
-
     /* Pas de width:fit-content ici : le canvas est en width:100%, les deux se
        référencent l'un l'autre et le conteneur s'effondre. C'est le conteneur
        qui porte la largeur max, calculée dans planResize. */
@@ -3722,7 +3716,6 @@ body .stat .k{
       <div class="plan-topbar">
         <div class="plan-head">
           <h2 class="hd-title">Layout — <span id="planIcao">—</span></h2>
-          <span class="plan-sub" id="planSub"></span>
         </div>
         <div id="planTimeSlot"></div>
       </div>
@@ -15425,14 +15418,46 @@ window.addEventListener("scroll", hidePop, true);
          · terrain plus PETIT que le cadre -> il reste entièrement visible
          · terrain plus GRAND -> le cadre reste entièrement couvert
        Les deux cas tombent de la même formule : les bornes se croisent. */
+    /* Emprise des boutons de zoom, en pixels PHYSIQUES du canvas. Ils flottent
+       AU-DESSUS du plan, coin bas-droit : tout ce que le cadrage ou le
+       déplacement dépose là passe dessous. On la mesure au lieu de la coder en
+       dur — les boutons passent de 34 à 40 px au point de rupture mobile, et
+       c'est là que la gêne se voit. Renvoie la largeur de la colonne et la
+       hauteur de la rangée qu'ils occupent, marge de garde comprise. */
+    function planGutter() {
+      const cv = $("#planCv"), z = document.querySelector("#planBody .plan-zoom");
+      if (!cv || !z) return { r: 0, b: 0 };
+      const c = cv.getBoundingClientRect(), q = z.getBoundingClientRect();
+      if (!c.width || !q.width) return { r: 0, b: 0 };
+      const GAP = 8;                    // ne pas venir affleurer le bouton
+      return {
+        r: Math.max(0, c.right - q.left + GAP) * planDPR,
+        b: Math.max(0, c.bottom - q.top + GAP) * planDPR,
+      };
+    }
+
     function planClamp() {
       const cv = $("#planCv"); if (!cv || !plan) return;
       const B = plan.B, f = plan.fit, k = plan.view.k;
       const x0 = (B.x0 * f.s + f.ox) * k, x1 = (B.x1 * f.s + f.ox) * k;
       const y0 = (B.y0 * f.s + f.oy) * k, y1 = (B.y1 * f.s + f.oy) * k;
       const cl = (v, a, b) => Math.min(Math.max(v, Math.min(a, b)), Math.max(a, b));
-      plan.view.tx = cl(plan.view.tx, cv.width - x1, -x0);
-      plan.view.ty = cl(plan.view.ty, cv.height - y1, -y0);
+      /* Le bord du terrain a le droit d'aller se ranger SOUS les boutons.
+         Sans ce jeu, une surface située à l'extrémité sud-est du terrain reste
+         coincée dessous quoi qu'on fasse — ni le zoom ni le doigt ne peuvent
+         l'en sortir, puisque la butée interdit de dépasser le bord du terrain.
+         La bande vide ainsi autorisée est exactement celle que les boutons
+         recouvrent : elle ne se voit pas.
+         Ce jeu ne vaut QUE lorsque le terrain déborde déjà du cadre. Tant qu'il
+         y tient en entier (k=1, ou un petit terrain), les deux butées se
+         croisent et relâcher celle du bas-droit ne décale rien : elle plaque le
+         terrain contre ce bord au lieu de le laisser centré — le plan s'ouvrait
+         de travers. */
+      const g = planGutter();
+      const gx = (x1 - x0) >= cv.width ? g.r : 0;
+      const gy = (y1 - y0) >= cv.height ? g.b : 0;
+      plan.view.tx = cl(plan.view.tx, cv.width - x1 - gx, -x0);
+      plan.view.ty = cl(plan.view.ty, cv.height - y1 - gy, -y0);
     }
 
     // Plafond de zoom. À k=9, des postes espacés de ~30 m ne sont séparés que
@@ -15526,11 +15551,28 @@ window.addEventListener("scroll", hidePop, true);
       const cx = (bx.x0 + bx.x1) / 2, cy = (bx.y0 + bx.y1) / 2;
       const w = (bx.x1 - bx.x0) * f.s, h = (bx.y1 - bx.y0) * f.s;
       const PAD = 1.18;                  // une marge autour, pas un cadre au trait
-      let k = Math.min(cv.width / (w * PAD), cv.height / (h * PAD));
-      k = Math.max(1, Math.min(PLAN_ZFIT_MAX, k));
+      /* Le cadre s'arrête AVANT les boutons de zoom. Cadrer sur toute la surface
+         du canvas glissait sous eux ce qui est le plus au sud-est — signalé sur
+         mobile, où ils sont les plus gros et le canvas le plus étroit : un NOTAM
+         cadré mais invisible vaut un NOTAM manqué.
+         Deux cadres possibles, et on garde le PLUS ZOOMÉ des deux : libérer la
+         colonne des boutons, ou leur rangée. Une emprise large et plate se cadre
+         pleine largeur en remontant, une emprise haute et étroite pleine hauteur
+         en se décalant à gauche — dans les deux cas rien n'est perdu, alors que
+         retirer les deux d'un coup coûterait un tiers de la hauteur à tout le
+         monde pour un coin. Centrer DANS le cadre retenu suffit à garantir le
+         dégagement : ce qui n'entre pas dans la colonne n'atteint pas le coin. */
+      const g = planGutter();
+      let best = null;
+      for (const c of [{ W: cv.width - g.r, H: cv.height },
+                       { W: cv.width, H: cv.height - g.b }]) {
+        const kk = Math.min(c.W / (w * PAD), c.H / (h * PAD));
+        if (!best || kk > best.k) best = { k: kk, W: c.W, H: c.H };
+      }
+      const k = Math.max(1, Math.min(PLAN_ZFIT_MAX, best.k));
       plan.view.k = k;
-      plan.view.tx = cv.width / 2 - (cx * f.s + f.ox) * k;
-      plan.view.ty = cv.height / 2 - (cy * f.s + f.oy) * k;
+      plan.view.tx = best.W / 2 - (cx * f.s + f.ox) * k;
+      plan.view.ty = best.H / 2 - (cy * f.s + f.oy) * k;
       planClamp(); planDraw();
     }
 
@@ -16755,7 +16797,6 @@ window.addEventListener("scroll", hidePop, true);
       const icao = currentIcao;
       const ov = $("#planOv"), body = $("#planBody");
       $("#planIcao").textContent = icao || "—";
-      $("#planSub").textContent = "";
       $("#planTimeSlot").innerHTML = "";
       ov.hidden = false;
       lockPlanScroll();
@@ -16770,9 +16811,6 @@ window.addEventListener("scroll", hidePop, true);
         return;
       }
       plan = planBuild(layout, current);
-      const nTwy = plan.SURF.filter(s => s.t === "twy" && s.r).length;
-      const nRwy = plan.SURF.filter(s => s.t === "rwy" && s.r).length;
-      $("#planSub").textContent = `${nRwy} runway${nRwy === 1 ? "" : "s"} · ${nTwy} named taxiway${nTwy === 1 ? "" : "s"}`;
 
       /* Un NOTAM ouvert depuis la liste peut n'être actif NI aujourd'hui NI
          demain — la liste, elle, montre tout ce qui est en vigueur. Cas réel
