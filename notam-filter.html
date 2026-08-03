@@ -1683,11 +1683,18 @@
     .modal.plan .hd-scroll {
       flex: 1 1 auto;
       min-height: 0;
-      max-height: none
+      max-height: none;
+      /* Les retraits haut et bas sont portés par les deux boîtes qui se collent
+         — .plan-cvwrap et .plan-foot — et non par le conteneur : laissés ici,
+         ils bornent la course du collage, et le bandeau légal remontait d'un
+         cran au dernier pixel de défilement. Voir la note sur le plan collé. */
+      padding-top: 0;
+      padding-bottom: 0
     }
 
     .modal.plan .plan-wrap {
-      padding-top: 12px
+      padding-top: 0;
+      padding-bottom: 0
     }
 
     .plan-head .hd-title {
@@ -1786,9 +1793,26 @@
       margin: 2px 0 8px
     }
 
+    /* LE PLAN NE QUITTE PAS L'ÉCRAN PENDANT QU'ON LIT LES NOTAMs. Il est collé
+       en haut de la zone qui défile, les fiches passent DESSOUS. Sans ça, lire
+       la fiche du taxiway qu'on vient d'ouvrir obligeait à faire disparaître le
+       taxiway : la question en haut, la réponse en bas, jamais les deux — et sur
+       téléphone, où la modale est plein écran, le plan mangeait tout l'écran.
+       Ce collage ne suffit pas à lui seul : un plan aussi haut que l'écran reste
+       aussi haut que l'écran une fois collé. C'est planResize qui lui reprend de
+       quoi montrer le début de la liste.
+       Le retrait au-dessus du plan vit ICI, pas sur .hd-scroll / .plan-wrap :
+       porté par la boîte qui se colle, il reste au-dessus du plan une fois
+       collée — sinon le plan sautait de 12 px vers le haut au premier pixel de
+       défilement. */
     .plan-cvwrap {
-      position: relative;
-      margin: 0 auto
+      position: sticky;
+      top: 0;
+      z-index: 2;
+      margin: 0 auto;
+      padding-top: 14px;
+      background: var(--panel);
+      box-shadow: 0 8px 12px -10px rgba(0, 0, 0, .55)
     }
 
     .plan-zoom {
@@ -1934,13 +1958,22 @@
       display: none
     }
 
+    /* Le bandeau légal se colle en bas, comme le plan se colle en haut : la
+       liste défile ENTRE les deux. Une mention « pas pour la navigation » qui
+       disparaît dès qu'on descend d'une fiche ne mentionne plus rien — et c'est
+       précisément en lisant les NOTAMs qu'on est le plus près de prendre le
+       dessin pour une carte. */
     .plan-foot {
+      position: sticky;
+      bottom: 0;
+      z-index: 2;
+      background: var(--panel);
       margin-top: 12px;
       font: 500 9.5px/1.5 var(--mono);
       color: var(--muted2);
       letter-spacing: .06em;
       border-top: 1px solid var(--line);
-      padding-top: 9px
+      padding: 9px 0 10px
     }
 
     /* Sur mobile, une modale à marges est un luxe : le plan a besoin de chaque
@@ -1981,7 +2014,11 @@
       }
 
       .modal.plan .plan-wrap {
-        padding: 10px 10px 16px
+        padding: 0 10px
+      }
+
+      .plan-cvwrap {
+        padding-top: 10px
       }
 
       .plan-head {
@@ -16148,11 +16185,47 @@ window.addEventListener("scroll", hidePop, true);
          son contenu, donc du canvas — lui demander la place disponible revient à
          demander à la boîte sa taille pour décider de sa taille. */
       let availH;
-      if (planIsFullScreen()) {
-        const top = (wrap || cv).getBoundingClientRect().top;   // sous l'en-tête et les boutons
+      const full = planIsFullScreen();
+      if (full) {
+        // le canvas lui-même, pas son conteneur : celui-ci porte le retrait qui
+        // le sépare du bandeau fixe, et ce retrait n'est pas de la place à
+        // dessiner. Le conteneur étant collé en haut, la mesure vaut aussi
+        // quand la liste a défilé.
+        const top = cv.getBoundingClientRect().top;
         availH = Math.max(240, innerHeight - top - after - 16);
       } else {
         availH = Math.max(320, Math.min(660, Math.round(innerHeight * 0.72) - after));
+      }
+
+      /* BANDE DE LECTURE. Le plan est collé en haut de la zone qui défile (voir
+         .plan-cvwrap) : encore faut-il qu'il reste de la place SOUS lui. Un plan
+         haut comme l'écran reste haut comme l'écran une fois collé — la liste
+         était alors entièrement sous la ligne de flottaison, et ouvrir le plan
+         depuis un NOTAM montrait le terrain sans jamais montrer le NOTAM.
+         On lui reprend donc de quoi faire apparaître le début de la liste :
+         question et réponse dans le même écran, le reste au doigt.
+         Jamais plus que ce que la liste mesure vraiment — une fiche courte ne
+         doit pas laisser une bande vide sous le plan — et jamais au point de
+         réduire le dessin à une frise : le plancher passe avant la bande. */
+      const PICK_M = 10;                       // marge haute de .plan-pick
+      const pick = document.querySelector("#planBody .plan-pick");
+      // on remesure la LISTE, pas la bande qu'on lui avait réservée la fois
+      // d'avant : sans cette remise à zéro, la réserve ne ferait que grandir.
+      if (pick) pick.style.minHeight = "";
+      const pickH = pick && pick.innerHTML.trim() ? pick.getBoundingClientRect().height : 0;
+      if (pickH) {
+        const room = Math.min(pickH + PICK_M, full
+          ? Math.max(150, Math.min(300, Math.round(availH * 0.42)))
+          : Math.max(170, Math.min(260, Math.round(availH * 0.34))));
+        const before = availH;
+        availH = Math.max(full ? 200 : 260, availH - room);
+        /* La bande garde sa hauteur même quand la liste rétrécit — un clic sur une
+           surface remplace sept fiches par une seule, et le plan, lui, ne bouge
+           pas (le redimensionner à chaque clic ferait sauter le dessin sous le
+           doigt). Sans ce plancher, le bandeau légal remontait au milieu de
+           l'écran en laissant du vide en dessous. Plein écran seulement : ailleurs
+           la fenêtre se règle sur son contenu et se resserre d'elle-même. */
+        if (full) pick.style.minHeight = Math.max(0, before - availH - PICK_M) + "px";
       }
 
       cv.style.height = availH + "px";
@@ -17205,14 +17278,26 @@ window.addEventListener("scroll", hidePop, true);
        la fiche NOTAM apparaît sous le canvas — mais souvent hors du cadre visible,
        surtout sur mobile où la modale est plein écran. On fait défiler le SEUL
        scroll existant (.hd-scroll de la modale) jusqu'à ce que la fiche soit
-       visible, sans jamais remonter si elle l'est déjà. */
+       visible.
+       La bande lisible n'est PAS tout le cadre : le plan est collé en haut et le
+       bandeau légal en bas, une fiche amenée à leur hauteur passerait dessous.
+       On vise donc ce qui reste entre les deux — et si la fiche est déjà cachée
+       SOUS le plan (on avait défilé, puis cliqué), on remonte : c'est le seul
+       cas où remonter est une réponse au clic. */
     function planScrollToPick() {
       const box = document.querySelector("#planOv .hd-scroll");
       const pick = $("#planPick");
       if (!box || !pick || !pick.innerHTML.trim()) return;
       const b = box.getBoundingClientRect(), p = pick.getBoundingClientRect();
-      const overflow = p.bottom - b.bottom;
-      if (overflow > 4) box.scrollBy({ top: overflow + 16, behavior: "smooth" });
+      const cvw = document.querySelector("#planBody .plan-cvwrap");
+      const ft = document.querySelector("#planBody .plan-foot");
+      const top = cvw ? Math.max(b.top, cvw.getBoundingClientRect().bottom) : b.top;
+      const bot = ft ? Math.min(b.bottom, ft.getBoundingClientRect().top) : b.bottom;
+      if (p.top < top - 2) { box.scrollBy({ top: p.top - top - 8, behavior: "smooth" }); return; }
+      // on ne pousse jamais le HAUT de la fiche sous le plan pour en montrer le
+      // bas : une fiche se lit par le début.
+      const overflow = p.bottom - bot;
+      if (overflow > 4) box.scrollBy({ top: Math.min(overflow + 12, p.top - top), behavior: "smooth" });
     }
     // Une fiche NOTAM sous le plan. `tag` nomme la surface quand la fiche
     // répond à un clic dessus ; la liste d'ensemble, elle, ne désigne aucune
@@ -17380,6 +17465,11 @@ window.addEventListener("scroll", hidePop, true);
       ov.hidden = false;
       lockPlanScroll();
       body.innerHTML = `<div class="plan-msg"><div class="spinner"></div>Loading layout…</div>`;
+      /* Le conteneur de défilement, lui, survit d'une ouverture à l'autre : seul
+         son contenu est remplacé. Sans cette remise à zéro, rouvrir un plan
+         reprenait là où on avait laissé la liste — le plan collé en haut, mais la
+         lecture commencée au milieu d'un NOTAM qu'on n'a pas demandé. */
+      const sc = document.querySelector("#planOv .hd-scroll"); if (sc) sc.scrollTop = 0;
       if (!icao) { body.innerHTML = `<div class="plan-msg">Load an aerodrome first.</div>`; return; }
 
       const layout = await fetchLayout(icao);
