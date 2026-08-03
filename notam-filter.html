@@ -13126,19 +13126,31 @@ function renderInfo(icao) {
     function glPalette(light) {
       return light
         ? {
-          // Mer calibrée, pas choisie au jugé : #b9d2e6 est le point où le
-          // contraste terre/mer (1,51) monte sans faire tomber la côte (2,04)
-          // ni le trait vert de la route (2,48) sous 2 au-dessus de l'eau.
-          // Plus foncé, la route — l'objet le plus important de la carte — se
-          // noie ; plus clair, on retombe sur les deux blancs d'origine.
-          land: "#fafbfc", sea: "#b9d2e6", lake: "#b9d2e6", lakeEdge: "#93b1c8",
-          coast: "#7b93a6", border: "#93a9bb", river: "#9dbdd4", dot: "#8ea0ad",
-          cover: "#e7efe6", road: "#bfcbd5", roadHi: "#8da0ae"
+          // Terre en blanc pur : c'est le fond, et tout le reste du dessin —
+          // filaire de la carte comme surcouches NOTAM — se détache dessus.
+          // Le filaire a été redescendu d'un cran en luminosité, la route
+          // secondaire surtout : à #bfcbd5 elle plafonnait à 1,59 contre la
+          // terre, soit invisible en plein soleil ; à #8a9dac elle est à 2,80.
+          // Mer : #a9c8e0 remonte le contraste terre/mer à 1,75 et la côte à
+          // 3,01, sans faire tomber le trait vert de la route — l'objet le plus
+          // important de la carte — sous 2 au-dessus de l'eau (2,22).
+          // Le couvert végétal, lui, est le seul à ne PAS être poussé à fond :
+          // au-delà de #dae8d5 la forêt landaise devient une nappe verte qui
+          // dispute la couleur aux surcouches (trait de route, pastille verte)
+          // et sous laquelle la route secondaire retombe. Le fond doit rester
+          // le fond.
+          land: "#ffffff", sea: "#a9c8e0", lake: "#a9c8e0", lakeEdge: "#7c9fba",
+          coast: "#566f83", border: "#758fa4", river: "#78a4c4", dot: "#77899a",
+          cover: "#dae8d5", road: "#8a9dac", roadHi: "#66808f"
         }
         : {
-          land: "#171d23", sea: "#0b0f13", lake: "#0c1116", lakeEdge: "#1c2732",
-          coast: "#3f4a55", border: "#333d47", river: "#22303b", dot: "#4a5560",
-          cover: "#1b222a", road: "#2b3540", roadHi: "#3f4a55"
+          // Même logique de nuit, mais par le bas : la mer descend vers le noir
+          // et le filaire monte en gris, sans jamais éclairer la nappe — le
+          // fond reste sombre pour la vision nocturne (route secondaire 1,36 →
+          // 2,07 contre la terre, côte 2,13 → 3,89 contre la mer).
+          land: "#1b2229", sea: "#070a0d", lake: "#080c10", lakeEdge: "#2e3e4d",
+          coast: "#5f7080", border: "#4e5c6a", river: "#3a5162", dot: "#697886",
+          cover: "#232d26", road: "#465464", roadHi: "#617484"
         };
     }
     function glStyle(light, offline) {
@@ -13157,7 +13169,7 @@ function renderInfo(icao) {
           { id: "bnd", type: "line", source: "o", "source-layer": "boundaries", paint: { "line-color": C.border, "line-width": .8, "line-dasharray": [3, 3] } },
           { id: "roads", type: "line", source: "o", "source-layer": "roads", minzoom: 4,
             filter: ["in", ["get", "kind"], ["literal", ["highway", "major_road"]]],
-            paint: { "line-color": roadHi, "line-width": ["interpolate", ["linear"], ["zoom"], 4, .4, 6, 1.2] } }
+            paint: { "line-color": roadHi, "line-width": ["interpolate", ["linear"], ["zoom"], 4, .5, 6, 1.4] } }
         );
       } else {                                           // schéma OpenMapTiles
         L.push(
@@ -13172,10 +13184,13 @@ function renderInfo(icao) {
             paint: { "line-color": C.border, "line-width": ["interpolate", ["linear"], ["zoom"], 3, .7, 9, 1.4], "line-dasharray": [3, 3] } },
           { id: "road-major", type: "line", source: "o", "source-layer": "transportation", minzoom: 5,
             filter: ["in", ["get", "class"], ["literal", ["motorway", "trunk"]]],
-            paint: { "line-color": roadHi, "line-width": ["interpolate", ["linear"], ["zoom"], 5, .5, 10, 1.6, 14, 3] } },
+            paint: { "line-color": roadHi, "line-width": ["interpolate", ["linear"], ["zoom"], 5, .6, 10, 1.9, 14, 3.4] } },
+          // Sous le pixel, l'antialiasing rend la moitié du contraste gagné sur
+          // la couleur : un trait à .4 px ne couvre que ~40 % de sa case. D'où
+          // le plancher à .6 px, sans quoi la route secondaire reste pâle.
           { id: "road-minor", type: "line", source: "o", "source-layer": "transportation", minzoom: 8,
             filter: ["in", ["get", "class"], ["literal", ["primary", "secondary", "tertiary"]]],
-            paint: { "line-color": road, "line-width": ["interpolate", ["linear"], ["zoom"], 8, .4, 14, 1.8] } },
+            paint: { "line-color": road, "line-width": ["interpolate", ["linear"], ["zoom"], 8, .6, 14, 2] } },
           { id: "aero-a", type: "fill", source: "o", "source-layer": "aeroway", minzoom: 10, paint: { "fill-color": C.dot, "fill-opacity": .45 } },
           { id: "aero-l", type: "line", source: "o", "source-layer": "aeroway", minzoom: 10, paint: { "line-color": C.dot, "line-width": 1.2 } }
         );
