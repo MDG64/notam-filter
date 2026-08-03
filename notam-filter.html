@@ -4103,7 +4103,7 @@ body .stat .k{
       // d'où leur présence dans les DEUX listes — pendant textuel des sujets
       // Q NM/NN/NT/NV passés en approche+départ le 2026-08-02 (voir leur
       // commentaire dans SUBJECT_CATEGORIES). Sert quand le Q-code est absent
-      // ou en QXXXX, fréquent côté FAA.
+      // ou en QXXXX, fréquent côté US.
       depart: ["SID", "DEPARTURE", "CLB GRADIENT", "CLIMB GRADIENT", "INITIAL CLIMB", "NADP", "BIRD", "BASH",
         "VOR", "TACAN", "VORTAC",
         "WINDCONE", "WIND CONE", "WDI", "WIND DIRECTION INDICATOR"],
@@ -4133,7 +4133,7 @@ body .stat .k{
     // LOR CH105X U/S (MAINT) » et M2497/26 « PAR RWY 25, 07 AND 20 U/S DUE TO
     // MAINT. », tous deux affichés Arrival + Ground. On ne le consulte donc
     // qu'en DERNIER RECOURS, quand ni le Q-code ni les mots-clés de lieu n'ont
-    // rien donné — c'est là qu'il garde sa valeur (NOTAM américains en QXXXX dont le
+    // rien donné — c'est là qu'il garde sa valeur (NOTAM US en QXXXX dont le
     // seul indice est le mot « maintenance »).
     const WEAK_KEYWORDS = {
       sol: ["MAINT"],
@@ -4257,7 +4257,7 @@ body .stat .k{
       // figure dans les mots-clés « sol », or la maintenance n'est ici que la
       // CAUSE de la panne, pas l'objet du NOTAM.
       // Le repli par le texte est réservé aux NOTAM sans Q-code exploitable
-      // (FAA : QXXXX, ou pas de ligne Q du tout). Partout ailleurs c'est le
+      // (côté US : QXXXX, ou pas de ligne Q du tout). Partout ailleurs c'est le
       // Q-code qui tranche, sinon une fermeture de piste du genre « RWY 25 CLSD
       // DUE ILS MAINT » (QMRLC) perdrait son Ground sur une mention de cause.
       const [ilsSubj] = qcodeParts(q);
@@ -4285,7 +4285,7 @@ body .stat .k{
       const m = text.match(re);
       return m ? m[1].trim().replace(/\s+/g, " ") : "";
     }
-    // Nettoie le HTML que la source amont glisse dans certains NOTAM US (FDC/obstacles) :
+    // Nettoie le HTML que la source glisse dans certains NOTAM US (FDC/obstacles) :
     // <B>…</B>, <BR>, entités échappées. Sans ça ces balises cassent l'extraction
     // du Q-code (badge parasite type "B>KZMA") et collent les items à l'affichage.
     // No-op sur un NOTAM ICAO normal (aucune balise). Préserve les sauts de ligne
@@ -4302,7 +4302,7 @@ body .stat .k{
       const text = cleanHtml(raw);
       // ICAO (A1234/26) OU domestique US (07/211, MM/NNN) : les NOTAM US
       // domestiques ont un ID cycle/séquence, sans lettre de série ni année.
-      // Certains textes source américains encadrent tout le message d'une
+      // Certains textes source (US) encadrent tout le message d'une
       // parenthèse ouvrante avant l'ID (format NOTAM standard) : la tolérer
       // évite un faux "(sans id)" alors que l'ID existe (vu sur HSSS
       // A0050/26, A0052/26 — absents sans ce correctif).
@@ -11987,7 +11987,7 @@ function renderInfo(icao) {
     const classifySent = new Set();    // textes déjà soumis (évite de redemander)
     let proposeSeq = 0;
     // NOTAM d'annulation dont l'item E) ne fait que recopier l'en-tête :
-    // « E) L0011/26 NOTAMC L0010/26 A) ETAR ». Les USA en produisent beaucoup, et
+    // « E) L0011/26 NOTAMC L0010/26 A) ETAR ». La source US en produit beaucoup, et
     // ils n'ont aucun contenu opérationnel — le LLM ne peut qu'inventer une
     // phase de vol à partir d'un numéro de série. La revue du 2026-07-28 en
     // comptait 5 sur 9 propositions de terrain, tous tranchés « null » — plus de
