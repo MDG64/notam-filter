@@ -11582,6 +11582,41 @@ E) ${e}`;
        route ne doit pas lancer 30 téléchargements d'un coup. */
     const _layoutQ = [];
     let _layoutBusy = false;
+
+    /* GARDE-FOU + PORTABILITÉ — cacheLayoutOffline() et dropLayoutOffline()
+       ci-dessous, comme fetchLayout() plus bas, supposent un SERVICE WORKER :
+       c'est lui, et lui seul, qui garde durablement les plans (sw.js, règle 3).
+       Sans SW rien ne plante — le fetch part, la réponse est jetée, plus rien
+       n'est conservé : la promesse « plan consultable en vol » cesse d'être
+       tenue EN SILENCE. Pour un EFB c'est le pire mode de panne, d'où
+       l'avertissement unique ci-dessous.
+       Cas réels sans SW : navigation privée, pression sur le stockage, échec
+       d'enregistrement (voir le .catch de register(), plus bas) — et demain
+       iOS/Capacitor, où le WKWebView sert depuis capacitor:// alors que
+       serviceWorker.register() exige http/https. Ces trois fonctions sont donc
+       les seules à réimplémenter le jour d'un portage iOS, sur Capacitor
+       Filesystem : rien d'autre dans la page ne touche au stockage des plans. */
+    let _swChecked = false;
+    async function _warnIfNoSW() {
+      if (_swChecked) return;        // une seule vérification par session
+      _swChecked = true;
+      // getRegistration() plutôt que .controller : ce dernier est null au tout
+      // premier chargement, avant que clients.claim() ne prenne la page — on
+      // avertirait à tort d'une installation parfaitement saine.
+      // Deux tentatives : register() est appelé bien plus bas dans le fichier,
+      // un premier appel peut le précéder au tout premier lancement. Un
+      // avertissement qui crie à tort finit ignoré, donc on laisse sa chance.
+      const has = async () => {
+        try { return !!(navigator.serviceWorker && await navigator.serviceWorker.getRegistration()); }
+        catch (_) { return false; }
+      };
+      if (await has()) return;
+      await new Promise(r => setTimeout(r, 2000));
+      if (await has()) return;
+      console.warn("[plan] aucun service worker : les plans NE SERONT PAS conservés " +
+        "hors ligne sur cet appareil — « consultable en vol » ne tient pas.");
+    }
+
     async function _layoutDrain() {
       if (_layoutBusy) return;
       _layoutBusy = true;
@@ -11595,6 +11630,7 @@ E) ${e}`;
     }
     function cacheLayoutOffline(icao) {
       if (!icao || _layoutQ.includes(icao)) return;
+      _warnIfNoSW();                 // fire-and-forget : n'a pas à retarder la file
       _layoutQ.push(icao); _layoutDrain();
     }
     async function dropLayoutOffline(icao) {
@@ -11604,7 +11640,12 @@ E) ${e}`;
         try { layoutCache.delete(icao); } catch (_) { }
         const url = new URL(LAYOUT_URL + encodeURIComponent(icao) + ".json", location.href).href;
         for (const n of await caches.keys()) (await caches.open(n)).delete(url);
-      } catch (_) { }
+      } catch (e) {
+        // Seule dépendance DURE au service worker de tout le fichier : `caches`
+        // n'existe pas sans lui. On le dit au lieu de laisser croire que le plan
+        // a bien été évincé — sinon il survit aux NOTAM qu'il accompagne.
+        console.warn("[plan] éviction du plan hors-ligne impossible —", icao, e);
+      }
     }
     function stampZ(ts) {
       const d = new Date(ts);
@@ -14701,6 +14742,11 @@ window.addEventListener("scroll", hidePop, true);
           }
         }
       } catch (e) { /* hors ligne : repli ci-dessous */ }
+      // ATTENTION au repli : `layoutCache` est une Map EN MÉMOIRE, elle meurt
+      // avec la session. La vraie couche durable est le service worker, qui
+      // sert ce fetch depuis son cache quand le réseau manque. Sans SW ce repli
+      // ne couvre que les terrains déjà ouverts dans la session en cours — voir
+      // le garde-fou _warnIfNoSW() et la note de portabilité iOS plus haut.
       return layoutCache.has(icao) ? layoutCache.get(icao) : null;
     }
 
@@ -17633,7 +17679,10 @@ window.addEventListener("scroll", hidePop, true);
     if (currentIcao) updatePlanBtn(currentIcao);
 
     if ("serviceWorker" in navigator) {
-      navigator.serviceWorker.register("./sw.js").catch(() => { });
+      // Un échec ici est la cause racine de toute la chaîne : sans SW, plus de
+      // plans ni de frontières FIR hors ligne. Ne pas l'avaler en silence.
+      navigator.serviceWorker.register("./sw.js")
+        .catch(e => console.warn("[sw] enregistrement échoué — pas de consultation hors ligne :", e));
     }
 
     /* ================= DÉTECTION D'UNE NOUVELLE VERSION =====================
