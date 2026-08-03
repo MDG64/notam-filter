@@ -1582,6 +1582,14 @@
       color: var(--text)
     }
 
+    /* var(--cyan) plutôt qu'une couleur en dur : le thème clair la redéfinit,
+       le lien suit sans règle supplémentaire. */
+    .hd-note a {
+      color: var(--cyan);
+      text-decoration: underline;
+      text-underline-offset: 2px
+    }
+
     .hd-notam {
       border: 1px solid var(--line);
       border-left: 4px solid var(--red);
@@ -3994,6 +4002,13 @@ body .stat .k{
           <b>Aerodrome layouts</b> — map data © <b>OpenStreetMap</b> contributors, available
           under the Open Database Licence (ODbL). Layouts are indicative, not AIP-compliant,
           and not for navigation.
+        </div>
+
+        <div class="hd-sec">Legal</div>
+        <div class="hd-note">
+          <a href="./legal.html">Legal notice, Terms of Use &amp; Privacy Policy</a><br>
+          Using this Service implies acceptance of those Terms. NOTAM Lens is a
+          decision-support tool and does <b>not</b> replace the official pre-flight briefing.
         </div>
       </div>
     </div>

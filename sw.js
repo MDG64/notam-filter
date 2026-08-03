@@ -12,10 +12,12 @@
 // Ne la changer que si on veut délibérément purger les appareils.
 const CACHE = "notam-filter-v5";
 const ASSETS = [
-  "./notam-filter.html", "./index.html", "./manifest.json",
-  // "./legal.html" retiré tant que la page n'est pas publiée : elle porte
-  // encore « Document non finalisé » et des champs vides. addAll() est
-  // atomique — un seul 404 et TOUT le pré-cache échoue silencieusement.
+  "./notam-filter.html", "./index.html", "./manifest.json", "./legal.html",
+  // legal.html est pré-caché depuis sa publication (3 août 2026) : son article
+  // premier rend les CGU opposables à l'usage du Service, elles doivent donc
+  // rester lisibles même sans réseau. Rappel pour la suite : addAll() est
+  // atomique — un seul 404 et TOUT le pré-cache échoue silencieusement, donc
+  // n'ajouter ici que des fichiers dont l'existence est certaine.
   "./icon-192.png", "./icon-512.png"
 ];
 
