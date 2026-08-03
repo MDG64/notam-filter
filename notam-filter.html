@@ -16206,13 +16206,20 @@ window.addEventListener("scroll", hidePop, true);
          question et réponse dans le même écran, le reste au doigt.
          Jamais plus que ce que la liste mesure vraiment — une fiche courte ne
          doit pas laisser une bande vide sous le plan — et jamais au point de
-         réduire le dessin à une frise : le plancher passe avant la bande. */
+         réduire le dessin à une frise : le plancher passe avant la bande.
+         SAUF en portée « All », où l'on ne lit pas des NOTAMs : on REGARDE LE
+         TERRAIN, et un plan de terrain se lit comme une carte AD 2, en grand.
+         C'est la portée d'entrée du bouton du terrain, celle où l'on n'a
+         désigné personne — rien à mettre en regard, donc rien à réserver. La
+         liste reste dessous, le plan collé la laisse défiler devant lui, et les
+         deux portées qui répondent à « où est CE NOTAM » sont à un tap. */
       const PICK_M = 10;                       // marge haute de .plan-pick
       const pick = document.querySelector("#planBody .plan-pick");
       // on remesure la LISTE, pas la bande qu'on lui avait réservée la fois
       // d'avant : sans cette remise à zéro, la réserve ne ferait que grandir.
       if (pick) pick.style.minHeight = "";
-      const pickH = pick && pick.innerHTML.trim() ? pick.getBoundingClientRect().height : 0;
+      const pickH = (planScope !== "all" && pick && pick.innerHTML.trim())
+        ? pick.getBoundingClientRect().height : 0;
       if (pickH) {
         const room = Math.min(pickH + PICK_M, full
           ? Math.max(150, Math.min(300, Math.round(availH * 0.42)))
