@@ -50,6 +50,16 @@ function champs(brut) {
 
 const { cas } = JSON.parse(readFileSync(join(HERE, "verdicts-aerodrome-2026-07-28.json"), "utf8"));
 
+// Un verdict de revue est un fait DATÉ, pas une vérité perpétuelle : il arrive
+// qu'une revue ultérieure le retourne. Le cas est réel — KSKA « BASH PHASE I IN
+// EFFECT », rangé au sol le 2026-07-28 puis passé en départ+approche le
+// 2026-07-31 avec le mot-clé BASH lui-même. Plutôt que de réécrire le verdict
+// d'origine (ce fichier est un enregistrement de décisions humaines, pas une
+// liste d'attentes à ajuster jusqu'à ce que ça passe), le cas porte un champ
+// `revise` qui date et motive le retournement. C'est lui qui fait foi ici, et
+// les deux versions restent lisibles côte à côte.
+const verdictRetenu = c => (c.revise ? c.revise.attendu : c.attendu);
+
 test("les 9 NOTAM de terrain relus sont classés conformément à la revue", async () => {
   const { classifyNotam } = await chargerClassificateur();
   const ecarts = [];
@@ -57,10 +67,25 @@ test("les 9 NOTAM de terrain relus sont classés conformément à la revue", asy
     const { q, e } = champs(c.texte);
     const obtenu = classifyNotam(q, e).categories.slice().sort().join("+");
     // Le verdict « null » de la revue = le NOTAM reste dans « Unclassified ».
-    const attendu = [].concat(c.attendu).sort().join("+").replace("null", "non_classe");
-    if (obtenu !== attendu) ecarts.push(`${c.sujet} (${c.hash.slice(0, 8)}) attendu=${attendu} obtenu=${obtenu}`);
+    const attendu = [].concat(verdictRetenu(c)).sort().join("+").replace("null", "non_classe");
+    const quand = c.revise ? ` (révisé le ${c.revise.le})` : "";
+    if (obtenu !== attendu) ecarts.push(`${c.sujet} (${c.hash.slice(0, 8)}) attendu=${attendu}${quand} obtenu=${obtenu}`);
   }
   assert.deepEqual(ecarts, []);
+});
+
+test("une révision de verdict dit bien autre chose que le verdict d'origine", () => {
+  // Garde-fou du mécanisme ci-dessus : une révision qui répète le verdict
+  // qu'elle est censée corriger ne documente rien et masquerait une régression
+  // le jour où le classificateur reviendrait à son comportement d'avant.
+  const revises = cas.filter(c => c.revise);
+  assert.ok(revises.length, "plus aucune révision : retirer le mécanisme plutôt que le laisser sans emploi");
+  for (const c of revises) {
+    assert.ok(/^\d{4}-\d{2}-\d{2}$/.test(c.revise.le), `${c.sujet} : révision sans date exploitable`);
+    assert.ok(c.revise.pourquoi, `${c.sujet} : révision sans motif`);
+    assert.notDeepEqual([].concat(c.revise.attendu).sort(), [].concat(c.attendu).sort(),
+      `${c.sujet} : révision identique au verdict d'origine, à supprimer`);
+  }
 });
 
 test("le point d'attente est au sol, l'attente en vol reste en approche", async () => {

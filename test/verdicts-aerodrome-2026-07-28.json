@@ -68,6 +68,14 @@
         "sol"
       ],
       "decisionLLM": "sol",
+      "revise": {
+        "le": "2026-07-31",
+        "attendu": [
+          "depart",
+          "approche"
+        ],
+        "pourquoi": "BASH = Bird Aircraft Strike Hazard. Le 2026-07-28 le mot-clé vivait dans la liste « sol », au motif que ces phases se gèrent depuis les aires. Retourné le 2026-07-31 : le risque décrit est la COLLISION AVIAIRE, qui se produit aux basses altitudes du décollage et de l'approche, pas au roulage — et le verdict d'origine était incohérent avec « BIRD », déjà rangé en départ+approche (cf. le cas LFPO e92b5f95 de cette même revue)."
+      },
       "texte": "M0624/26 NOTAMN \r\nQ) ZSE/QXXXX/IV/NBO/A/000/999/4736N11739W005 \r\nA) KSKA \r\nB) 2606252303 \r\nC) 2608282359 \r\nE) BASH PHASE I IN EFFECT"
     },
     {
