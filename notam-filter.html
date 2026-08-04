@@ -22,7 +22,10 @@
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <meta name="apple-mobile-web-app-title" content="NOTAM Filter">
+  <!-- Libellé sous l'icône sur iOS. Il doit répéter le short_name du manifeste
+       (que Safari ignore) : il disait encore "NOTAM Filter", l'app s'installait
+       donc sous deux noms différents selon la plateforme. -->
+  <meta name="apple-mobile-web-app-title" content="Notam Lens">
   <meta name="theme-color" content="#0d1117">
   <style>
     :root {

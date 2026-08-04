@@ -1,6 +1,6 @@
 {
-  "name": "NOTAM Lens",
-  "short_name": "NOTAM Lens",
+  "name": "Notam Lens",
+  "short_name": "Notam Lens",
   "description": "Pre-flight NOTAM decision support for pilots",
   "start_url": "./notam-filter.html",
   "display": "standalone",
