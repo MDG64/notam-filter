@@ -18,7 +18,15 @@ const ASSETS = [
   // rester lisibles même sans réseau. Rappel pour la suite : addAll() est
   // atomique — un seul 404 et TOUT le pré-cache échoue silencieusement, donc
   // n'ajouter ici que des fichiers dont l'existence est certaine.
-  "./icon-192.png", "./icon-512.png"
+  // Suffixe "-v2" À DESSEIN (4 août 2026, nouvelle icône N + loupe). La règle 5
+  // sert les icônes en CACHE D'ABORD et la clé CACHE reste figée : réécrire
+  // icon-192.png en place n'aurait JAMAIS atteint les appareils déjà installés,
+  // ils auraient servi l'ancienne image indéfiniment. Changer le NOM change
+  // l'URL, donc le cache la rate et va la chercher — sans purger la clé, ce qui
+  // aurait effacé les plans hors ligne des pilotes. Même geste à la prochaine
+  // refonte d'icône : incrémenter le suffixe, ne pas écraser.
+  "./icon-192-v2.png", "./icon-512-v2.png", "./icon-maskable-512-v2.png",
+  "./apple-touch-icon-180-v2.png", "./favicon-32-v2.png"
 ];
 
 self.addEventListener("install", e => {
