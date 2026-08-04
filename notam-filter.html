@@ -14929,7 +14929,7 @@ window.addEventListener("scroll", hidePop, true);
       // AREA_KW de refsFromNotam pour ce que « AREA », générique, autorise.
       const AREA_KW=new Set([...APR_KW,"APRONS","AREA","AREAS"]);
       const unquote=t=>t.replace(/^['"«»`]+|['"«»`]+$/g,"");
-      function refsFromNotam(e,heads,aprons){
+      function refsFromNotam(e,heads,aprons,shorts){
         const w=lex(e), T=" "+(e||"").toUpperCase()+" ";
         const twy=new Set(),twyHits=[],rwy=new Set(),stand=new Set(),apron=new Set(),partial=[];
         const okT=t=>TWY_REF.test(t), okS=t=>/^[A-Z]{0,2}\d{1,3}$/.test(t);
@@ -14937,9 +14937,24 @@ window.addEventListener("scroll", hidePop, true);
            comparée aux noms d'aires DU TERRAIN. Deux jetons d'abord (« TARMAC
            NORD », « BLAGNAC 2 »), puis un seul ; après le mot-clé, puis avant
            (« APRON ROMEO » aussi bien que « ROMEO APRON »). Guillemets retirés. */
-        const nameAt=(i,len)=>{ if(i<0||!aprons||!aprons.size) return null; const p=[];
+        /* Deux tournures font mentir le vocabulaire, et une seule suffit à
+           peindre en fermé une aire que le NOTAM laisse ouverte :
+             « APRON NORTH OF TWY A » — une POSITION, pas l'aire « North » ;
+             « APN 24 HR AVBL »       — un HORAIRE, pas l'aire « 24 ».
+           Le vocabulaire ne peut pas les départager — EKCH a bien une aire nord,
+           LBSF une aire 24 — mais le mot qui SUIT le fait sans ambiguïté.
+           Balayage des 4176 terrains : 13 fausses fermetures sur 8 terrains
+           (EGAA, EKBI, EKCH, LBSF) sans ce filet.
+           Rien à filtrer quand le nom PRÉCÈDE le mot-clé (« NORTH APRON ») : le
+           mot suivant est le mot-clé lui-même. */
+        const NOTNAME=new Set(["OF","HR","HRS"]);
+        const suit=(i,len)=>!NOTNAME.has(w[i+len]||"");
+        const lecteur=voc=>(i,len)=>{ if(i<0||!voc||!voc.size) return null; const p=[];
           for(let k=0;k<len;k++){ const t=unquote(w[i+k]||""); if(!t||HARD.has(t)||SEP.has(t)) return null; p.push(t); }
-          const s=p.join(" "); return aprons.has(s)?s:null; };
+          const s=p.join(" "); return voc.has(s)&&suit(i,len)?s:null; };
+        const nameAt=lecteur(aprons);
+        // MÊME lecture, contre le vocabulaire DÉPOUILLÉ du préfixe (cf. APRONS_SHORT)
+        const shortAt=lecteur(shorts);
         for(let i=0;i<w.length;i++){
           const k=w[i];
           if(TWY_KW.has(k))  series(w,i,TWY_KW,okT,heads).forEach(h=>{ twy.add(h.ref); twyHits.push(h); });
@@ -14962,7 +14977,14 @@ window.addEventListener("scroll", hidePop, true);
              le vocabulaire vient du layout, pas d'une liste câblée. */
           if(AREA_KW.has(k)){
             const f=nameAt(i+1,2)||nameAt(i+1,1)||nameAt(i-2,2)||nameAt(i-1,1);
-            if(f) apron.add(f);
+            /* Nom entier d'abord, dépouillé ensuite, filet OTAN/indicatif en
+               dernier : du plus sûr au plus large. Le dépouillé ne s'ouvre que
+               derrière APRON/APN/RAMP, et il PASSE AVANT la branche OTAN pour
+               la même raison que le nom entier — « APRON ALPHA » désigne l'aire
+               ALPHA, pas une aire « A » que le plan déclarerait manquante. */
+            const g=f||!APR_KW.has(k)?null
+              :(shortAt(i+1,2)||shortAt(i+1,1)||shortAt(i-2,2)||shortAt(i-1,1));
+            if(f||g) apron.add(f||g);
             else if(APR_KW.has(k)){ const t=w[i+1]; if(t&&!STOP.has(t)){ if(NATO[t])apron.add(NATO[t]);
               else if(/^[A-Z]{1,2}\d{0,2}$/.test(t))apron.add(t); } }
           }
@@ -15514,10 +15536,36 @@ window.addEventListener("scroll", hidePop, true);
          sans glaner. Les noms d'UNE lettre en sont exclus : « AREA A » est déjà
          couvert par la branche APR_KW, et une aire nommée « A » ferait lire
          « MOVEMENT AREA A CLSD » comme une fermeture d'aire. */
-      const APRONS = new Set();
+      /* SECOND vocabulaire, DÉPOUILLÉ du préfixe de type. L'alias d'index
+         ci-dessus rend l'aire joignable sous « E » ; encore faut-il que
+         refsFromNotam PRODUISE « E », et il ne sait le faire que pour un
+         indicatif d'une ou deux lettres. Trois familles restaient muettes :
+           · « APRON EAST », « APRON NORTH », « APRON III » (124 aires) : le
+             filet exige 1-2 lettres, un mot n'en sort pas ;
+           · « APRON 2 » (294 aires) : le filet exige au moins une LETTRE, un
+             numéro nu n'en sort pas non plus ;
+           · « APRON ALPHA » : la branche OTAN traduisait ALPHA en « A », or
+             l'aire s'appelle ALPHA — le plan déclarait une aire A manquante,
+             exactement le faux MISS que le commentaire ci-dessous redoute.
+         Ce vocabulaire n'est consulté QUE derrière un mot-clé d'aire explicite
+         (APRON/APN/RAMP), jamais derrière « AREA » : le mot-clé du NOTAM
+         REMPLACE alors le préfixe qu'on vient de retirer du nom OSM — « APRON »
+         + « NORTH » reconstitue « APRON NORTH ». Le générique « AREA » n'a
+         rien à remplacer, et « MOVEMENT AREA NORTH OF TWY A » ne doit pas
+         peindre l'aire nord.
+         Les noms NUS qui sont un simple numéro (« 2 », 531 aires) y entrent
+         aussi : ils ne portent pas de préfixe à retirer, mais souffrent du même
+         filet — aucune autre voie ne peut les produire. */
+      const APRONS = new Set(), APRONS_SHORT = new Set();
+      const APR_NUM = /^\d{1,3}$/;
       for (const s of SURF) if (s.r && s.t === "apr") {
         const U = String(s.r).toUpperCase();
         if (U.length > 1) { APRONS.add(U); APRONS.add(deacc(U)); }
+        for (const v of [U, deacc(U)]) {
+          const short = v.replace(APR_STRIP, "");
+          if (short && short !== v) APRONS_SHORT.add(short);
+          else if (APR_NUM.test(v)) APRONS_SHORT.add(v);
+        }
       }
       const HEADS = new Set();
       for (const s of SURF) if (s.r && s.t === "twy") {
@@ -15765,7 +15813,7 @@ window.addEventListener("scroll", hidePop, true);
       const MISSLBL = { twy: "TWY", rwy: "RWY", stand: "STAND", apron: "APRON" };
 
       for (const n of ground) {
-        const refs = refsFromNotam(n.e || "", HEADS, APRONS);
+        const refs = refsFromNotam(n.e || "", HEADS, APRONS, APRONS_SHORT);
         for (const kind of ["twy", "rwy", "stand", "apron"]) {
           for (const ref of refs[kind]) {
             const hits = INDEX.get(KIND2T[kind] + ":" + ref);
@@ -15850,7 +15898,7 @@ window.addEventListener("scroll", hidePop, true);
          retirer ce bloc ne change pas le rendu. Voir le harnais tests/plan-invariants. */
       const segLen = gp => { let l = 0; for (let i = 1; i < gp.length; i++) l += Math.hypot(gp[i][0] - gp[i - 1][0], gp[i][1] - gp[i - 1][1]); return l; };
       for (const n of ground) {
-        const rf = refsFromNotam(n.e || "", HEADS, APRONS);
+        const rf = refsFromNotam(n.e || "", HEADS, APRONS, APRONS_SHORT);
         if (!rf.partial.length) continue;
         for (const [rx, ry] of rf.partial) {
           const hostRef = (rf.twy || []).find(r => r !== rx && r !== ry);

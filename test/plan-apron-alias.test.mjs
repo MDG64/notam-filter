@@ -36,7 +36,7 @@ function decoupe(re, quoi) {
   return m[0];
 }
 
-/** buildSurfaces() + l'indexation + APRONS + refsFromNotam(), tels qu'ils tournent. */
+/** buildSurfaces() + l'indexation + les vocabulaires + refsFromNotam(), tels qu'ils tournent. */
 async function chargerPlan() {
   const src = [
     decoupe(/\/\* refsFromNotam v2[\s\S]*?partial,hit:!!hit\};\n {6}\}/, "refsFromNotam()"),
@@ -44,8 +44,8 @@ async function chargerPlan() {
     "function plan(features) {",
     "  const SURF = buildSurfaces({ f: features });",
     decoupe(/const INDEX = new Map\(\);[\s\S]*?\n {6}\}\n/, "l'indexation de planBuild()"),
-    decoupe(/const APRONS = new Set\(\);[\s\S]*?\n {6}\}/, "le vocabulaire d'aires de planBuild()"),
-    "  return { INDEX, APRONS };",
+    decoupe(/const APRONS = new Set\(\)[\s\S]*?\n {6}\}/, "les vocabulaires d'aires de planBuild()"),
+    "  return { INDEX, APRONS, APRONS_SHORT };",
     "}",
     "export { plan, refsFromNotam };",
   ].join("\n");
@@ -54,18 +54,20 @@ async function chargerPlan() {
 
 const apr = r => ({ t: "apr", r, g: [[50.2, 12.9], [50.2, 12.91], [50.21, 12.91], [50.2, 12.9]] });
 
+const lit = (p, texte, refsFromNotam) =>
+  refsFromNotam(texte, new Set(), p.APRONS, p.APRONS_SHORT).apron;
+
 /** Le trajet complet : le NOTAM nomme, l'index doit rendre la surface. */
-function trouve({ INDEX, APRONS }, texte, refsFromNotam) {
-  const refs = refsFromNotam(texte, new Set(), APRONS);
+function trouve(p, texte, refsFromNotam) {
   const out = new Set();
-  for (const r of refs.apron) for (const s of INDEX.get("apr:" + r) || []) out.add(s.r);
+  for (const r of lit(p, texte, refsFromNotam)) for (const s of p.INDEX.get("apr:" + r) || []) out.add(s.r);
   return [...out].sort();
 }
 
 /** Ce que le bandeau « missing from this layout » listerait (cf. MISS dans planBuild). */
-function manquantes({ INDEX, APRONS }, texte, refsFromNotam) {
-  return refsFromNotam(texte, new Set(), APRONS).apron
-    .filter(r => !INDEX.get("apr:" + r)).map(r => "APRON " + r).sort();
+function manquantes(p, texte, refsFromNotam) {
+  return lit(p, texte, refsFromNotam)
+    .filter(r => !p.INDEX.get("apr:" + r)).map(r => "APRON " + r).sort();
 }
 
 test("une aire nommée au long est trouvée par le NOTAM qui l'abrège", async () => {
@@ -77,6 +79,12 @@ test("une aire nommée au long est trouvée par le NOTAM qui l'abrège", async (
     ["Apron A1", "APRON A1 CLSD"],      // indicatif alphanumérique
     ["Ramp C", "RAMP C CLSD"],          // vocabulaire US
     ["APN B", "APRON B CLSD"],          // préfixe abrégé côté OSM, au long côté NOTAM
+    ["APRON 2", "APRON 2 CLSD"],        // numéro nu : le filet exige une lettre (294 aires)
+    ["Apron Vendée", "APRON VENDEE CLSD"],  // nom en toutes lettres, accentué chez OSM
+    ["APRON NORTH", "APRON NORTH CLSD"],    // mot que le filet ne peut pas produire (124 aires)
+    ["APRON ALPHA", "APRON ALPHA CLSD"],    // l'aire s'appelle ALPHA, pas « A »
+    ["2", "APRON 2 CLSD"],              // nom NU réduit à un numéro (531 aires)
+    ["APRON 2 NORTH", "APRON 2 NORTH CLSD"], // dépouillé en deux mots
   ];
   for (const [ref, notam] of CAS) {
     const p = plan([apr(ref)]);
@@ -129,21 +137,54 @@ test("les deux dépouillements se composent : accents PUIS préfixe", async () =
   assert.ok(p.INDEX.has("apr:VENDEE"), "la clé doublement dépouillée manque");
 });
 
-/* ------------------------------------------------------------------
-   DEUX TROUS CONNUS, en AMONT de l'index — refsFromNotam n'émet aucune
-   ref, donc le NOTAM tombe en « could not be placed » sans même figurer
-   au bandeau MISS. L'alias ci-dessus ne peut rien pour eux : il n'y a
-   rien à rapprocher. Ils ne sont pas assertés ici pour ne pas figer un
-   comportement qu'on veut voir changer.
+test("le nom au long l'emporte sur la traduction OTAN", async () => {
+  const { plan, refsFromNotam } = await chargerPlan();
+  // Sinon « APRON ALPHA » sortirait « A », introuvable, et le plan déclarerait
+  // une aire A manquante du fond de carte — le faux MISS qu'on vient de tuer.
+  const p = plan([apr("APRON ALPHA")]);
+  assert.deepEqual(lit(p, "APRON ALPHA CLSD", refsFromNotam), ["ALPHA"]);
+  assert.deepEqual(manquantes(p, "APRON ALPHA CLSD", refsFromNotam), []);
+  // là où l'aire n'a PAS de nom en toutes lettres, la branche OTAN reste utile
+  const q = plan([apr("APRON A")]);
+  assert.deepEqual(trouve(q, "APRON ALPHA CLSD", refsFromNotam), ["APRON A"]);
+});
 
-   · « APRON 2 CLSD » : le filet /^[A-Z]{1,2}\d{0,2}$/ exige au moins une
-     lettre, un numéro nu ne passe pas. L'ouvrir ferait lire « APN 24 HR
-     AVBL » comme une aire 24.
-   · « APRON VENDEE CLSD » : nameAt ne reconnaît que le nom ENTIER
-     (« APRON VENDEE »), car APRONS ne stocke pas la forme dépouillée.
-     L'y ajouter ferait lire « MOVEMENT AREA NORTH OF TWY A » comme une
-     fermeture d'aire pour les terrains qui ont une « Apron North ».
+test("le vocabulaire dépouillé ne s'ouvre pas derrière le générique « AREA »", async () => {
+  const { plan, refsFromNotam } = await chargerPlan();
+  // Le mot-clé du NOTAM REMPLACE le préfixe retiré du nom OSM. « AREA » n'a
+  // rien à remplacer : « MOVEMENT AREA NORTH OF TWY A » n'est pas une
+  // fermeture de l'aire nord, et « WORK AREA 2 » pas une fermeture de l'aire 2.
+  const p = plan([apr("APRON NORTH"), apr("APRON 2")]);
+  assert.deepEqual(lit(p, "MOVEMENT AREA NORTH CLSD", refsFromNotam), []);
+  assert.deepEqual(lit(p, "WORK AREA 2 WIP", refsFromNotam), []);
+  // le nom ENTIER, lui, reste lisible derrière AREA : c'est le cas LFBO
+  // « PUSH BACK AREA 'ROMEO' CLSD » qui a motivé cette branche.
+  const q = plan([apr("ROMEO")]);
+  assert.deepEqual(trouve(q, "PUSH BACK AREA 'ROMEO' CLSD", refsFromNotam), ["ROMEO"]);
+});
 
-   Les deux se règlent, mais chacun touche un garde-fou anti-glanage et
-   mérite sa propre décision.
-   ------------------------------------------------------------------ */
+test("le mot qui suit départage un nom d'aire d'une position ou d'un horaire", async () => {
+  const { plan, refsFromNotam } = await chargerPlan();
+  // Ces deux terrains ONT bien l'aire citée : seul le mot suivant dit que le
+  // NOTAM parle d'autre chose. Sans ce filtre, on peindrait une aire ouverte.
+  const p = plan([apr("APRON NORTH"), apr("APRON 24")]);
+  assert.deepEqual(lit(p, "APRON NORTH OF TWY A CLSD", refsFromNotam), []);
+  assert.deepEqual(lit(p, "APN 24 HR AVBL", refsFromNotam), []);
+  // et la tournure normale continue de passer
+  assert.deepEqual(lit(p, "APRON NORTH CLSD", refsFromNotam), ["NORTH"]);
+  // le filet vaut pour les DEUX vocabulaires : ici l'aire s'appelle « NORTH »
+  // tout court, elle passe donc par le nom entier et non par le dépouillé.
+  // 13 fausses fermetures sur 8 terrains réels (EGAA, EKBI, EKCH, LBSF).
+  const q = plan([apr("NORTH"), apr("EAST")]);
+  assert.deepEqual(lit(q, "APRON NORTH OF TWY A CLSD", refsFromNotam), []);
+  assert.deepEqual(lit(q, "APRON EAST OF STAND 12 NOT AVBL", refsFromNotam), []);
+  assert.deepEqual(lit(q, "APRON NORTH CLSD", refsFromNotam), ["NORTH"]);
+});
+
+test("un nom nu qui n'est pas un numéro n'entre pas au vocabulaire dépouillé", async () => {
+  const { plan } = await chargerPlan();
+  // « 2 » y entre (aucune autre voie ne peut le produire), « A » non : la
+  // branche OTAN/indicatif le rend déjà, et l'ajouter n'ouvrirait que du bruit.
+  const p = plan([apr("2"), apr("A"), apr("CARGO")]);
+  assert.deepEqual([...p.APRONS_SHORT].sort(), ["2"]);
+});
