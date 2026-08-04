@@ -179,6 +179,22 @@ test("capacité de stationnement et assistance en piste sont au sol", async () =
   assert.ok(classifyNotam("QICAS", "ILS RWY 25 U/S, NO POTABLE WATER TRUCK").categories.includes("approche"));
 });
 
+test("« WITHDRAWN » ne classe en Critical que s'il retire une surface", async () => {
+  const { classifyNotam } = await chargerClassificateur();
+  // Cas réel LFBD A1354/26 : le mot suffisait à faire une fermeture totale —
+  // pastille rouge dans la liste ET piste rouge plein sur le plan — alors que
+  // seules des VALEURS publiées à l'AIP sont retirées.
+  assert.equal(classifyNotam("QMRXX",
+    "RWY 23 AND 29 TDZ VALUES WITHDRAWN : REF AIP AD 2 LFBD.12.").severity, "caution");
+  // Une vraie surface retirée du service reste bien Critical.
+  assert.equal(classifyNotam("QMRLC", "RWY 05/23 WITHDRAWN").severity, "critical");
+  // Et « NOTAM WITHDRAWN » est une annulation : Information, comme NOTAM CNL /
+  // NOTAM VOID. C'est aussi ce que le plan en dit (planKind -> "reopened") ;
+  // avant, la liste le contredisait en le laissant Critical.
+  assert.equal(classifyNotam("QMRXX", "TWY M23 - NOTAM WITHDRAWN").severity, "info");
+  assert.equal(classifyNotam("QMRXX", "TWY M23 - NOTAM VOID").severity, "info");
+});
+
 test("une annulation qui recopie son en-tête n'est jamais soumise au LLM", () => {
   // Ces NOTAMC ONT un item E) — il recopie l'en-tête, mot pour mot. Le filtre
   // `n.e` de proposeUnclassified() les laissait donc passer : 5 appels LLM sur

@@ -40,13 +40,15 @@ async function chargerPlanKind() {
     RESUME_OK_RE: /const RESUME_OK_RE = (\/.*\/);/,
     RESTRICT_TEXT: /const RESTRICT_TEXT = (\[[\s\S]*?\]);/,
     RESTRICT_ACFT_RE: /const RESTRICT_ACFT_RE = (\/.*\/);/,
+    WITHDRAWN_RE: /const WITHDRAWN_RE = (\/.*\/g);/,
+    WITHDRAWN_DATA_RE: /const WITHDRAWN_DATA_RE = (\/.*\/g);/,
   };
   const consts = Object.entries(motifs).map(([nom, re]) => {
     const m = re.exec(html);
     assert.ok(m, `${nom} introuvable dans notam-filter.html`);
     return `const ${nom} = ${m[1]};`;
   });
-  const fns = ["isResumption", "hasRestrictCond", "planKind"].map(nom => {
+  const fns = ["isResumption", "hasRestrictCond", "hasClosureWord", "planKind"].map(nom => {
     const re = new RegExp(`function ${nom}\\([^)]*\\) \\{[\\s\\S]*?\\n {4}\\}`);
     const m = re.exec(html);
     assert.ok(m, `function ${nom}() introuvable dans notam-filter.html`);
@@ -71,6 +73,7 @@ test("les cas réels documentés en commentaire donnent la couleur attendue", as
     ["RWY 06/24 RESUMED NORMAL OPR", "reopened"], // levée de restriction, pas une fermeture
     ["TWY M23 - NOTAM CNL", "reopened"], // NOTAM retiré
     ["RWY 26L TWY DIRECTION SIGN MISSING", "restricted"], // ni fermeture ni condition reconnue -> ambre "à vérifier", jamais rouge
+    ["RWY 23 AND 29 TDZ VALUES WITHDRAWN : REF AIP AD 2 LFBD.12.", "restricted"], // LFBD A1354/26 : ce sont les VALEURS de l'AIP qui sont retirées, pas la piste
   ];
   const ecarts = [];
   for (const [texte, attendu] of CAS) {
@@ -78,6 +81,22 @@ test("les cas réels documentés en commentaire donnent la couleur attendue", as
     if (obtenu !== attendu) ecarts.push(`« ${texte} » → ${obtenu}, attendu ${attendu}`);
   }
   assert.deepEqual(ecarts, []);
+});
+
+test("« WITHDRAWN » ferme une surface, pas une donnée publiée", async () => {
+  const { planKind } = await chargerPlanKind();
+  // Ce qui est retiré du service ferme : la surface elle-même.
+  assert.equal(planKind(n("RWY 05/23 WITHDRAWN")), "closed");
+  assert.equal(planKind(n("TWY B WITHDRAWN UNTIL FURTHER NOTICE")), "closed");
+  // Ce qui est retiré de la PUBLICATION ne ferme rien : la piste reste ouverte.
+  assert.equal(planKind(n("RWY 23 AND 29 TDZ VALUES WITHDRAWN")), "restricted");
+  assert.equal(planKind(n("DECLARED DISTANCES WITHDRAWN, REF AIP AD 2")), "restricted");
+  assert.equal(planKind(n("RWY 09 TORA VALUES ARE WITHDRAWN")), "restricted");
+  // Un texte qui mélange les deux reste une fermeture : on compte les
+  // occurrences, une donnée retirée n'absout pas une surface retirée.
+  assert.equal(planKind(n("TWY B WITHDRAWN. RWY 23 TDZ VALUES WITHDRAWN")), "closed");
+  // Et un mot de fermeture classique garde évidemment la priorité.
+  assert.equal(planKind(n("RWY 23 CLSD, TDZ VALUES WITHDRAWN")), "closed");
 });
 
 test("le désignateur d'appareil ne se reconnaît qu'après le mot ACFT", async () => {

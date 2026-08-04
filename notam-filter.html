@@ -4178,7 +4178,35 @@ body .stat .k{
       sol: ["MAINT"],
     };
     const CRITICAL_TEXT = ["CLSD", "CLOSED", "U/S", "UNSERVICEABLE", "UNSERV", "NOT AVBL",
-      "NOT AVAILABLE", "UNSAFE", "WITHDRAWN"];
+      "NOT AVAILABLE", "UNSAFE"];
+    /* « WITHDRAWN » retire quelque chose du service — encore faut-il savoir QUOI.
+       Retirer une SURFACE (« RWY 05/23 WITHDRAWN », « TWY B WITHDRAWN ») est bien
+       une fermeture. Retirer une DONNÉE PUBLIÉE ne ferme rien du tout : cas réel
+       LFBD A1354/26 (QMRXX) « RWY 23 AND 29 TDZ VALUES WITHDRAWN : REF AIP AD 2
+       LFBD.12. » — seules les valeurs de zone de toucher disparaissent de l'AIP,
+       la piste reste ouverte, et le mot seul peignait la 05/23 en ROUGE PLEIN.
+       Même chose pour « NOTAM WITHDRAWN », qui annule le message : isResumption()
+       le lit déjà comme une levée (vert au plan) mais CRITICAL_TEXT le remontait
+       en Critical dans la liste — plan et liste se contredisaient sur le même
+       NOTAM, exactement ce que le prédicat partagé doit empêcher.
+       D'où un mot SORTI de la liste des mots de fermeture nus : il n'en est un
+       que si au moins une de ses occurrences ne porte pas sur une donnée. On
+       COMPTE, on ne teste pas — « TWY B WITHDRAWN. TDZ VALUES WITHDRAWN » reste
+       une fermeture.
+       Angle mort assumé : la donnée doit précéder le mot (« TDZ VALUES FOR RWY 23
+       WITHDRAWN » retomberait en fermeture). Reconnaître la donnée n'importe où
+       dans le texte coûterait bien plus cher — une vraie fermeture qui cite des
+       valeurs par ailleurs cesserait d'être rouge. */
+    const WITHDRAWN_RE = /\bWITHDRAWN\b/g;
+    const WITHDRAWN_DATA_RE = /\b(?:NOTAM|VALUES?|DATA|INFORMATIONS?|INFO|MINIMA|DISTANCES?|COORDINATES?|ELEVATIONS?|CHARTS?)(?:\s+(?:ARE|IS|HAS|HAVE|BEEN|NOW))*\s+WITHDRAWN\b/g;
+    // Prédicat unique du « mot de fermeture », partagé par severity() (rang dans
+    // la liste), planKind() (couleur du plan) et isResumption() : les trois
+    // doivent lire le même texte de la même façon.
+    function hasClosureWord(t) {
+      if (CRITICAL_TEXT.some(k => t.includes(k))) return true;
+      const total = (t.match(WITHDRAWN_RE) || []).length;
+      return total > 0 && total > (t.match(WITHDRAWN_DATA_RE) || []).length;
+    }
 
     // Activités / restrictions en vol qui priment : même si le Q-code pointe une
     // surface (piste, etc.), ces messages concernent le vol -> forcés en Flight.
@@ -4247,7 +4275,7 @@ body .stat .k{
       // condition -> critical, même si le mot "OBST" y apparaît comme cause) vs
       // A4935/26 "...PROHIBITED FOR ACFT WHICH WINGSPAN EXCEEDS 36M" (condition
       // -> pas de fermeture totale, reste au rang caution/CONDITION_SEVERITY).
-      const isClosure = CRITICAL_TEXT.some(k => t.includes(k)) ||
+      const isClosure = hasClosureWord(t) ||
         (t.includes("PROHIBITED") && !hasRestrictCond(t));
       // Un NOTAM qui restreint ou interdit l'accès, TOTALEMENT (isClosure) OU
       // CONDITIONNELLEMENT (PROHIBITED avec condition de type/envergure, ou tout
@@ -15020,7 +15048,7 @@ window.addEventListener("scroll", hidePop, true);
       if (CNL_TEXT.some(k => T.includes(k))) return true;
       if (/(?:^|\s)CNL\.?(?:\s|$)/.test(T)) return true;         // "... CNL." isolé, ex. événement annulé
       if (RESUME_TEXT.some(k => T.includes(k)) || RESUME_OK_RE.test(T))
-        return !CRITICAL_TEXT.some(k => T.includes(k));
+        return !hasClosureWord(T);
       return false;
     }
     /* Une fermeture (CLSD, U/S…) interdit tout accès : rouge plein. Une
@@ -15074,7 +15102,7 @@ window.addEventListener("scroll", hidePop, true);
       // « CLOSURE » (nom) apparaît dans des NOTAM réels ("CLOSURE OF TAXIWAYS
       // ...") sans jamais contenir littéralement CLSD/CLOSED — vérifié le
       // 2026-07-27 sur LFBO A4912/26, qui repeignait à tort en ambre.
-      if (CRITICAL_TEXT.some(k => T.includes(k)) || T.includes("CLOSURE")) return "closed";
+      if (hasClosureWord(T) || T.includes("CLOSURE")) return "closed";
       if (hasRestrictCond(T)) return "restricted";
       // PROHIBITED sans condition de type/envergure (déjà captée juste au-dessus
       // par RESTRICT_TEXT) est une interdiction TOTALE, pas une restriction
