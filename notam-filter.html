@@ -3174,11 +3174,20 @@
       }
     }
 
+    /* AU-DESSUS DU CANVAS, PAS À ÉGALITÉ. #routeMap porte z-index:2 pour passer
+       devant le fond MapLibre, et #routeMapGL ne crée pas de contexte
+       d'empilement : le canvas et cette flèche se retrouvaient donc au même
+       niveau dans la boîte de l'overlay, et c'est l'ordre du DOM qui tranchait
+       — canvas après la flèche, donc par-dessus. Quand MapLibre tourne le
+       canvas est transparent et laisse passer les clics, on ne voyait rien ;
+       sans lui (pas de WebGL2, hors ligne sans archive) le canvas repeint son
+       propre fond, et la seule sortie de la carte disparaissait sous lui.
+       6 la place au-dessus du canvas (2), de l'attribution (3) et du toast (5). */
     .map-x {
       position: absolute;
       top: 14px;
       left: 14px;
-      z-index: 2;
+      z-index: 6;
       width: 36px;
       height: 36px;
       border-radius: 50%;
@@ -12544,7 +12553,12 @@ function renderInfo(icao) {
       refreshMapBtn();
       return !!BORDERS;
     }
-    $("#stationMapBtn").onclick = async () => { if (await ensureMapReady()) openMap(); };
+    // Les deux globes (celui du header et celui de la page Route) ouvrent la
+    // MÊME carte : ils passent donc par le même chemin, openMapOverlay(), qui
+    // tente le fond vectoriel avant de dessiner. Séparés, ils divergeaient —
+    // le header rendait l'ancienne carte (canvas seul) pendant que la page
+    // Route rendait la nouvelle.
+    $("#stationMapBtn").onclick = openMapOverlay;
     function apMeta(a, st) {
       if (st === "ok") return "✓ NOTAMs saved";
       if (st === "fail") return "✕ failed";
@@ -13513,14 +13527,17 @@ function renderInfo(icao) {
       }
       drawMap();
     }
-    $("#mapBtn").onclick = async () => {
+    // Chemin d'ouverture unique de l'overlay carte, partagé par le globe du
+    // header (#stationMapBtn) et celui de la page Route (#mapBtn).
+    async function openMapOverlay() {
       if (!(await ensureMapReady())) return;
       // Tentative de fond vectoriel. En cas d'échec (pas de WebGL2, script ou
       // archive absents hors ligne), GL.active reste faux et openMap() rend
       // exactement la carte d'avant — aucune régression sur ces appareils.
       try { await GL.ready(); } catch (e) { }
       openMap();
-    };
+    }
+    $("#mapBtn").onclick = openMapOverlay;
     $("#mapClose").onclick = () => { $("#mapOv").hidden = true; };
     (() => { // interactions carte : molette / glisser / pincer / clic sur un terrain
       const cv = $("#routeMap");
