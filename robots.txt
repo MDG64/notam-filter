@@ -1,0 +1,16 @@
+# NOTAM Lens — pas de référencement tant que l'app n'est pas publiée sur les
+# stores. Posé le 2026-08-04.
+#
+# ATTENTION à ce que ce fichier NE fait PAS : il n'interdit aucun accès. Toute
+# personne qui connaît l'URL entre normalement. GitHub Pages ne sait pas
+# restreindre l'accès hors formule Enterprise, et de toute façon un site fermé
+# rendrait la TWA inutilisable — elle n'est que Chrome chargeant cette adresse.
+# La vraie protection ici, c'est que personne n'a l'URL.
+#
+# Le `noindex` posé dans le <head> des trois pages est le garde-fou qui compte :
+# un Disallow empêche de CRAWLER, pas d'indexer une URL découverte ailleurs.
+#
+# À RETIRER au moment de la publication sur les stores, sinon la fiche Play
+# pointera vers un site que Google refuse d'indexer.
+User-agent: *
+Disallow: /
