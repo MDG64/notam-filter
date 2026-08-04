@@ -1,4 +1,4 @@
-# NOTAM Lens — pas de référencement tant que l'app n'est pas publiée sur les
+# Notam Lens — pas de référencement tant que l'app n'est pas publiée sur les
 # stores. Posé le 2026-08-04.
 #
 # ATTENTION à ce que ce fichier NE fait PAS : il n'interdit aucun accès. Toute

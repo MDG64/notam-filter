@@ -1,4 +1,4 @@
-// Service Worker — NOTAM Lens PWA (fichiers et clé de cache restés "notam-filter-*" :
+// Service Worker — Notam Lens PWA (fichiers et clé de cache restés "notam-filter-*" :
 // renommer casserait les URL GitHub Pages déjà en circulation)
 // v3 : "réseau d'abord" pour l'app (les MAJ s'affichent au prochain lancement),
 //       "cache d'abord" pour les icônes, les appels API toujours en réseau,
