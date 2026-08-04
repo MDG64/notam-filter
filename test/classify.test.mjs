@@ -135,6 +135,25 @@ test("le PAR reste en arrivée seule, et « MAINT » ne classe plus rien à lui 
   assert.ok(classifyNotam("QXXXX", "APRON MAINT IN PROGRESS").categories.includes("sol"));
 });
 
+test("capacité de stationnement et assistance en piste sont au sol", async () => {
+  const { classifyNotam } = await chargerClassificateur();
+  // Cas réels RJSM L0023/26 et L0024/26 (propositions LLM du 2026-08-03), tous
+  // deux en QXXXX : sans mot-clé de lieu ils restaient « Unclassified ».
+  assert.deepEqual(classifyNotam("QXXXX",
+    "WORKING MOG FOR AMC ATGHS MISAWA IS ONE WIDE-BODY OR TWO NARROW-BODY AIRCRAFT").categories,
+    ["sol"]);
+  assert.deepEqual(classifyNotam("QXXXX",
+    "AMC ATGHS HAS NO POTABLE WATER TRUCK AVAILABLE UNTIL FURTHER NOTICE.").categories,
+    ["sol"]);
+  // La forme développée passe aussi bien que l'abréviation.
+  assert.deepEqual(classifyNotam("QXXXX", "MAX ON GROUND REDUCED TO TWO ACFT").categories, ["sol"]);
+  // Mais MOGAS n'est pas un MOG : le mot-clé est encadré d'espaces pour que la
+  // comparaison par sous-chaîne ne l'attrape pas.
+  assert.deepEqual(classifyNotam("QXXXX", "MOGAS NOT AVBL").categories, ["non_classe"]);
+  // Et le mot-clé ne dépouille pas un classement plus précis venu du Q-code.
+  assert.ok(classifyNotam("QICAS", "ILS RWY 25 U/S, NO POTABLE WATER TRUCK").categories.includes("approche"));
+});
+
 test("une annulation qui recopie son en-tête n'est jamais soumise au LLM", () => {
   // Ces NOTAMC ONT un item E) — il recopie l'en-tête, mot pour mot. Le filtre
   // `n.e` de proposeUnclassified() les laissait donc passer : 5 appels LLM sur

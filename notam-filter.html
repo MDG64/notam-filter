@@ -4147,7 +4147,19 @@ body .stat .k{
         // sur les aires. Revue du 2026-07-28 (KSKA). « BASH » figurait ici
         // jusqu'au 2026-07-31 — déplacé en départ+approche, voir le commentaire
         // de ces deux listes.
-        "ENGINE RUN", "ENG RUN"],
+        "ENGINE RUN", "ENG RUN",
+        // Capacité d'accueil des aires et moyens d'assistance : ce que le
+        // terrain peut STATIONNER et SERVIR. Revue du 2026-08-03, deux NOTAM
+        // RJSM (Misawa) en QXXXX, donc sans aucun indice de phase hors du
+        // texte : L0023/26 « WORKING MOG FOR AMC ATGHS MISAWA IS ONE WIDE-BODY
+        // OR TWO NARROW-BODY AIRCRAFT » et L0024/26 « AMC ATGHS HAS NO POTABLE
+        // WATER TRUCK AVAILABLE UNTIL FURTHER NOTICE ». Aucun mot-clé existant
+        // ne les touchait — ils restaient en « Unclassified ».
+        // « MOG » (Maximum On Ground) est encadré d'espaces à dessein : la
+        // comparaison se fait par sous-chaîne, et MOGAS (essence automobile)
+        // est un sujet carburant qui n'a rien à voir avec le stationnement.
+        " MOG ", "MAX ON GROUND", "MAXIMUM ON GROUND",
+        "POTABLE WATER", "WATER TRUCK"],
     };
     // Mots-clés de CAUSE : ils disent ce qui se passe, pas OÙ. « MAINT » n'est
     // pas un lieu — on répare aussi bien un balisage qu'un TACAN ou un radar —
