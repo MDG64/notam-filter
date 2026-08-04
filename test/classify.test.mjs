@@ -25,12 +25,15 @@ async function chargerClassificateur() {
   const debut = L.findIndex(l => l.includes("const SUBJECT_CATEGORIES = {"));
   const fin = L.findIndex(l => l.includes("return { categories: [...cats], severity: severity(q, e), source };"));
   assert.ok(debut >= 0 && fin > debut, "marqueurs de la section de classification introuvables");
-  // CNL_TEXT et RESTRICT_TEXT sont déclarés bien plus bas dans le fichier
-  // (severity() les utilise par remontée de portée) : on les rapatrie.
+  // CNL_TEXT, RESTRICT_TEXT et hasRestrictCond() sont déclarés bien plus bas
+  // dans le fichier (severity() les utilise par remontée de portée, comme
+  // planKind() qui vit là-bas) : on les rapatrie.
   const src = [
     L.slice(debut, fin + 2).join("\n"),
     "const CNL_TEXT = " + /const CNL_TEXT = (\[[^\]]*\]);/.exec(html)[1] + ";",
     "const RESTRICT_TEXT = " + /const RESTRICT_TEXT = (\[[\s\S]*?\]);/.exec(html)[1] + ";",
+    "const RESTRICT_ACFT_RE = " + /const RESTRICT_ACFT_RE = (\/.*\/);/.exec(html)[1] + ";",
+    /function hasRestrictCond\(t\) \{[\s\S]*?\n {4}\}/.exec(html)[0],
     "export { classifyNotam };",
   ].join("\n");
   return import("data:text/javascript;base64," + Buffer.from(src).toString("base64"));

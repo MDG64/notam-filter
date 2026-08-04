@@ -4223,7 +4223,7 @@ body .stat .k{
       // signalé mais n'appelle pas d'action opérationnelle immédiate).
       if (subj === "OB" || subj === "OL") return "info";
       // Signal de fermeture/interdiction ACTIVE : mot de fermeture (CRITICAL_TEXT)
-      // OU "PROHIBITED" sans condition de type/envergure (RESTRICT_TEXT, plus bas)
+      // OU "PROHIBITED" sans condition de type/envergure (hasRestrictCond, plus bas)
       // — une interdiction TOTALE, pas une simple restriction partielle. Calculé
       // une fois pour primer sur les deux raccourcis "info" ci-dessous (CNL_TEXT,
       // INFO_TEXT_RE) : ni une mention d'obstacle-comme-cause, ni une référence à
@@ -4233,7 +4233,7 @@ body .stat .k{
       // A4935/26 "...PROHIBITED FOR ACFT WHICH WINGSPAN EXCEEDS 36M" (condition
       // -> pas de fermeture totale, reste au rang caution/CONDITION_SEVERITY).
       const isClosure = CRITICAL_TEXT.some(k => t.includes(k)) ||
-        (t.includes("PROHIBITED") && !RESTRICT_TEXT.some(k => t.includes(k)));
+        (t.includes("PROHIBITED") && !hasRestrictCond(t));
       // Un NOTAM qui restreint ou interdit l'accès, TOTALEMENT (isClosure) OU
       // CONDITIONNELLEMENT (PROHIBITED avec condition de type/envergure, ou tout
       // autre match RESTRICT_TEXT), cite très souvent un OBSTACLE comme simple
@@ -4243,7 +4243,7 @@ body .stat .k{
       // PROHIBITED FOR ACFT WHICH WINGSPAN EXCEEDS 36M" : conditionnel
       // (isClosure=false) mais reste une restriction active -> Caution, jamais
       // Info malgré le mot OBSTACLE.
-      const isActiveRestriction = isClosure || t.includes("PROHIBITED") || RESTRICT_TEXT.some(k => t.includes(k));
+      const isActiveRestriction = isClosure || t.includes("PROHIBITED") || hasRestrictCond(t);
       // NOTAM levé (CNL/CANCELLED/WITHDRAWN/VOID) : simple information, pas une
       // alerte active — sauf si isActiveRestriction (une restriction/fermeture
       // reste active malgré la mention d'une levée passée). Réutilise CNL_TEXT
@@ -15026,6 +15026,29 @@ window.addEventListener("scroll", hidePop, true);
     const RESTRICT_TEXT = ["PROHIBITED TO", "LIMITED TO", "LTD TO",
       "WINGSPAN GREATER", "WINGSPAN ABOVE", "WINGSPAN OVER", "WINGSPAN EXCEEDS",
       "WINGSPAN HIGHER THAN", "NOT AVBL FOR ACFT", "ACFT TYPE"];
+    /* Deuxième forme de condition, aussi fréquente que l'envergure : le NOTAM
+       NOMME les appareils visés par leur désignateur OACI (A388, B748, B77W,
+       AT72, MD11…). Cas réel LFPO A5113/26 « RWY 06/24 PROHIBITED FOR ACFT A388
+       AND B748 REF AD2.24 GMC 02 AND GMC 04. » : la piste reste ouverte à tout
+       le reste de la flotte, elle ne doit pas être peinte en rouge « fermée ».
+       Aucun mot de RESTRICT_TEXT n'y figure ("FOR ACFT" n'est pas "ACFT TYPE"),
+       le texte tombait donc sur le PROHIBITED nu -> fermeture totale.
+       Le désignateur est cherché APRÈS le mot ACFT et nulle part ailleurs : un
+       NOTAM est truffé de jetons lettres+chiffres qui n'ont rien d'un type
+       d'appareil (« AD2.24 », « GMC 02 », « RWY 06 » — celui-ci ci-dessus s'y
+       serait prêté), et les reconnaître partout ferait passer de vraies
+       fermetures totales pour des restrictions. Les lettres doivent toucher les
+       chiffres (A388, B737-800) : « FOR ALL ACFT », « ACFT ON STAND 12 » ou
+       « ACFT UP TO 36M » ne matchent pas — une interdiction sans type nommé
+       reste une fermeture. */
+    const RESTRICT_ACFT_RE = /\bACFT\s+(?:TYPES?\s+)?[A-Z]{1,3}\d{1,3}[A-Z]{0,2}\b/;
+    // Prédicat unique de la condition « partielle », partagé par planKind()
+    // (couleur du plan) et severity() (rang dans la liste) : les deux doivent
+    // toujours lire le même texte de la même façon, sinon une piste ambre au
+    // plan garde une pastille rouge en face d'elle dans la liste.
+    function hasRestrictCond(t) {
+      return RESTRICT_TEXT.some(k => t.includes(k)) || RESTRICT_ACFT_RE.test(t);
+    }
     function planKind(n) {
       // Une levée (NOTAM CNL/VOID, reprise normale) n'est pas juste « rien à
       // peindre » : c'est une confirmation positive que la surface est de
@@ -15037,7 +15060,7 @@ window.addEventListener("scroll", hidePop, true);
       // ...") sans jamais contenir littéralement CLSD/CLOSED — vérifié le
       // 2026-07-27 sur LFBO A4912/26, qui repeignait à tort en ambre.
       if (CRITICAL_TEXT.some(k => T.includes(k)) || T.includes("CLOSURE")) return "closed";
-      if (RESTRICT_TEXT.some(k => T.includes(k))) return "restricted";
+      if (hasRestrictCond(T)) return "restricted";
       // PROHIBITED sans condition de type/envergure (déjà captée juste au-dessus
       // par RESTRICT_TEXT) est une interdiction TOTALE, pas une restriction
       // partielle : rouge. Cas réel LFPO A4641/26 « LDG RWY 20 PROHIBITED DUE TO
