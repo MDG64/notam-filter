@@ -15463,11 +15463,28 @@ window.addEventListener("scroll", hidePop, true);
          l'aire est dessinée et nommée sur le plan mais introuvable à l'index. */
       const COMBINING = new RegExp("[\\u0300-\\u036f]", "g");
       const deacc = s => s.normalize("NFD").replace(COMBINING, "");
+      /* Et le même alias que STRIP, pour les aires. OSM écrit souvent le TYPE
+         dans le nom — LKCS nomme ses trois aires « Apron W », « Apron M »,
+         « Apron E » — alors que le NOTAM dit « APRON E » et que refsFromNotam
+         n'en tire que « E ». Sans clé dépouillée, l'aire est DESSINÉE ET
+         ÉTIQUETÉE sur le plan mais introuvable à l'index : elle part en MISS, et
+         le bandeau réimprime mot pour mot l'étiquette qu'on lit deux centimètres
+         plus haut (« APRON E · APRON W … missing from this layout »). Il invite
+         en plus à signaler un fond de carte qui est juste — un signalement OSM
+         pour rien. Cas vu à LKCS le 2026-08-04 sur B1901/26.
+         On ajoute la clé au lieu de RÉÉCRIRE s.r, pour la même raison qu'au-
+         dessus : « APRON E » est le marquage réel au sol, le plan doit continuer
+         à l'écrire, et un NOTAM qui cite le nom entier trouve toujours. */
+      const APR_STRIP = /^(?:APRONS?|APN|RAMP)\s+/;
       for (const s of SURF) if (s.r) {
         idx(s.t + ":" + s.r, s);
         const U = String(s.r).toUpperCase();
         if (U !== s.r) idx(s.t + ":" + U, s);
-        if (s.t === "apr") { const D = deacc(U); if (D !== U) idx("apr:" + D, s); }
+        if (s.t === "apr") {
+          const D = deacc(U); if (D !== U) idx("apr:" + D, s);
+          const short = D.replace(APR_STRIP, "");
+          if (short && short !== D) idx("apr:" + short, s);
+        }
         if (s.t === "twy") {
           const short = U.replace(STRIP, "");
           if (short && short !== U) idx("twy:" + short, s);
