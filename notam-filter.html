@@ -14807,10 +14807,17 @@ window.addEventListener("scroll", hidePop, true);
 
     // L'index dit QUI a un plan, avant tout clic. Sans lui le bouton mentirait
     // sur les terrains sans géométrie : un 404 n'est pas une réponse à un pilote.
+    //
+    // Même `no-cache` que fetchLayout, et pour la même raison : GitHub Pages
+    // sert cet index avec Cache-Control: max-age=600, donc sans revalidation
+    // conditionnelle un terrain qui vient de gagner ses taxiways nommés garde
+    // son ancien niveau jusqu'à dix minutes — le plan affiché est le bon, la
+    // pastille du bouton, non. Une requête de plus au démarrage, et l'index
+    // suit la publication au lieu de la suivre à retardement.
     async function loadPlanIndex() {
       if (planIndex) return planIndex;
       try {
-        const r = await fetch(LAYOUT_URL + "_index.json");
+        const r = await fetch(LAYOUT_URL + "_index.json", { cache: "no-cache" });
         planIndex = r.ok ? await r.json() : {};
       } catch (e) { planIndex = {}; }
       return planIndex;
