@@ -1578,11 +1578,6 @@
       justify-content: center;
     }
 
-    .hd-seg .hd-chip .cat-ico { height: 28px; width: auto; }
-    .hd-note .cat-ico {
-      width: 22px; height: 12px; vertical-align: -2px; margin-right: 3px; fill: currentColor;
-    }
-
     .hd-note {
       font-size: 11.5px;
       color: var(--muted);
@@ -4019,19 +4014,19 @@ body .stat .k{
 
         <div class="hd-sec">Category filters</div>
         <div class="hd-seg">
-          <span class="hd-chip on"><svg class="cat-ico" viewBox="0 0 128 128" aria-label="Ground"><use href="#icon-ground"/></svg></span>
-          <span class="hd-chip"><svg class="cat-ico" viewBox="0 0 128 128" aria-label="Departure"><use href="#icon-depart"/></svg></span>
-          <span class="hd-chip"><svg class="cat-ico" viewBox="0 0 128 128" aria-label="Flight"><use href="#icon-flight"/></svg></span>
-          <span class="hd-chip"><svg class="cat-ico" viewBox="0 0 128 128" aria-label="Arrival"><use href="#icon-arrival"/></svg></span>
+          <span class="cat on"><span class="cat-label">Ground</span><span class="cnt">12</span></span>
+          <span class="cat"><span class="cat-label">Departure</span><span class="cnt">4</span></span>
+          <span class="cat"><span class="cat-label">Flight</span><span class="cnt">7</span></span>
+          <span class="cat"><span class="cat-label">Arrival</span><span class="cnt">3</span></span>
         </div>
-        <div class="hd-note" style="margin-bottom:10px">Tap to filter by phase of flight. Tap again to remove. Combine
-          with a severity card.</div>
+        <div class="hd-note" style="margin-bottom:10px">Tap to filter by phase of flight — the figure is the number of
+          NOTAMs in that phase. Tap again to remove. Combine with a severity card.</div>
         <div class="hd-block">
           <div class="hd-note">
-            <svg class="cat-ico" viewBox="0 0 128 128" aria-hidden="true"><use href="#icon-flight"/></svg><b>Flight</b> — en-route, airspace, aerodrome status<br>
-            <svg class="cat-ico" viewBox="0 0 128 128" aria-hidden="true"><use href="#icon-depart"/></svg><b>Departure</b> — take-off, SID<br>
-            <svg class="cat-ico" viewBox="0 0 128 128" aria-hidden="true"><use href="#icon-arrival"/></svg><b>Arrival</b> — approach, STAR, landing<br>
-            <svg class="cat-ico" viewBox="0 0 128 128" aria-hidden="true"><use href="#icon-ground"/></svg><b>Ground</b> — taxiways, stands, aprons, services
+            <b>Ground</b> — taxiways, stands, aprons, services<br>
+            <b>Departure</b> — take-off, SID<br>
+            <b>Flight</b> — en-route, airspace, aerodrome status<br>
+            <b>Arrival</b> — approach, STAR, landing
           </div>
         </div>
 
