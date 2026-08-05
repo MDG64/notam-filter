@@ -13279,7 +13279,7 @@ function renderInfo(icao) {
       async _openArchive() {
         if (this.archive !== null) return this.archive;
         try {
-          const r = await fetch(PMTILES_URL);            // SW règle 5 : mis en cache, servi hors ligne
+          const r = await fetch(PMTILES_URL);            // SW règle 5 : déposée en cache, servie hors ligne
           if (!r.ok) throw new Error("HTTP " + r.status);
           this.archive = await new PMTilesBlob(await r.blob()).open();
         } catch (e) { this.archive = false; }
@@ -13293,16 +13293,25 @@ function renderInfo(icao) {
           if (!(await this._script())) return false;
           if (!maplibregl.getRTLTextPluginStatus) { /* build inattendu */ }
           await this._openArchive();
-          this.offline = !navigator.onLine || !this.archive ? !navigator.onLine : false;
-          if (!navigator.onLine && !this.archive) return false;   // ni réseau ni archive -> canvas d'origine
-          if (this.archive) {
-            maplibregl.addProtocol("pmtiles", async params => {
-              const m = /^pmtiles:\/\/local\/(\d+)\/(\d+)\/(\d+)/.exec(params.url);
-              if (!m) return { data: null };
-              const d = await GL.archive.tile(+m[1], +m[2], +m[3]);
-              return { data: d || new ArrayBuffer(0) };
-            });
-          }
+          // PAS D'ARCHIVE, PAS DE MAPLIBRE — même si navigator.onLine dit « en
+          // ligne ». Ce drapeau ne prouve qu'une chose : une interface réseau
+          // est active. Wifi cabine captif, data au sol, portail non franchi —
+          // il annonce alors « en ligne » alors que rien ne passe. L'ancienne
+          // condition ne renonçait que si navigator.onLine était faux, donc sur
+          // un appareil qui se croyait connecté on partait sur le style en
+          // ligne : MapLibre démarrait, drawMap() effaçait le canvas puisque
+          // GL.active était vrai, aucune tuile n'arrivait — carte VIDE avec les
+          // seuls terrains dessinés par-dessus. Le repli canvas, lui, marche
+          // toujours et sans réseau. L'archive est la seule preuve qu'on saura
+          // dessiner un fond quoi qu'il arrive, donc elle est la condition.
+          if (!this.archive) return false;                        // -> fond canvas d'origine
+          this.offline = !navigator.onLine;
+          maplibregl.addProtocol("pmtiles", async params => {
+            const m = /^pmtiles:\/\/local\/(\d+)\/(\d+)\/(\d+)/.exec(params.url);
+            if (!m) return { data: null };
+            const d = await GL.archive.tile(+m[1], +m[2], +m[3]);
+            return { data: d || new ArrayBuffer(0) };
+          });
           const host = $("#routeMapGL");
           try {
             this.map = new maplibregl.Map({
@@ -13313,6 +13322,20 @@ function renderInfo(icao) {
             this.map.touchZoomRotate.disableRotation();
           } catch (e) { return false; }
           this.map.on("render", () => drawMap());
+          // Deuxième filet, pour le cas où navigator.onLine a menti APRÈS le
+          // démarrage (perte de réseau en vol) ou dès le départ : au premier
+          // échec de tuile, on repasse sur l'archive locale. Une seule fois —
+          // ensuite this.offline est vrai et la garde ci-dessous coupe court.
+          // Le style hors ligne s'arrête à z6 et sur-zoome au-delà : moins de
+          // détail que l'archive OpenFreeMap, mais une carte, et c'est le sujet.
+          this.map.on("error", ev => {
+            if (this.offline) return;
+            if (ev && ev.sourceId && ev.sourceId !== "o") return;
+            this.offline = true;
+            try { this.map.setStyle(glStyle(document.body.classList.contains("light"), true)); }
+            catch (_) { }
+            console.warn("[carte] tuiles en ligne injoignables — bascule sur l'archive hors ligne");
+          });
           this.active = true;
           return true;
         })();

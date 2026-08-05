@@ -107,6 +107,33 @@ self.addEventListener("fetch", e => {
     return;
   }
 
-  // 5) Autres ressources (icônes) : cache d'abord, réseau en repli.
+  // 5) Fond vectoriel de la carte ROUTE : moteur MapLibre (vendor/) et archive
+  //    de tuiles monde (tiles/*.pmtiles, 21 Mo). Cache d'abord — leurs noms
+  //    portent une version, donc une copie en cache est forcément la bonne —
+  //    ET MISE EN CACHE au passage : c'est ce dernier point qui manquait.
+  //    La règle 6 ci-dessous sert bien "cache d'abord", mais elle ne DÉPOSE
+  //    jamais rien : les icônes s'en tirent parce qu'elles sont pré-cachées à
+  //    l'install, vendor/ et tiles/ ne l'étaient nulle part. Résultat, hors
+  //    ligne le fond MapLibre ne démarrait pas (repli sur l'ancien fond canvas)
+  //    ou démarrait sans tuiles (carte vide, surcouche seule).
+  //    Pas de pré-cache à l'install : addAll() est atomique et 21 Mo au premier
+  //    lancement, c'est une facture de données non demandée. Le dépôt se fait à
+  //    la première ouverture de la carte route en ligne.
+  if (url.includes("/vendor/") || url.includes("/tiles/")) {
+    e.respondWith(
+      caches.match(e.request).then(hit => hit || fetch(e.request).then(r => {
+        // Une réponse partielle (206) n'est pas stockable dans le Cache API et
+        // ne vaut rien hors ligne : on la laisse passer sans la garder.
+        if (r && r.ok && r.status === 200) {
+          const copy = r.clone();
+          caches.open(CACHE).then(c => c.put(e.request, copy)).catch(() => {});
+        }
+        return r;
+      }))
+    );
+    return;
+  }
+
+  // 6) Autres ressources (icônes) : cache d'abord, réseau en repli.
   e.respondWith(caches.match(e.request).then(r => r || fetch(e.request)));
 });
