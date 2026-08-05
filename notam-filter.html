@@ -3922,6 +3922,22 @@ body .stat .k{
           <div class="hd-desc">Type the <b>4-letter ICAO code</b> of the aerodrome.</div>
         </div>
         <div class="hd-row">
+          <div class="hd-vis"><span class="hd-cbtn">🌐</span></div>
+          <div class="hd-arr">→</div>
+          <div class="hd-desc">Open the <b>map</b> centred on the aerodrome shown. Once a route has been run, the same
+            map draws it.</div>
+        </div>
+        <div class="hd-row">
+          <div class="hd-vis"><span class="hd-chip">Route</span></div>
+          <div class="hd-arr">→</div>
+          <div class="hd-desc">Open the <b>Route</b> page — see below.</div>
+        </div>
+        <div class="hd-row">
+          <div class="hd-vis"><span class="hd-chip">FIR</span></div>
+          <div class="hd-arr">→</div>
+          <div class="hd-desc">Open the <b>world FIR map</b> — see below.</div>
+        </div>
+        <div class="hd-row">
           <div class="hd-vis"><span class="hd-cbtn">☾</span></div>
           <div class="hd-arr">→</div>
           <div class="hd-desc">Switch <b>day / night</b> theme.</div>
@@ -3938,6 +3954,26 @@ body .stat .k{
           <div class="hd-arr">→</div>
           <div class="hd-desc">Tap the star to <b>save</b> an aerodrome. Saved ones appear in the Favourites bar for
             one-tap access.</div>
+        </div>
+
+        <div class="hd-sec">Aerodrome bar</div>
+        <div class="hd-row">
+          <div class="hd-vis">
+            <svg viewBox="0 0 24 24" width="26" height="26" aria-hidden="true">
+              <rect x="1" y="1" width="22" height="22" rx="5" fill="#ffffff" stroke="#d5dbe0" stroke-width="1"/>
+              <circle cx="12" cy="7" r="1.9" fill="#16232f"/>
+              <rect x="10.1" y="10.6" width="3.8" height="9" rx="1.9" fill="#16232f"/>
+            </svg>
+          </div>
+          <div class="hd-arr">→</div>
+          <div class="hd-desc"><b>Airport info</b> — name, position, elevation and runways of the aerodrome shown.</div>
+        </div>
+        <div class="hd-row">
+          <div class="hd-vis"><svg viewBox="0 0 34 14" width="54" aria-hidden="true"><use href="#icon-plansign"/></svg>
+          </div>
+          <div class="hd-arr">→</div>
+          <div class="hd-desc">Open the <b>aerodrome layout</b> — see below. The button is absent when no layout exists
+            for that aerodrome.</div>
         </div>
 
         <div class="hd-sec">Severity counts</div>
@@ -4007,7 +4043,7 @@ body .stat .k{
             <span class="hd-tag">QMXLC</span>
             <span class="hd-gtag" style="margin-left:auto">GROUND</span>
           </div>
-          <div class="txt">CLOSED TAXIWAYS : TWY W3 BTN TWY LP</div>
+          <div class="txt">CLOSED <span class="gl">TWY</span> : TWY W3 <span class="gl">BTN</span> TWY LP</div>
           <div class="dt">Start <b>30 MAR 2026 21:30Z</b><br>End <b>31 JUL 2026 03:30Z</b></div>
         </div>
         <div class="hd-note" style="margin-top:9px">
@@ -4015,13 +4051,118 @@ body .stat .k{
           category<br>
           Dates are in <b>UTC / Zulu</b>.
         </div>
+        <div class="hd-row" style="margin-top:11px">
+          <div class="hd-vis" style="min-width:auto"><span class="hd-tag">QMXLC</span></div>
+          <div class="hd-arr">→</div>
+          <div class="hd-desc">Tap the <b>Q-code</b> to read it in plain English, with the traffic, purpose and scope
+            qualifiers.</div>
+        </div>
+        <div class="hd-row">
+          <div class="hd-vis" style="min-width:auto"><span class="gl">TWY</span></div>
+          <div class="hd-arr">→</div>
+          <div class="hd-desc">Words with a <b>dashed underline</b> are ICAO abbreviations — tap one to decode it.</div>
+        </div>
+        <div class="hd-row">
+          <div class="hd-vis"><span class="hd-gtag">GROUND</span></div>
+          <div class="hd-arr">→</div>
+          <div class="hd-desc">A card carrying the <b>GROUND</b> tag is tappable: it opens the aerodrome layout,
+            centred on the surface the NOTAM names.</div>
+        </div>
+
+        <div class="hd-sec">Aerodrome layout</div>
+        <div class="hd-note" style="margin-bottom:11px">
+          Drawn from OpenStreetMap for the aerodromes that have one. Ground NOTAMs are matched to the runways,
+          taxiways, aprons and stands they name, and painted on the drawing.
+        </div>
+        <div class="hd-block">
+          <div class="hd-legend">
+            <div class="li"><span class="hd-dot" style="background:var(--red)"></span><span><b>Red</b> — closed</span>
+            </div>
+            <div class="li"><span class="hd-dot hd-caut"></span><span><b>Amber</b> — restricted, work in
+                progress</span></div>
+            <div class="li"><span class="hd-dot" style="background:var(--green)"></span><span><b>Green</b> — reopened
+                (NOTAM cancelled or void, normal operation resumed)</span></div>
+          </div>
+        </div>
+        <div class="hd-note" style="margin:9px 0 11px">Colour says <b>what happens to the surface</b>, not how severe
+          the NOTAM is — the severity dot stays in the list.</div>
+        <div class="hd-row">
+          <div class="hd-vis" style="min-width:auto"><span class="hd-chip">Now</span></div>
+          <div class="hd-arr">→</div>
+          <div class="hd-desc"><b>Now / Today / Tomorrow</b> — the period the drawing shows. It is independent of the
+            filter used in the list.</div>
+        </div>
+        <div class="hd-row">
+          <div class="hd-vis" style="min-width:auto"><span class="hd-chip on">This NOTAM</span></div>
+          <div class="hd-arr">→</div>
+          <div class="hd-desc">Name only what the NOTAM you opened refers to. Only shown when the layout was opened
+            from a card.</div>
+        </div>
+        <div class="hd-row">
+          <div class="hd-vis" style="min-width:auto"><span class="hd-chip">All ground NOTAMs</span></div>
+          <div class="hd-arr">→</div>
+          <div class="hd-desc">Name what every ground NOTAM of that period refers to, and list them below the drawing.
+          </div>
+        </div>
+        <div class="hd-row">
+          <div class="hd-vis" style="min-width:auto"><span class="hd-chip">All</span></div>
+          <div class="hd-arr">→</div>
+          <div class="hd-desc">Name every element of the aerodrome, the untouched ones more discreetly.</div>
+        </div>
+        <div class="hd-row">
+          <div class="hd-vis"><span class="hd-cbtn">+</span></div>
+          <div class="hd-arr">→</div>
+          <div class="hd-desc"><b>+ / − / ⤢</b> zoom in, zoom out, fit to screen. Drag to pan, pinch to zoom. <b>Tap a
+              surface</b> to read the NOTAMs that concern it.</div>
+        </div>
+        <div class="hd-note">A line under the drawing counts how many ground NOTAMs could be placed. Some cannot — read
+          the full list. If a surface a NOTAM names is <b>missing from the drawing</b>, a warning says so and a
+          <b>Report missing surface</b> button lets you flag it, so the map data gets fixed for everyone.</div>
+        <div class="hd-note" style="margin-top:9px"><b>Indicative, not AIP-compliant, not for navigation.</b></div>
+
+        <div class="hd-sec">Route</div>
+        <div class="hd-row">
+          <div class="hd-vis"><span class="hd-icao"><span class="l">FROM</span><span class="v">LFBO</span></span></div>
+          <div class="hd-arr">→</div>
+          <div class="hd-desc">Enter <b>FROM</b> and <b>TO</b> — and an <b>ALT</b> destination alternate if you have
+            one. <b>⇄</b> swaps FROM and TO.</div>
+        </div>
+        <div class="hd-row">
+          <div class="hd-vis" style="min-width:auto"><span class="hd-chip">≥2400 m</span></div>
+          <div class="hd-arr">→</div>
+          <div class="hd-desc">Keep only aerodromes with a <b>hard runway</b> of at least that length.</div>
+        </div>
+        <div class="hd-row">
+          <div class="hd-vis" style="min-width:auto"><span class="hd-chip on">GO</span></div>
+          <div class="hd-arr">→</div>
+          <div class="hd-desc">Lists every aerodrome inside a <b>±200 NM corridor</b> along the great circle, then
+            <b>downloads and saves their NOTAMs</b>. Keep the app in the foreground while it runs.</div>
+        </div>
+        <div class="hd-note">Once saved, tap any card to read that aerodrome's NOTAMs — <b>including in flight, with no
+            connection</b>. The <b>🌐</b> button draws the route and the aerodromes on the map.</div>
+
+        <div class="hd-sec">FIR map</div>
+        <div class="hd-note">The <b>FIR</b> button opens the world map of flight information regions. Tap one to read
+          its en-route NOTAMs. Regions with a known <b>airspace closure</b> are coloured red or amber; the others stay
+          neutral blue.</div>
+
+        <div class="hd-sec">Offline</div>
+        <div class="hd-row">
+          <div class="hd-vis"><span class="hd-dot" style="background:var(--red)"></span></div>
+          <div class="hd-arr">→</div>
+          <div class="hd-desc">With no connection, a banner says <b>which saved data</b> is on screen and <b>when it was
+              saved</b> (UTC). Nothing refreshes until the connection is back.</div>
+        </div>
+        <div class="hd-note">Every aerodrome you consult is saved, layout included. The <b>Route</b> page saves a whole
+          corridor in one go — that is the way to prepare a flight before departure.</div>
 
         <div class="hd-sec">Data sources</div>
         <div class="hd-note">
           <b>NOTAMs</b> — official international NOTAM distribution service.<br>
-          <b>Aerodrome layouts</b> — map data © <b>OpenStreetMap</b> contributors, available
+          <b>Aerodrome layouts</b> and <b>map background</b> — map data © <b>OpenStreetMap</b> contributors, available
           under the Open Database Licence (ODbL). Layouts are indicative, not AIP-compliant,
-          and not for navigation.
+          and not for navigation.<br>
+          <b>Aerodrome and airspace reference data</b> — OurAirports and Natural Earth, public domain.
         </div>
 
         <div class="hd-sec">Legal</div>
