@@ -13221,8 +13221,19 @@ function renderInfo(icao) {
     function glStyle(light, offline) {
       const C = glPalette(light);
       const cover = C.cover, road = C.road, roadHi = C.roadHi;
+      // `tiles:` et NON `url:` pour l'archive locale. Avec `url:`, MapLibre y voit
+      // l'adresse d'un TileJSON : il appelle le protocole UNE fois, avec
+      // "pmtiles://local" tout court, en attendant un descripteur de source. Le
+      // gestionnaire, lui, n'accepte que des adresses de tuile (son motif exige
+      // /z/x/y), il rendait donc `{data:null}` — la source ne se chargeait
+      // jamais et AUCUNE tuile n'était demandée. Restait la couche `background`,
+      // c'est-à-dire un aplat de couleur : « plus de fond de carte, seulement
+      // les terrains ». Avec `tiles:`, MapLibre substitue {z}/{x}/{y} et appelle
+      // le protocole une fois par tuile — la forme que le motif attend.
+      // Le défaut est resté invisible deux jours : le service worker ne gardait
+      // pas l'archive, donc ce chemin hors ligne n'avait jamais pu s'exécuter.
       const src = offline
-        ? { type: "vector", url: "pmtiles://local", minzoom: 0, maxzoom: 6 }
+        ? { type: "vector", tiles: ["pmtiles://local/{z}/{x}/{y}"], minzoom: 0, maxzoom: 6 }
         : { type: "vector", tiles: [OFM_TILES], minzoom: 0, maxzoom: 14 };
       const L = [{ id: "bg", type: "background", paint: { "background-color": C.land } }];
       if (offline) {                                     // schéma Protomaps
