@@ -17082,8 +17082,14 @@ window.addEventListener("scroll", hidePop, true);
       }
       for (const s of S) if (s.t === "apr") for (const g of s.segs) planFill(ctx, g, BASE.apr);
       for (const s of S) if (s.t === "apr") for (const g of s.segs) planStroke(ctx, g, 1, EDGE.apr, false);
-      cased("rwy", PLAN_W.rwy);
+      /* La PISTE passe par-dessus les taxiways, pas l'inverse : là où une bretelle
+         rejoint la piste, le gris clair du taxiway et son liseré débordaient sur la
+         chaussée et y dessinaient un coin plus pâle — la piste semblait entamée à
+         chaque jonction. En peignant les taxiways d'abord, la piste reste une bande
+         franche et continue ; seule la ligne axiale jaune, tracée en dernier, la
+         franchit, ce qui est exactement le rendu d'une carte d'aérodrome. */
       cased("twy", PLAN_W.twy);
+      cased("rwy", PLAN_W.rwy);
       /* Axe jaune des taxiways, par-dessus la chaussée : c'est LE repère des
          cartes d'aérodrome. Tracé en dernier pour rester visible aux jonctions,
          et volontairement fin — il guide l'œil sans concurrencer le surlignage
