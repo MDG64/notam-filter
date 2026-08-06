@@ -11743,11 +11743,15 @@ E) ${e}`;
        GitHub Pages répond Access-Control-Allow-Origin: * ; siteURL() fait la
        bascule d'origine. Rien d'autre dans la page ne touche au stockage des
        plans. */
-    function _natFS() {
+    function _isNative() {
       const C = window.Capacitor;
-      return (C && typeof C.isNativePlatform === "function" && C.isNativePlatform()
-        && C.Plugins && C.Plugins.Filesystem) ? C.Plugins.Filesystem : null;
+      return !!(C && typeof C.isNativePlatform === "function" && C.isNativePlatform());
     }
+    function _natPlugin(name) {
+      const C = window.Capacitor;
+      return (_isNative() && C.Plugins && C.Plugins[name]) ? C.Plugins[name] : null;
+    }
+    function _natFS() { return _natPlugin("Filesystem"); }
     const REMOTE_BASE = "https://notam.feyndev.com/";
     const siteURL = rel => _natFS() ? REMOTE_BASE + rel : "./" + rel;
     async function natRead(rel) {
@@ -11767,6 +11771,34 @@ E) ${e}`;
       try { await fs.deleteFile({ path: "offline/" + rel, directory: "DATA" }); }
       catch (_) { }                      // déjà absent : l'éviction est acquise
     }
+
+    /* ---- Réseau : navigator.onLine ment sous WKWebView (souvent figé à
+       true, et les événements online/offline ne suivent pas toujours). En
+       natif, @capacitor/network fait autorité : _natNetInit() suit son état
+       (getStatus initial + listener) et REJOUE les événements window
+       online/offline — la balise d'état, la file de signalements et le
+       détecteur de version suivent le plugin sans réécriture. netOnline()
+       sert l'état en synchrone. Plugin absent (navigateur, ou natif sans
+       @capacitor/network) : repli navigator.onLine, comportement historique. */
+    let _netUp = null;                   // null = plugin non branché
+    let _netHooked = false;
+    function _natNetInit() {
+      if (_netHooked) return;
+      const net = _natPlugin("Network");
+      if (!net) return;
+      _netHooked = true;
+      const apply = connected => {
+        const was = _netUp; _netUp = !!connected;
+        if (was === _netUp) return;
+        try { window.dispatchEvent(new Event(_netUp ? "online" : "offline")); } catch (_) { }
+      };
+      try {
+        net.getStatus().then(s => apply(s && s.connected)).catch(() => { });
+        net.addListener("networkStatusChange", s => apply(s && s.connected));
+      } catch (_) { _netHooked = false; }
+    }
+    _natNetInit();
+    function netOnline() { return _netUp === null ? navigator.onLine : _netUp; }
 
     /* GARDE-FOU — sans couche durable, rien ne plante : le fetch part, la
        réponse est jetée, plus rien n'est conservé, et la promesse « plan
@@ -12119,7 +12151,7 @@ function renderInfo(icao) {
       const FRESH_MS = 60 * 60 * 1000;
       const cachedFresh = loadOffline(icao);
       if (cachedFresh && Array.isArray(cachedFresh.raw) && (Date.now() - cachedFresh.ts) < FRESH_MS) {
-        setBeacon(navigator.onLine);
+        setBeacon(netOnline());
         renderFromRaw(cachedFresh.raw);
         return;
       }
@@ -12182,7 +12214,7 @@ function renderInfo(icao) {
     // Tester `n.e` seul ne suffit pas : il n'est justement pas vide.
     const CANCEL_ECHO_RE = /^\s*\(?[A-Z]?\d{3,4}\/\d{2}\s+NOTAMC\b/;
     async function proposeUnclassified() {
-      if (!navigator.onLine || !BACKEND_URL) return;
+      if (!netOnline() || !BACKEND_URL) return;
       const seq = ++proposeSeq;
       const todo = current.filter(n => n.source === "unclassified" && n.e && !CANCEL_ECHO_RE.test(n.e));
       if (!todo.length) return;
@@ -12371,7 +12403,7 @@ function renderInfo(icao) {
       b.classList.toggle("online", !!online);
       b.classList.toggle("offline", !online);
     }
-    setBeacon(navigator.onLine);
+    setBeacon(netOnline());
     window.addEventListener("online", () => setBeacon(true));
     window.addEventListener("offline", () => setBeacon(false));
 
@@ -12659,7 +12691,14 @@ function renderInfo(icao) {
     }
     let _wake = null;
     async function keepAwake(on) {
+      // WKWebView n'a pas navigator.wakeLock : pendant un préchargement de
+      // route de plusieurs minutes, l'écran s'éteindrait alors que l'UI dit
+      // « keep the app open ». En natif, @capacitor-community/keep-awake tient
+      // l'écran — même sondage paresseux que _natFS(), plugin absent = repli
+      // sur l'API web, et l'échec reste silencieux comme avant.
       try {
+        const KA = _natPlugin("KeepAwake");
+        if (KA) { if (on) await KA.keepAwake(); else await KA.allowSleep(); return; }
         if (on && "wakeLock" in navigator) { _wake = await navigator.wakeLock.request("screen"); }
         else if (!on && _wake) { await _wake.release(); _wake = null; }
       } catch (e) { }
@@ -13453,7 +13492,7 @@ function renderInfo(icao) {
           // toujours et sans réseau. L'archive est la seule preuve qu'on saura
           // dessiner un fond quoi qu'il arrive, donc elle est la condition.
           if (!this.archive) return false;                        // -> fond canvas d'origine
-          this.offline = !navigator.onLine;
+          this.offline = !netOnline();
           maplibregl.addProtocol("pmtiles", async params => {
             const m = /^pmtiles:\/\/local\/(\d+)\/(\d+)\/(\d+)/.exec(params.url);
             if (!m) return { data: null };
@@ -13840,7 +13879,7 @@ function renderInfo(icao) {
         if (w.saved) {
           // vert : on charge et on affiche les NOTAM sur la 1re page
           $("#mapOv").hidden = true; $("#routeScreen").hidden = true; load(w.icao);
-        } else if (navigator.onLine) {
+        } else if (netOnline()) {
           // rouge + connecté : ajout à la route puis chargement (load -> fetch + saveOffline -> passe vert)
           addWorldToRoute(w.icao);
           $("#mapOv").hidden = true; $("#routeScreen").hidden = true; load(w.icao);
@@ -17546,7 +17585,7 @@ window.addEventListener("scroll", hidePop, true);
        unique promis à l'utilisateur ne serait tenu qu'avec de la couverture. */
     async function layoutReportFlush() {
       const s = layoutReportState();
-      if (!s.queue.length || !navigator.onLine || !BACKEND_URL) return;
+      if (!s.queue.length || !netOnline() || !BACKEND_URL) return;
       const rest = [];
       for (const p of s.queue) {
         let ok = false;
@@ -18080,6 +18119,22 @@ window.addEventListener("scroll", hidePop, true);
         .catch(e => console.warn("[sw] enregistrement échoué — pas de consultation hors ligne :", e));
     }
 
+    // Liens externes en natif : target=_blank s'ouvrirait DANS la WebView —
+    // sans barre d'adresse ni bouton retour, l'utilisateur serait piégé sur
+    // le site externe. On route vers le navigateur système : plugin
+    // @capacitor/browser si présent, sinon window.open, que Capacitor relaie
+    // à l'OS pour les URLs hors app. En navigateur : aucun changement.
+    document.addEventListener("click", e => {
+      if (!_isNative()) return;
+      const a = e.target && e.target.closest ? e.target.closest('a[target="_blank"]') : null;
+      if (!a || !a.href) return;
+      e.preventDefault();
+      const B = _natPlugin("Browser");
+      const fallback = () => { try { window.open(a.href, "_blank"); } catch (_) { } };
+      if (B && B.open) B.open({ url: a.href }).catch(fallback);
+      else fallback();
+    });
+
     /* ================= DÉTECTION D'UNE NOUVELLE VERSION =====================
        Un EFB reste ouvert des heures. La règle 2 du service worker va déjà
        chercher le HTML en réseau à chaque NAVIGATION, donc un vrai lancement
@@ -18126,7 +18181,7 @@ window.addEventListener("scroll", hidePop, true);
         return isNaN(t) ? 0 : t;
       }
       async function verifier() {
-        if (enCours || !navigator.onLine) return;
+        if (enCours || !netOnline()) return;
         const now = Date.now();
         // Garde-fou du démarrage : QUEL QUE SOIT le déclencheur, rien ne part
         // dans les premières secondes. `pageshow` et `focus` se déclenchent
