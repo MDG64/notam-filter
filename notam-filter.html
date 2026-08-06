@@ -11722,29 +11722,64 @@ E) ${e}`;
        provoque donc le téléchargement du layout au moment où le terrain devient
        hors-ligne, et on le supprime quand la rotation l'éjecte — les plans ne
        survivent jamais aux NOTAM qu'ils accompagnent.
-       Le service worker (v3) intercepte le fetch et garde la copie ; ici on ne
-       fait que déclencher la requête. File séquentielle : un préchargement de
-       route ne doit pas lancer 30 téléchargements d'un coup. */
+       La couche durable (SW en navigateur, Filesystem en natif, ci-dessous)
+       garde la copie ; ici on ne fait que déclencher la requête. File
+       séquentielle : un préchargement de route ne doit pas lancer 30
+       téléchargements d'un coup. */
     const _layoutQ = [];
     let _layoutBusy = false;
 
-    /* GARDE-FOU + PORTABILITÉ — cacheLayoutOffline() et dropLayoutOffline()
-       ci-dessous, comme fetchLayout() plus bas, supposent un SERVICE WORKER :
-       c'est lui, et lui seul, qui garde durablement les plans (sw.js, règle 3).
-       Sans SW rien ne plante — le fetch part, la réponse est jetée, plus rien
-       n'est conservé : la promesse « plan consultable en vol » cesse d'être
-       tenue EN SILENCE. Pour un EFB c'est le pire mode de panne, d'où
-       l'avertissement unique ci-dessous.
-       Cas réels sans SW : navigation privée, pression sur le stockage, échec
-       d'enregistrement (voir le .catch de register(), plus bas) — et demain
-       iOS/Capacitor, où le WKWebView sert depuis capacitor:// alors que
-       serviceWorker.register() exige http/https. Ces trois fonctions sont donc
-       les seules à réimplémenter le jour d'un portage iOS, sur Capacitor
-       Filesystem : rien d'autre dans la page ne touche au stockage des plans. */
+    /* ---- Couche DURABLE des plans et FIR : deux fonds, un seul contrat ----
+       Navigateur/PWA : le service worker garde les copies au passage (sw.js,
+       règle 3) — le code appelant ne fait que déclencher les requêtes,
+       comportement historique inchangé, natRead/natWrite y sont des no-op.
+       Capacitor (assets embarqués) : PAS de service worker — le WKWebView sert
+       depuis capacitor:// alors que register() exige http/https. Le rôle
+       durable passe à Capacitor Filesystem (@capacitor/filesystem,
+       Directory.Data), sondé à CHAQUE appel via _natFS() : le plugin n'existe
+       qu'une fois l'app empaquetée, la page reste 100 % navigateur sans lui.
+       Autre différence en natif : layouts/ et fir/ ne sont PAS embarqués dans
+       le bundle (103 Mo, 4177 fichiers) — ils restent servis par le site, et
+       GitHub Pages répond Access-Control-Allow-Origin: * ; siteURL() fait la
+       bascule d'origine. Rien d'autre dans la page ne touche au stockage des
+       plans. */
+    function _natFS() {
+      const C = window.Capacitor;
+      return (C && typeof C.isNativePlatform === "function" && C.isNativePlatform()
+        && C.Plugins && C.Plugins.Filesystem) ? C.Plugins.Filesystem : null;
+    }
+    const REMOTE_BASE = "https://notam.feyndev.com/";
+    const siteURL = rel => _natFS() ? REMOTE_BASE + rel : "./" + rel;
+    async function natRead(rel) {
+      const fs = _natFS(); if (!fs) return null;
+      try {
+        const { data } = await fs.readFile({ path: "offline/" + rel, directory: "DATA", encoding: "utf8" });
+        return typeof data === "string" ? data : null;
+      } catch (_) { return null; }       // fichier absent : pas une erreur
+    }
+    async function natWrite(rel, text) {
+      const fs = _natFS(); if (!fs) return;
+      try { await fs.writeFile({ path: "offline/" + rel, directory: "DATA", encoding: "utf8", data: text, recursive: true }); }
+      catch (e) { console.warn("[plan] écriture Filesystem échouée —", rel, e); }
+    }
+    async function natDrop(rel) {
+      const fs = _natFS(); if (!fs) return;
+      try { await fs.deleteFile({ path: "offline/" + rel, directory: "DATA" }); }
+      catch (_) { }                      // déjà absent : l'éviction est acquise
+    }
+
+    /* GARDE-FOU — sans couche durable, rien ne plante : le fetch part, la
+       réponse est jetée, plus rien n'est conservé, et la promesse « plan
+       consultable en vol » cesse d'être tenue EN SILENCE. Pour un EFB c'est le
+       pire mode de panne, d'où l'avertissement unique ci-dessous. En natif,
+       Filesystem tient le rôle du SW : rien à crier. Restent les cas
+       navigateur réels : navigation privée, pression sur le stockage, échec
+       d'enregistrement (voir le .catch de register(), plus bas). */
     let _swChecked = false;
     async function _warnIfNoSW() {
       if (_swChecked) return;        // une seule vérification par session
       _swChecked = true;
+      if (_natFS()) return;          // natif : Filesystem est la couche durable
       // getRegistration() plutôt que .controller : ce dernier est null au tout
       // premier chargement, avant que clients.claim() ne prenne la page — on
       // avertirait à tort d'une installation parfaitement saine.
@@ -11767,7 +11802,12 @@ E) ${e}`;
       _layoutBusy = true;
       while (_layoutQ.length) {
         const icao = _layoutQ.shift();
-        try { await fetch(LAYOUT_URL + encodeURIComponent(icao) + ".json", { cache: "no-cache" }); }
+        try {
+          const r = await fetch(siteURL("layouts/" + encodeURIComponent(icao) + ".json"), { cache: "no-cache" });
+          // Navigateur : le SW (règle 3) a gardé la copie au passage, la
+          // réponse peut être jetée. Natif : c'est ici qu'elle se conserve.
+          if (r && r.ok && _natFS()) await natWrite("layouts/" + icao + ".json", await r.text());
+        }
         catch (_) { /* hors ligne : retenté à la prochaine consultation */ }
         await new Promise(r => setTimeout(r, 120));
       }
@@ -11783,12 +11823,14 @@ E) ${e}`;
         // le cache mémoire de la session doit partir aussi, sinon le plan reste
         // lisible jusqu'au prochain rechargement alors qu'on vient de l'éjecter
         try { layoutCache.delete(icao); } catch (_) { }
+        if (_natFS()) { await natDrop("layouts/" + icao + ".json"); return; }
         const url = new URL(LAYOUT_URL + encodeURIComponent(icao) + ".json", location.href).href;
         for (const n of await caches.keys()) (await caches.open(n)).delete(url);
       } catch (e) {
-        // Seule dépendance DURE au service worker de tout le fichier : `caches`
-        // n'existe pas sans lui. On le dit au lieu de laisser croire que le plan
-        // a bien été évincé — sinon il survit aux NOTAM qu'il accompagne.
+        // En navigateur, `caches` est la seule dépendance dure au service
+        // worker de tout le fichier : sans lui on le dit, au lieu de laisser
+        // croire que le plan a bien été évincé — sinon il survit aux NOTAM
+        // qu'il accompagne.
         console.warn("[plan] éviction du plan hors-ligne impossible —", icao, e);
       }
     }
@@ -12932,39 +12974,59 @@ function renderInfo(icao) {
     let FIR = null, FIR_CLOSURES = null, FIR_NOTAMS = null, firView = null, _firBg = null, _firBgCanvas = null, _firBgZoomTimer = null, firHitboxes = [];
     let currentFirDetailId = null;   // FIR actuellement affichée dans le panneau, ou null (vue monde)
     async function fetchFir() {
-      // Même règle que fetchLayout() : réseau d'abord (no-cache), repli mémoire
+      // Même règle que fetchLayout() : réseau d'abord (no-cache), replis
       // seulement si le fetch échoue (hors ligne) — jamais de pull amont ici,
-      // ce fichier est un jeu de frontières statique servi depuis GitHub Pages.
+      // ce fichier est un jeu de frontières statique servi depuis le site.
       try {
-        const r = await fetch(FIR_URL, { cache: "no-cache" });
-        if (r.ok) { const j = await r.json(); if (j && Array.isArray(j.fir)) { FIR = j.fir; return FIR; } }
-      } catch (e) { /* hors ligne : repli ci-dessous */ }
+        const r = await fetch(siteURL("fir/boundaries.json"), { cache: "no-cache" });
+        if (r.ok) {
+          const t = await r.text();
+          const j = JSON.parse(t);
+          if (j && Array.isArray(j.fir)) { FIR = j.fir; natWrite("fir/boundaries.json", t); return FIR; }
+        }
+      } catch (e) { /* hors ligne : replis ci-dessous */ }
+      if (!FIR) {
+        const s = await natRead("fir/boundaries.json");
+        if (s) { try { const j = JSON.parse(s); if (j && Array.isArray(j.fir)) FIR = j.fir; } catch (_) { } }
+      }
       return FIR;
     }
     async function fetchFirClosures() {
       // Deux sources, dans cet ordre :
       //  1. le proxy (classification réactualisée en continu côté serveur) ;
-      //  2. fir/closures.json, l'instantané figé livré avec l'app — mis en cache
-      //     par le service worker, donc c'est LUI qui répond en vol sans réseau.
-      // Aucun appel amont depuis le navigateur dans les deux cas.
+      //  2. fir/closures.json, l'instantané figé livré avec l'app.
+      // En vol sans réseau : le service worker répond en navigateur (règle 3,
+      // les deux URLs contiennent /fir/), la copie Filesystem en natif.
+      // Aucun appel amont depuis l'appareil dans tous les cas.
       const sources = [
         { url: BACKEND_URL ? BACKEND_URL + "/api/fir/closures" : null, live: true },
-        { url: FIR_CLOSURES_URL, live: false },
+        { url: siteURL("fir/closures.json"), live: false },
       ];
       for (const s of sources) {
         if (!s.url) continue;
         try {
           const r = await fetch(s.url, { cache: "no-cache" });
           if (!r.ok) continue;
-          const j = await r.json();
+          const t = await r.text();
+          const j = JSON.parse(t);
           if (j && Array.isArray(j.closures)) {
             const m = new Map(); j.closures.forEach(c => m.set(c.id, c));
             FIR_CLOSURES = m;
+            natWrite("fir/closures-last.json", t);   // dernier état connu, natif
             return FIR_CLOSURES;
           }
         } catch (e) { /* source suivante */ }
       }
-      return FIR_CLOSURES;   // hors ligne complet : ce qu'on avait déjà en mémoire
+      if (!FIR_CLOSURES) {
+        const s = await natRead("fir/closures-last.json");
+        if (s) {
+          try {
+            const j = JSON.parse(s);
+            if (j && Array.isArray(j.closures)) { const m = new Map(); j.closures.forEach(c => m.set(c.id, c)); FIR_CLOSURES = m; }
+          } catch (_) { }
+        }
+      }
+      return FIR_CLOSURES;   // hors ligne complet : mémoire, sinon dernier état persisté
     }
     // NOTAM de sujet AF (= portant sur la FIR entière), groupés par FIR.
     // Sert au liseré vert « cette FIR a des NOTAM actifs » et au panneau de
@@ -12976,10 +13038,15 @@ function renderInfo(icao) {
       try {
         const r = await fetch(BACKEND_URL + "/api/fir/notams", { cache: "no-cache" });
         if (r.ok) {
-          const j = await r.json();
-          if (j && j.fir) { FIR_NOTAMS = j.fir; return FIR_NOTAMS; }
+          const t = await r.text();
+          const j = JSON.parse(t);
+          if (j && j.fir) { FIR_NOTAMS = j.fir; natWrite("fir/notams-af.json", t); return FIR_NOTAMS; }
         }
-      } catch (e) { /* hors ligne : le service worker sert la copie mise en cache */ }
+      } catch (e) { /* hors ligne : le SW sert sa copie en navigateur (règle 3) */ }
+      if (!FIR_NOTAMS) {
+        const s = await natRead("fir/notams-af.json");
+        if (s) { try { const j = JSON.parse(s); if (j && j.fir) FIR_NOTAMS = j.fir; } catch (_) { } }
+      }
       return FIR_NOTAMS;
     }
     // Détail complet d'une FIR (toutes rubriques, pas seulement AF). Réseau
@@ -14929,9 +14996,20 @@ window.addEventListener("scroll", hidePop, true);
     async function loadPlanIndex() {
       if (planIndex) return planIndex;
       try {
-        const r = await fetch(LAYOUT_URL + "_index.json", { cache: "no-cache" });
-        planIndex = r.ok ? await r.json() : {};
-      } catch (e) { planIndex = {}; }
+        const r = await fetch(siteURL("layouts/_index.json"), { cache: "no-cache" });
+        if (r.ok) {
+          const t = await r.text();
+          planIndex = JSON.parse(t);
+          natWrite("layouts/_index.json", t);   // write-through natif, no-op ailleurs
+          return planIndex;
+        }
+      } catch (e) { /* hors ligne : replis ci-dessous */ }
+      // Natif : la dernière copie écrite ci-dessus. Navigateur : le SW a déjà
+      // servi ce fetch depuis son cache (règle 3), on n'arrive ici qu'au tout
+      // premier lancement sans réseau — l'index vide est alors honnête.
+      const s = await natRead("layouts/_index.json");
+      if (s) { try { planIndex = JSON.parse(s); return planIndex; } catch (_) { } }
+      planIndex = {};
       return planIndex;
     }
     function hasPlan(icao) { return !!(planIndex && planIndex[icao]); }
@@ -14942,20 +15020,31 @@ window.addEventListener("scroll", hidePop, true);
       // doit apparaître au prochain rendu, pas seulement à la prochaine
       // réouverture complète de l'appli. Le Map ne sert que de repli hors ligne.
       try {
-        const r = await fetch(LAYOUT_URL + encodeURIComponent(icao) + ".json", { cache: "no-cache" });
+        const r = await fetch(siteURL("layouts/" + encodeURIComponent(icao) + ".json"), { cache: "no-cache" });
         if (r.ok) {
-          const j = await r.json();
+          const t = await r.text();
+          const j = JSON.parse(t);
           if (j && Array.isArray(j.f) && Array.isArray(j.arp)) {
             layoutCache.set(icao, j);
+            natWrite("layouts/" + icao + ".json", t);   // write-through natif, no-op ailleurs
             return j;
           }
         }
-      } catch (e) { /* hors ligne : repli ci-dessous */ }
-      // ATTENTION au repli : `layoutCache` est une Map EN MÉMOIRE, elle meurt
-      // avec la session. La vraie couche durable est le service worker, qui
-      // sert ce fetch depuis son cache quand le réseau manque. Sans SW ce repli
-      // ne couvre que les terrains déjà ouverts dans la session en cours — voir
-      // le garde-fou _warnIfNoSW() et la note de portabilité iOS plus haut.
+      } catch (e) { /* hors ligne : replis ci-dessous */ }
+      // Repli 1 (natif) : la copie Filesystem déposée par _layoutDrain() ou le
+      // write-through ci-dessus — l'équivalent exact du cache du SW.
+      const s = await natRead("layouts/" + icao + ".json");
+      if (s) {
+        try {
+          const j = JSON.parse(s);
+          if (j && Array.isArray(j.f) && Array.isArray(j.arp)) { layoutCache.set(icao, j); return j; }
+        } catch (_) { }
+      }
+      // Repli 2 : `layoutCache` est une Map EN MÉMOIRE, elle meurt avec la
+      // session. En navigateur la vraie couche durable est le service worker,
+      // qui sert le fetch ci-dessus depuis son cache quand le réseau manque —
+      // on n'arrive donc ici que sans aucune copie nulle part (voir le
+      // garde-fou _warnIfNoSW() et la couche durable, plus haut).
       return layoutCache.has(icao) ? layoutCache.get(icao) : null;
     }
 
@@ -17981,9 +18070,12 @@ window.addEventListener("scroll", hidePop, true);
     // rattrapage : si un terrain était déjà affiché quand ce script s'est chargé
     if (currentIcao) updatePlanBtn(currentIcao);
 
-    if ("serviceWorker" in navigator) {
+    if ("serviceWorker" in navigator && !_natFS()) {
       // Un échec ici est la cause racine de toute la chaîne : sans SW, plus de
       // plans ni de frontières FIR hors ligne. Ne pas l'avaler en silence.
+      // En natif (Capacitor) on ne tente même pas : register() exige
+      // http/https, et c'est Filesystem qui tient le hors-ligne (voir la
+      // couche durable des plans, plus haut).
       navigator.serviceWorker.register("./sw.js")
         .catch(e => console.warn("[sw] enregistrement échoué — pas de consultation hors ligne :", e));
     }
