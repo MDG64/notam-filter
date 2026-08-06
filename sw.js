@@ -26,7 +26,19 @@ const ASSETS = [
   // aurait effacé les plans hors ligne des pilotes. Même geste à la prochaine
   // refonte d'icône : incrémenter le suffixe, ne pas écraser.
   "./icon-192-v2.png", "./icon-512-v2.png", "./icon-maskable-512-v2.png",
-  "./apple-touch-icon-180-v2.png", "./favicon-32-v2.png"
+  "./apple-touch-icon-180-v2.png", "./favicon-32-v2.png",
+  // Polices auto-hébergées (2026-08-06, retrait de Google Fonts). Pré-cache
+  // OBLIGATOIRE : la règle 6 les sert « cache d'abord » mais ne dépose jamais
+  // rien — sans cette liste, la typo tomberait en police système hors ligne.
+  // Noms versionnés (v20/v23) : immuables, mêmes règles que les icônes -v2.
+  "./fonts/ibm-plex-sans-v23-latin-wght.woff2",
+  "./fonts/ibm-plex-sans-v23-latin-ext-wght.woff2",
+  "./fonts/ibm-plex-mono-v20-latin-400.woff2",
+  "./fonts/ibm-plex-mono-v20-latin-ext-400.woff2",
+  "./fonts/ibm-plex-mono-v20-latin-500.woff2",
+  "./fonts/ibm-plex-mono-v20-latin-ext-500.woff2",
+  "./fonts/ibm-plex-mono-v20-latin-600.woff2",
+  "./fonts/ibm-plex-mono-v20-latin-ext-600.woff2"
 ];
 
 self.addEventListener("install", e => {
