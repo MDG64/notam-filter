@@ -1,6 +1,6 @@
 {
   "generated": "2026-07-25",
-  "source": "il.dump.gz (pull du service officiel de distribution internationale des NOTAMs du 2026-07-25 13:11Z, flux INTL) — NOTAM ayant pour sujet Q-code AF (FIR/UIR), texte relu manuellement",
+  "source": "il.dump.gz (pull du service officiel de distribution internationale des NOTAMs, 2026-07-25 13:11Z, flux INTL) — NOTAM ayant pour sujet Q-code AF (FIR/UIR), texte relu manuellement",
   "criteria": "rouge = FIR totalement fermée, aucun trafic ne passe ; ambre = restriction réelle mais FIR traversable (routage de contingence imposé, ATC absent/dégradé, exploitants ou catégories de vol interdits) ; vert = le reste, NOTAM actifs sans restriction d'accès",
   "criteriaRevised": "2026-07-26 — rouge signifiait auparavant « restriction générale sans condition de nationalité », ce qui n'est pas une fermeture : HSSS était peint en rouge alors que son NOTAM impose des routes de contingence, donc décrit comment traverser. Repassé en ambre, en même temps que les règles correspondantes de notam-proxy/lib/fir-classifier.js.",
   "closures": [

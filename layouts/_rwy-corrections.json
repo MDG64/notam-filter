@@ -1,0 +1,977 @@
+{
+ "source": "NTAD Runways (BTS), dérivé du registre national de pistes NASR — domaine public",
+ "cycle": "2026/07/09",
+ "genere": "2026-07-30",
+ "seuils": {
+  "terrainMetres": 6000,
+  "pisteMetres": 400,
+  "capDegres": 5,
+  "longueurRatio": 0.15,
+  "secondFacteur": 2,
+  "secondMarge": 50
+ },
+ "corrections": [
+  {
+   "icao": "KADH",
+   "classe": "perime",
+   "de": "17;35",
+   "vers": "18/36",
+   "ancre": {
+    "lat": 34.80489,
+    "lon": -96.671974,
+    "longueur": 1863
+   },
+   "ecartMetres": 15,
+   "ecartCap": 0
+  },
+  {
+   "icao": "KADS",
+   "classe": "perime",
+   "de": "15/33",
+   "vers": "16/34",
+   "ancre": {
+    "lat": 32.96855,
+    "lon": -96.836472,
+    "longueur": 2199
+   },
+   "ecartMetres": 2,
+   "ecartCap": 0
+  },
+  {
+   "icao": "KALM",
+   "classe": "perime",
+   "de": "03/21",
+   "vers": "04/22",
+   "ancre": {
+    "lat": 32.837837,
+    "lon": -105.993115,
+    "longueur": 2937
+   },
+   "ecartMetres": 4,
+   "ecartCap": 0
+  },
+  {
+   "icao": "KARA",
+   "classe": "perime",
+   "de": "16/34",
+   "vers": "17/35",
+   "ancre": {
+    "lat": 30.037473,
+    "lon": -91.883834,
+    "longueur": 2528
+   },
+   "ecartMetres": 32,
+   "ecartCap": 0
+  },
+  {
+   "icao": "KASN",
+   "classe": "perime",
+   "de": "03/21",
+   "vers": "04/22",
+   "ancre": {
+    "lat": 33.569672,
+    "lon": -86.051077,
+    "longueur": 1885
+   },
+   "ecartMetres": 22,
+   "ecartCap": 0
+  },
+  {
+   "icao": "KBAM",
+   "classe": "perime",
+   "de": "12/30",
+   "vers": "13/31",
+   "ancre": {
+    "lat": 40.597727,
+    "lon": -116.873625,
+    "longueur": 2213
+   },
+   "ecartMetres": 3,
+   "ecartCap": 0
+  },
+  {
+   "icao": "KBAM",
+   "classe": "perime",
+   "de": "3/21",
+   "vers": "04/22",
+   "ancre": {
+    "lat": 40.600401,
+    "lon": -116.87501,
+    "longueur": 2213
+   },
+   "ecartMetres": 3,
+   "ecartCap": 0.1
+  },
+  {
+   "icao": "KBKS",
+   "classe": "absent",
+   "de": null,
+   "vers": "17/35",
+   "ancre": {
+    "lat": 27.206359,
+    "lon": -98.120094,
+    "longueur": 1826
+   },
+   "ecartMetres": 2,
+   "ecartCap": 0.1
+  },
+  {
+   "icao": "KBPI",
+   "classe": "perime",
+   "de": "13/31",
+   "vers": "14/32",
+   "ancre": {
+    "lat": 42.585087,
+    "lon": -110.111191,
+    "longueur": 2071
+   },
+   "ecartMetres": 4,
+   "ecartCap": 0
+  },
+  {
+   "icao": "KBRO",
+   "classe": "perime",
+   "de": "13R/31L",
+   "vers": "13/31",
+   "ancre": {
+    "lat": 25.905583,
+    "lon": -97.423408,
+    "longueur": 2256
+   },
+   "ecartMetres": 1,
+   "ecartCap": 0
+  },
+  {
+   "icao": "KBTR",
+   "classe": "absent",
+   "de": null,
+   "vers": "04L/22R",
+   "ancre": {
+    "lat": 30.532037,
+    "lon": -91.149221,
+    "longueur": 2290
+   },
+   "ecartMetres": 1,
+   "ecartCap": 0
+  },
+  {
+   "icao": "KBTY",
+   "classe": "perime",
+   "de": "16/34",
+   "vers": "17/35",
+   "ancre": {
+    "lat": 36.861134,
+    "lon": -116.786412,
+    "longueur": 1714
+   },
+   "ecartMetres": 1,
+   "ecartCap": 0
+  },
+  {
+   "icao": "KCDS",
+   "classe": "perime",
+   "de": "17/35",
+   "vers": "18/36",
+   "ancre": {
+    "lat": 34.432066,
+    "lon": -100.285862,
+    "longueur": 1814
+   },
+   "ecartMetres": 3,
+   "ecartCap": 0.1
+  },
+  {
+   "icao": "KCLM",
+   "classe": "perime",
+   "de": "08/26",
+   "vers": "09/27",
+   "ancre": {
+    "lat": 48.118855,
+    "lon": -123.498953,
+    "longueur": 1929
+   },
+   "ecartMetres": 1,
+   "ecartCap": 0
+  },
+  {
+   "icao": "KCNY",
+   "classe": "absent",
+   "de": null,
+   "vers": "15/33",
+   "ancre": {
+    "lat": 38.767833,
+    "lon": -109.747665,
+    "longueur": 684
+   },
+   "ecartMetres": 4,
+   "ecartCap": 0.2
+  },
+  {
+   "icao": "KDLO",
+   "classe": "perime",
+   "de": "14/32",
+   "vers": "15/33",
+   "ancre": {
+    "lat": 35.745838,
+    "lon": -119.236636,
+    "longueur": 1876
+   },
+   "ecartMetres": 32,
+   "ecartCap": 0.1
+  },
+  {
+   "icao": "KDMA",
+   "classe": "perime",
+   "de": "12/30",
+   "vers": "13/31",
+   "ancre": {
+    "lat": 32.166372,
+    "lon": -110.883178,
+    "longueur": 4163
+   },
+   "ecartMetres": 1,
+   "ecartCap": 0
+  },
+  {
+   "icao": "KDRO",
+   "classe": "perime",
+   "de": "02/20",
+   "vers": "03/21",
+   "ancre": {
+    "lat": 37.151367,
+    "lon": -107.753941,
+    "longueur": 2848
+   },
+   "ecartMetres": 23,
+   "ecartCap": 0
+  },
+  {
+   "icao": "KDUC",
+   "classe": "absent",
+   "de": null,
+   "vers": "17/35",
+   "ancre": {
+    "lat": 34.47131,
+    "lon": -97.95985,
+    "longueur": 1930
+   },
+   "ecartMetres": 49,
+   "ecartCap": 0
+  },
+  {
+   "icao": "KESC",
+   "classe": "perime",
+   "de": "09/27",
+   "vers": "10/28",
+   "ancre": {
+    "lat": 45.720699,
+    "lon": -87.099284,
+    "longueur": 1960
+   },
+   "ecartMetres": 5,
+   "ecartCap": 0.1
+  },
+  {
+   "icao": "KESC",
+   "classe": "perime",
+   "de": "18/36",
+   "vers": "01/19",
+   "ancre": {
+    "lat": 45.725263,
+    "lon": -87.086579,
+    "longueur": 1523
+   },
+   "ecartMetres": 1,
+   "ecartCap": 0.1
+  },
+  {
+   "icao": "KFLX",
+   "classe": "absent",
+   "de": null,
+   "vers": "03/21",
+   "ancre": {
+    "lat": 39.499488,
+    "lon": -118.749099,
+    "longueur": 1895
+   },
+   "ecartMetres": 9,
+   "ecartCap": 0.1
+  },
+  {
+   "icao": "KFWS",
+   "classe": "perime",
+   "de": "17L/35R",
+   "vers": "18L/36R",
+   "ancre": {
+    "lat": 32.566509,
+    "lon": -97.306435,
+    "longueur": 1116
+   },
+   "ecartMetres": 6,
+   "ecartCap": 0.2
+  },
+  {
+   "icao": "KFWS",
+   "classe": "perime",
+   "de": "17R/35L",
+   "vers": "18R/36L",
+   "ancre": {
+    "lat": 32.564286,
+    "lon": -97.309683,
+    "longueur": 1828
+   },
+   "ecartMetres": 2,
+   "ecartCap": 0.1
+  },
+  {
+   "icao": "KFXY",
+   "classe": "perime",
+   "de": "19/33",
+   "vers": "15/33",
+   "ancre": {
+    "lat": 43.233431,
+    "lon": -93.622326,
+    "longueur": 1771
+   },
+   "ecartMetres": 1,
+   "ecartCap": 0.1
+  },
+  {
+   "icao": "KGEY",
+   "classe": "perime",
+   "de": "07/25",
+   "vers": "08/26",
+   "ancre": {
+    "lat": 44.513762,
+    "lon": -108.090343,
+    "longueur": 1201
+   },
+   "ecartMetres": 2,
+   "ecartCap": 0
+  },
+  {
+   "icao": "KHEZ",
+   "classe": "perime",
+   "de": "13/31",
+   "vers": "14/32",
+   "ancre": {
+    "lat": 31.614117,
+    "lon": -91.298698,
+    "longueur": 1981
+   },
+   "ecartMetres": 1,
+   "ecartCap": 0
+  },
+  {
+   "icao": "KHOB",
+   "classe": "perime",
+   "de": "03/21",
+   "vers": "04/22",
+   "ancre": {
+    "lat": 32.685879,
+    "lon": -103.217344,
+    "longueur": 2260
+   },
+   "ecartMetres": 94,
+   "ecartCap": 0
+  },
+  {
+   "icao": "KHOB",
+   "classe": "perime",
+   "de": "12/30",
+   "vers": "13/31",
+   "ancre": {
+    "lat": 32.688073,
+    "lon": -103.214432,
+    "longueur": 1828
+   },
+   "ecartMetres": 1,
+   "ecartCap": 0
+  },
+  {
+   "icao": "KHON",
+   "classe": "perime",
+   "de": "17/35",
+   "vers": "18/36",
+   "ancre": {
+    "lat": 44.383605,
+    "lon": -98.2256,
+    "longueur": 1515
+   },
+   "ecartMetres": 2,
+   "ecartCap": 0
+  },
+  {
+   "icao": "KHQZ",
+   "classe": "perime",
+   "de": "17/35",
+   "vers": "18/36",
+   "ancre": {
+    "lat": 32.746961,
+    "lon": -96.530425,
+    "longueur": 1822
+   },
+   "ecartMetres": 1,
+   "ecartCap": 0
+  },
+  {
+   "icao": "KHTH",
+   "classe": "absent",
+   "de": "33/51",
+   "vers": "15/33",
+   "ancre": {
+    "lat": 38.547584,
+    "lon": -118.630907,
+    "longueur": 1092
+   },
+   "ecartMetres": 48,
+   "ecartCap": 0.1
+  },
+  {
+   "icao": "KIAG",
+   "classe": "perime",
+   "de": "24",
+   "vers": "06/24",
+   "ancre": {
+    "lat": 43.105941,
+    "lon": -78.938842,
+    "longueur": 1715
+   },
+   "ecartMetres": 69,
+   "ecartCap": 0
+  },
+  {
+   "icao": "KIAG",
+   "classe": "perime",
+   "de": "28R",
+   "vers": "10/28",
+   "ancre": {
+    "lat": 43.109552,
+    "lon": -78.94904,
+    "longueur": 3331
+   },
+   "ecartMetres": 113,
+   "ecartCap": 0.2
+  },
+  {
+   "icao": "KLAM",
+   "classe": "perime",
+   "de": "09L/27R",
+   "vers": "09/27",
+   "ancre": {
+    "lat": 35.879676,
+    "lon": -106.268674,
+    "longueur": 1816
+   },
+   "ecartMetres": 2,
+   "ecartCap": 0.1
+  },
+  {
+   "icao": "KLEE",
+   "classe": "perime",
+   "de": "03/21",
+   "vers": "04/22",
+   "ancre": {
+    "lat": 28.821754,
+    "lon": -81.807353,
+    "longueur": 1507
+   },
+   "ecartMetres": 1,
+   "ecartCap": 0
+  },
+  {
+   "icao": "KMCF",
+   "classe": "perime",
+   "de": "04/22",
+   "vers": "05/23",
+   "ancre": {
+    "lat": 27.849342,
+    "lon": -82.521218,
+    "longueur": 3485
+   },
+   "ecartMetres": 0,
+   "ecartCap": 0
+  },
+  {
+   "icao": "KMIE",
+   "classe": "perime",
+   "de": "02/20",
+   "vers": "03/21",
+   "ancre": {
+    "lat": 40.242929,
+    "lon": -85.393026,
+    "longueur": 1619
+   },
+   "ecartMetres": 28,
+   "ecartCap": 0.1
+  },
+  {
+   "icao": "KMKL",
+   "classe": "absent",
+   "de": null,
+   "vers": "11/29",
+   "ancre": {
+    "lat": 35.602913,
+    "lon": -88.915114,
+    "longueur": 1059
+   },
+   "ecartMetres": 2,
+   "ecartCap": 0
+  },
+  {
+   "icao": "KMMI",
+   "classe": "absent",
+   "de": null,
+   "vers": "02/20",
+   "ancre": {
+    "lat": 35.399238,
+    "lon": -84.561779,
+    "longueur": 1957
+   },
+   "ecartMetres": 5,
+   "ecartCap": 0.1
+  },
+  {
+   "icao": "KMMT",
+   "classe": "absent",
+   "de": "05H/23H",
+   "vers": "05/23",
+   "ancre": {
+    "lat": 33.929235,
+    "lon": -80.803554,
+    "longueur": 595
+   },
+   "ecartMetres": 13,
+   "ecartCap": 0
+  },
+  {
+   "icao": "KMOB",
+   "classe": "perime",
+   "de": "14/32",
+   "vers": "15/33",
+   "ancre": {
+    "lat": 30.692774,
+    "lon": -88.24606,
+    "longueur": 2589
+   },
+   "ecartMetres": 4,
+   "ecartCap": 0
+  },
+  {
+   "icao": "KMSV",
+   "classe": "absent",
+   "de": null,
+   "vers": "15/33",
+   "ancre": {
+    "lat": 41.701631,
+    "lon": -74.795005,
+    "longueur": 1895
+   },
+   "ecartMetres": 2,
+   "ecartCap": 0
+  },
+  {
+   "icao": "KMTC",
+   "classe": "absent",
+   "de": null,
+   "vers": "01/19",
+   "ancre": {
+    "lat": 42.613893,
+    "lon": -82.836756,
+    "longueur": 3354
+   },
+   "ecartMetres": 155,
+   "ecartCap": 0.4
+  },
+  {
+   "icao": "KNGP",
+   "classe": "perime",
+   "de": "17/35",
+   "vers": "18/36",
+   "ancre": {
+    "lat": 27.692372,
+    "lon": -97.288471,
+    "longueur": 1510
+   },
+   "ecartMetres": 3,
+   "ecartCap": 0
+  },
+  {
+   "icao": "KOFK",
+   "classe": "perime",
+   "de": "01/19",
+   "vers": "02/20",
+   "ancre": {
+    "lat": 41.985109,
+    "lon": -97.433996,
+    "longueur": 1771
+   },
+   "ecartMetres": 3,
+   "ecartCap": 0
+  },
+  {
+   "icao": "KOSC",
+   "classe": "perime",
+   "de": "6/24",
+   "vers": "07/25",
+   "ancre": {
+    "lat": 44.451531,
+    "lon": -83.394175,
+    "longueur": 3590
+   },
+   "ecartMetres": 1,
+   "ecartCap": 0
+  },
+  {
+   "icao": "KOTH",
+   "classe": "perime",
+   "de": "04/22",
+   "vers": "05/23",
+   "ancre": {
+    "lat": 43.418908,
+    "lon": -124.250423,
+    "longueur": 1882
+   },
+   "ecartMetres": 34,
+   "ecartCap": 0.1
+  },
+  {
+   "icao": "KPDT",
+   "classe": "absent",
+   "de": null,
+   "vers": "08/26",
+   "ancre": {
+    "lat": 45.695423,
+    "lon": -118.841084,
+    "longueur": 1918
+   },
+   "ecartMetres": 8,
+   "ecartCap": 0.1
+  },
+  {
+   "icao": "KRDD",
+   "classe": "perime",
+   "de": "12/30",
+   "vers": "13/31",
+   "ancre": {
+    "lat": 40.506591,
+    "lon": -122.291348,
+    "longueur": 1541
+   },
+   "ecartMetres": 2,
+   "ecartCap": 0
+  },
+  {
+   "icao": "KRDD",
+   "classe": "perime",
+   "de": "16/34",
+   "vers": "17/35",
+   "ancre": {
+    "lat": 40.51069,
+    "lon": -122.294891,
+    "longueur": 2133
+   },
+   "ecartMetres": 4,
+   "ecartCap": 0
+  },
+  {
+   "icao": "KRMN",
+   "classe": "perime",
+   "de": "15L/33R",
+   "vers": "15/33",
+   "ancre": {
+    "lat": 38.399266,
+    "lon": -77.456788,
+    "longueur": 1869
+   },
+   "ecartMetres": 21,
+   "ecartCap": 0.1
+  },
+  {
+   "icao": "KRQE",
+   "classe": "perime",
+   "de": "02/20",
+   "vers": "03/21",
+   "ancre": {
+    "lat": 35.652061,
+    "lon": -109.067393,
+    "longueur": 2127
+   },
+   "ecartMetres": 2,
+   "ecartCap": 0
+  },
+  {
+   "icao": "KRST",
+   "classe": "perime",
+   "de": "02/20",
+   "vers": "03/21",
+   "ancre": {
+    "lat": 43.903977,
+    "lon": -92.500704,
+    "longueur": 2187
+   },
+   "ecartMetres": 10,
+   "ecartCap": 0
+  },
+  {
+   "icao": "KRWL",
+   "classe": "perime",
+   "de": "10/28",
+   "vers": "11/29",
+   "ancre": {
+    "lat": 41.805698,
+    "lon": -107.201211,
+    "longueur": 1309
+   },
+   "ecartMetres": 1,
+   "ecartCap": 0.1
+  },
+  {
+   "icao": "KSCK",
+   "classe": "absent",
+   "de": null,
+   "vers": "11R/29L",
+   "ancre": {
+    "lat": 37.895911,
+    "lon": -121.243189,
+    "longueur": 1347
+   },
+   "ecartMetres": 1,
+   "ecartCap": 0
+  },
+  {
+   "icao": "KSKF",
+   "classe": "perime",
+   "de": "15/33",
+   "vers": "16/34",
+   "ancre": {
+    "lat": 29.384272,
+    "lon": -98.581129,
+    "longueur": 3519
+   },
+   "ecartMetres": 4,
+   "ecartCap": 0
+  },
+  {
+   "icao": "KSPS",
+   "classe": "perime",
+   "de": "17/35",
+   "vers": "18/36",
+   "ancre": {
+    "lat": 33.972729,
+    "lon": -98.495865,
+    "longueur": 2118
+   },
+   "ecartMetres": 6,
+   "ecartCap": 0
+  },
+  {
+   "icao": "KSWW",
+   "classe": "absent",
+   "de": null,
+   "vers": "17/35",
+   "ancre": {
+    "lat": 32.468041,
+    "lon": -100.468369,
+    "longueur": 1786
+   },
+   "ecartMetres": 6,
+   "ecartCap": 0
+  },
+  {
+   "icao": "KTBR",
+   "classe": "perime",
+   "de": "05/23",
+   "vers": "06/24",
+   "ancre": {
+    "lat": 32.486847,
+    "lon": -81.737399,
+    "longueur": 1328
+   },
+   "ecartMetres": 3,
+   "ecartCap": 0
+  },
+  {
+   "icao": "KTNX",
+   "classe": "perime",
+   "de": "14/32",
+   "vers": "15/33",
+   "ancre": {
+    "lat": 37.79886,
+    "lon": -116.780725,
+    "longueur": 3664
+   },
+   "ecartMetres": 1,
+   "ecartCap": 0
+  },
+  {
+   "icao": "KTPL",
+   "classe": "absent",
+   "de": null,
+   "vers": "03/21",
+   "ancre": {
+    "lat": 31.153479,
+    "lon": -97.405939,
+    "longueur": 1450
+   },
+   "ecartMetres": 4,
+   "ecartCap": 0
+  },
+  {
+   "icao": "KTYR",
+   "classe": "perime",
+   "de": "17/35",
+   "vers": "18/36",
+   "ancre": {
+    "lat": 32.353713,
+    "lon": -95.405465,
+    "longueur": 1476
+   },
+   "ecartMetres": 1,
+   "ecartCap": 0
+  },
+  {
+   "icao": "KVAD",
+   "classe": "perime",
+   "de": "18L/36R",
+   "vers": "01R/19L",
+   "ancre": {
+    "lat": 30.969043,
+    "lon": -83.190932,
+    "longueur": 2843
+   },
+   "ecartMetres": 1,
+   "ecartCap": 0
+  },
+  {
+   "icao": "KVAD",
+   "classe": "perime",
+   "de": "18R/36L",
+   "vers": "01L/19R",
+   "ancre": {
+    "lat": 30.968291,
+    "lon": -83.195314,
+    "longueur": 2447
+   },
+   "ecartMetres": 1,
+   "ecartCap": 0
+  },
+  {
+   "icao": "KVCT",
+   "classe": "perime",
+   "de": "12L/30R",
+   "vers": "13/31",
+   "ancre": {
+    "lat": 28.85521,
+    "lon": -96.923479,
+    "longueur": 2799
+   },
+   "ecartMetres": 13,
+   "ecartCap": 0
+  },
+  {
+   "icao": "KVDI",
+   "classe": "perime",
+   "de": "13/31",
+   "vers": "14/32",
+   "ancre": {
+    "lat": 32.194343,
+    "lon": -82.371834,
+    "longueur": 1506
+   },
+   "ecartMetres": 3,
+   "ecartCap": 0.1
+  },
+  {
+   "icao": "KVDI",
+   "classe": "perime",
+   "de": "6/24",
+   "vers": "07/25",
+   "ancre": {
+    "lat": 32.191392,
+    "lon": -82.370659,
+    "longueur": 1818
+   },
+   "ecartMetres": 3,
+   "ecartCap": 0
+  },
+  {
+   "icao": "KWJF",
+   "classe": "absent",
+   "de": null,
+   "vers": "06/24",
+   "ancre": {
+    "lat": 34.741058,
+    "lon": -118.218614,
+    "longueur": 2190
+   },
+   "ecartMetres": 3,
+   "ecartCap": 0
+  },
+  {
+   "icao": "KYKN",
+   "classe": "perime",
+   "de": "01/19",
+   "vers": "02/20",
+   "ancre": {
+    "lat": 42.914453,
+    "lon": -97.38397,
+    "longueur": 1024
+   },
+   "ecartMetres": 3,
+   "ecartCap": 0.1
+  },
+  {
+   "icao": "PABI",
+   "classe": "perime",
+   "de": "10/28",
+   "vers": "11/29",
+   "ancre": {
+    "lat": 63.994965,
+    "lon": -145.719801,
+    "longueur": 1856
+   },
+   "ecartMetres": 0,
+   "ecartCap": 0
+  },
+  {
+   "icao": "PAMC",
+   "classe": "perime",
+   "de": "16/34",
+   "vers": "17/35",
+   "ancre": {
+    "lat": 62.951087,
+    "lon": -155.604947,
+    "longueur": 1805
+   },
+   "ecartMetres": 0,
+   "ecartCap": 0
+  },
+  {
+   "icao": "PANI",
+   "classe": "absent",
+   "de": null,
+   "vers": "11/29",
+   "ancre": {
+    "lat": 61.581413,
+    "lon": -159.545328,
+    "longueur": 1884
+   },
+   "ecartMetres": 2,
+   "ecartCap": 0
+  },
+  {
+   "icao": "PAUN",
+   "classe": "perime",
+   "de": "08/26",
+   "vers": "09/27",
+   "ancre": {
+    "lat": 63.883076,
+    "lon": -160.793229,
+    "longueur": 576
+   },
+   "ecartMetres": 2,
+   "ecartCap": 0.1
+  }
+ ]
+}
