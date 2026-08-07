@@ -1582,6 +1582,18 @@
       text-underline-offset: 2px
     }
 
+    /* Version + build : en chasse fixe et discrets — c'est une référence à
+       recopier dans un signalement, pas une information de vol. */
+    .hd-version {
+      display: inline-block;
+      margin-top: 6px;
+      font-family: var(--mono);
+      font-size: 10.5px;
+      color: var(--muted);
+      letter-spacing: .04em;
+      user-select: all
+    }
+
     .hd-notam {
       border: 1px solid var(--line);
       border-left: 4px solid var(--red);
@@ -4101,7 +4113,10 @@ body .stat .k{
         <div class="hd-note">
           <a href="./legal.html">Legal notice, Terms of Use &amp; Privacy Policy</a><br>
           Using this Service implies acceptance of those Terms. Notam Lens is a
-          decision-support tool and does <b>not</b> replace the official pre-flight briefing.
+          decision-support tool and does <b>not</b> replace the official pre-flight briefing.<br>
+          <!-- Identité de la copie qui tourne : à citer dans tout signalement.
+               Rempli par JS (voir APP_VERSION), jamais en dur dans le HTML. -->
+          <span id="hdVersion" class="hd-version"></span>
         </div>
       </div>
     </div>
@@ -11624,6 +11639,33 @@ E) ${e}`;
       (location.hostname === "localhost" || location.hostname === "127.0.0.1"))
       ? "http://127.0.0.1:8787"
       : "https://notam-proxy-production.up.railway.app";
+
+    /* ---- Identité de la version, affichée dans Aide > Legal ----
+       DEUX choses, parce qu'elles répondent à deux questions différentes :
+
+       APP_VERSION — le numéro PUBLIC, à incrémenter à la main au moment d'une
+       sortie, et à recopier tel quel dans le `versionName` du wrapper Play et
+       le `CFBundleShortVersionString` d'Xcode. C'est ce que l'utilisateur cite
+       et ce que la fiche du store affiche ; il ne bouge pas entre deux
+       publications, même si le web est redéployé dix fois.
+
+       Le BUILD — la date de la copie réellement en train de tourner, lue dans
+       `document.lastModified` (voir la longue note du détecteur de nouvelle
+       version, plus bas). Aucun numéro à maintenir, et c'est LUI qui distingue
+       deux appareils affichant le même APP_VERSION : sur le web une correction
+       part sans changer de version publique. Un signalement qui cite les deux
+       est donc exploitable, et « v1.0.0 » seul ne l'aurait pas été.
+       Empaqueté (Capacitor), le HTML est un fichier local figé : la date reste
+       celle du bundle, ce qui reste la bonne réponse — c'est bien la version
+       installée. */
+    const APP_VERSION = "1.0.0";
+    (() => {
+      const el = document.getElementById("hdVersion");
+      if (!el) return;
+      const t = Date.parse(document.lastModified);
+      const build = isNaN(t) ? "—" : new Date(t).toISOString().slice(0, 16).replace("T", " ") + "Z";
+      el.textContent = "Notam Lens v" + APP_VERSION + " · build " + build;
+    })();
 
     // Récupère les NOTAM bruts (tableau de chaînes ICAO) pour un code OACI.
     // - démo  : lit le jeu local (DB)
