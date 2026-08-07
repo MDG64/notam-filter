@@ -2,11 +2,16 @@
   "name": "Notam Lens",
   "short_name": "Notam Lens",
   "description": "Pre-flight NOTAM decision support for pilots",
+  "id": "./notam-filter.html",
   "start_url": "./notam-filter.html",
+  "scope": "/",
+  "lang": "en",
+  "dir": "ltr",
+  "categories": ["travel", "utilities", "productivity"],
   "display": "standalone",
   "background_color": "#0d1117",
   "theme_color": "#0d1117",
-  "orientation": "portrait-primary",
+  "orientation": "any",
   "icons": [
     {
       "src": "icon-192-v2.png",
