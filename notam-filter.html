@@ -12189,12 +12189,19 @@ function renderInfo(icao) {
       hideOffline();
 
       // ── Fraîcheur locale : si des NOTAMs sont en mémoire depuis moins d'1 h,
-      //    on les affiche directement — aucune requête, aucun bandeau.
+      //    on les affiche directement — aucune requête réseau.
+      //    LE BANDEAU, LUI, S'AFFICHE DÈS QU'ON EST HORS LIGNE, même sur des
+      //    données toutes fraîches : sans lui, l'écran est identique à l'écran
+      //    en ligne et seule la pastille distingue les deux. Un pilote doit
+      //    savoir qu'il regarde une copie et qu'aucune mise à jour ne peut
+      //    plus arriver — c'est la date affichée qui le lui dit.
       const FRESH_MS = 60 * 60 * 1000;
       const cachedFresh = loadOffline(icao);
       if (cachedFresh && Array.isArray(cachedFresh.raw) && (Date.now() - cachedFresh.ts) < FRESH_MS) {
-        setBeacon(netOnline());
+        const up = netOnline();
+        setBeacon(up);
         renderFromRaw(cachedFresh.raw);
+        if (!up) showOffline(cachedFresh.ts);   // après le rendu : il vide la zone
         return;
       }
 
@@ -12446,8 +12453,18 @@ function renderInfo(icao) {
       b.classList.toggle("offline", !online);
     }
     setBeacon(netOnline());
-    window.addEventListener("online", () => setBeacon(true));
-    window.addEventListener("offline", () => setBeacon(false));
+    // La connexion peut tomber alors que l'app est DÉJÀ ouverte, terrain
+    // affiché : sans ces deux lignes, l'écran resterait tel quel et le pilote
+    // continuerait de lire des NOTAM sans savoir qu'ils ont cessé d'être
+    // rafraîchissables. On lève donc le bandeau à la perte du réseau, daté de
+    // la copie effectivement à l'écran, et on le retire au retour.
+    window.addEventListener("online", () => { setBeacon(true); hideOffline(); });
+    window.addEventListener("offline", () => {
+      setBeacon(false);
+      if (!currentIcao) return;                  // rien à l'écran : rien à dater
+      const c = loadOffline(currentIcao);
+      if (c && Array.isArray(c.raw)) showOffline(c.ts);
+    });
 
     /* ---- thème jour / nuit (mémorisé) ---- */
     const THEME_KEY = "notam_theme";
