@@ -12855,7 +12855,9 @@ function renderInfo(icao) {
     // tente le fond vectoriel avant de dessiner. Séparés, ils divergeaient —
     // le header rendait l'ancienne carte (canvas seul) pendant que la page
     // Route rendait la nouvelle.
-    $("#stationMapBtn").onclick = openMapOverlay;
+    // Globe du header (1re page) : on centre sur le terrain affiché. Si aucun
+    // terrain n'est chargé, on retombe sur le cadrage route (ou monde).
+    $("#stationMapBtn").onclick = () => openMapOverlay(currentIcao || null);
     function apMeta(a, st) {
       if (st === "ok") return "✓ NOTAMs saved";
       if (st === "fail") return "✕ failed";
@@ -13840,13 +13842,23 @@ function renderInfo(icao) {
         });
       }
     }
-    function openMap() {
+    // Cadrage « un seul terrain » : ~0,6° de latitude de haut (≈ 65 km), assez
+    // serré pour situer l'aérodrome, assez large pour voir ses voisins.
+    const FOCUS_LAT_SPAN = 0.6;
+    function openMap(focusIcao) {
       if (!BORDERS) return;                          // frontières indispensables pour dessiner le fond
       $("#mapOv").hidden = false;
       const cv = $("#routeMap"), r = cv.getBoundingClientRect(), dpr = window.devicePixelRatio || 1;
       cv.width = Math.round(r.width * dpr); cv.height = Math.round(r.height * dpr);
       _bg = null;   // invalide le cache du fond (taille/route peut avoir changé)
-      if (curRoute && curRoute.ok) {
+      // Terrain à cadrer, quand la carte est ouverte depuis la 1re page : la route
+      // reste tracée, seule la vue initiale change.
+      const focus = (focusIcao && GEO && GEO[focusIcao]) ? GEO[focusIcao] : null;
+      if (focus) {
+        routeTracks = (curRoute && curRoute.ok) ? curRoute.segs.map(([d1, d2]) => gcTrack(GEO[d1], GEO[d2])) : [];
+        const scale = Math.max(3, (r.height * 0.9) / FOCUS_LAT_SPAN);
+        mapView = { cx: focus.lon, cy: focus.lat, scale, dpr };
+      } else if (curRoute && curRoute.ok) {
         // pré-calcul des tracés great-circle : indépendants de la vue, calculés une seule fois ici
         routeTracks = curRoute.segs.map(([d1, d2]) => gcTrack(GEO[d1], GEO[d2]));
         // vue initiale : dézoomée pour montrer toute la route (bounding box de tous les terrains)
@@ -13874,7 +13886,11 @@ function renderInfo(icao) {
         $("#routeMapGL").classList.add("gl");
         $("#routeMapAttr").hidden = false;
         GL.map.resize();
-        if (curRoute && curRoute.ok) {
+        if (focus) {
+          // même cadrage que le canvas : on convertit le scale de l'app en zoom MapLibre
+          const zoom = Math.log2(mapView.scale * Math.cos(focus.lat * Math.PI / 180) / 1.4222);
+          GL.map.jumpTo({ center: [focus.lon, focus.lat], zoom: Math.min(Math.max(zoom, 1), 13) });
+        } else if (curRoute && curRoute.ok) {
           const pts = curRoute.airports;
           GL.fit(pts.map(a => a.lon), pts.map(a => a.lat));
         } else {
@@ -13885,15 +13901,17 @@ function renderInfo(icao) {
     }
     // Chemin d'ouverture unique de l'overlay carte, partagé par le globe du
     // header (#stationMapBtn) et celui de la page Route (#mapBtn).
-    async function openMapOverlay() {
+    // `focusIcao` : terrain à centrer (globe de la 1re page). Sans lui, on cadre
+    // la route entière (globe de la page Route), comportement d'origine.
+    async function openMapOverlay(focusIcao) {
       if (!(await ensureMapReady())) return;
       // Tentative de fond vectoriel. En cas d'échec (pas de WebGL2, script ou
       // archive absents hors ligne), GL.active reste faux et openMap() rend
       // exactement la carte d'avant — aucune régression sur ces appareils.
       try { await GL.ready(); } catch (e) { }
-      openMap();
+      openMap(typeof focusIcao === "string" ? focusIcao : null);
     }
-    $("#mapBtn").onclick = openMapOverlay;
+    $("#mapBtn").onclick = () => openMapOverlay();
     $("#mapClose").onclick = () => { $("#mapOv").hidden = true; };
     (() => { // interactions carte : molette / glisser / pincer / clic sur un terrain
       const cv = $("#routeMap");
