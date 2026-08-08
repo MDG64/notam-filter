@@ -14015,9 +14015,43 @@ function renderInfo(icao) {
     // faux positif même en élargissant la fenêtre de recherche à 150
     // caractères. À élargir aux terrains seulement après un audit séparé.
     const FIR_CRITICAL_EXTRA_RE = /\bNO\b[\s\S]{0,60}\bAVBL\b/;
+    /* Zones de conflit : deuxième élargissement, réservé lui aussi aux NOTAM de
+       FIR. Ces messages portent un Q-code QAFXX (sujet « FIR », condition
+       inconnue) — donc ni mot de fermeture ni condition connue de
+       CONDITION_SEVERITY : severity() les rangeait tous en Caution ambre, alors
+       qu'ils disent « n'entrez pas ». Cas déclencheur OIIX A1757/26 « AIRSPACE
+       SAFETY AND SECURITY WARNING : HAZARDOUS SITUATION WITHIN THE TERRITORY
+       AND AIRSPACE OF KABUL FIR ».
+       TROIS formes, volontairement étroites, plutôt qu'un simple mot
+       « SECURITY » (19 matches sur le corpus, dont des NOTAM de sûreté
+       aéroportuaire sans rapport) :
+       - l'en-tête « AIRSPACE (SAFETY AND) SECURITY WARNING », mots collés :
+         « AIRSPACE …{0,40} WARNING » attrapait la querelle diplomatique
+         gréco-turque A1243/26 (« …INTERNATIONAL WATERS AND AIRSPACE REMAIN
+         UNCHANGED AND THE NAVIGATIONAL WARNING… »), qui n'est pas un danger ;
+       - l'avis formel de ne pas entrer (« ARE ADVISED NOT TO ENTER FIR … ») ;
+       - la mention explicite d'une CONFLICT ZONE.
+       Audité le 2026-08-08 sur les 421 NOTAM de FIR actifs (108 FIR) : 8
+       matches, tous du genre visé (OIIX A1755/26 A1756/26 A1757/26 A1614/26,
+       RJJJ Q1173/26 Minsk, LRBB A3459/26 et LMMM A1204/26 Ukraine), aucun faux
+       positif.
+       Restent DEHORS, faute de forme reconnaissable : OAKX G0270/26 (« PILOTS
+       … ARE SOLELY RESPONSIBLE FOR SAFETY AND SECURITY ASSESSMENT », un
+       dégagement de responsabilité, pas une alerte). Comme
+       FIR_CRITICAL_EXTRA_RE, rien de tout ça ne remonte dans severity()
+       global : sur un terrain, « CONFLICT ZONE » ou un avis d'opérateur n'ont
+       pas été audités. */
+    const FIR_CONFLICT_RE = [
+      /\bAIRSPACE\s+(?:SAFETY\s+AND\s+SECURITY|SECURITY\s+AND\s+SAFETY|SECURITY|SAFETY)\s+WARNING\b/,
+      /\bADVISED\s+NOT\s+TO\s+(?:ENTER|OPERATE|FLY|OVERFLY|PLAN)\b/,
+      /\bCONFLICT\s+ZONE\b/
+    ];
     function firSeverity(q, e) {
       const base = severity(q, e);
-      if (base !== "critical" && FIR_CRITICAL_EXTRA_RE.test((e || "").toUpperCase())) return "critical";
+      if (base === "critical") return base;
+      const t = (e || "").toUpperCase();
+      if (FIR_CRITICAL_EXTRA_RE.test(t)) return "critical";
+      if (FIR_CONFLICT_RE.some(re => re.test(t))) return "critical";
       return base;
     }
     async function openFirPanel(firId) {
