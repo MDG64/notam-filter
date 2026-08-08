@@ -4199,6 +4199,9 @@ body .stat .k{
         "TACAN", "VORTAC", "MARKER", "RNAV", "RNP", "GLS", "LPV", "LNAV", "VNAV", "IAP", "APCH",
         "APPROACH", "STAR", "MISSED", "MINIMA", "MINIMUM", "RVR", "PAPI", "VASI",
         "APCH LGT", "RWY LGT", "RUNWAY LIGHT", "RCLL", "REDL", "TRANSITION",
+        // Feux d'identification d'extrémité de piste (REIL) : voir le
+        // commentaire de la liste « depart », ils valent pour les deux phases.
+        "END ID LGT", "END IDENT LGT", "END IDENTIFIER LIGHT", " REIL",
         // « HOLDING » tout court valait approche jusqu'au 2026-08-02 : il
         // attrapait le POINT D'ATTENTE, qui est une position au sol (rangé en
         // « sol » plus bas). Cas réel B2380/26 « HOLDING POINT E NOT AVBL, USE
@@ -4227,8 +4230,18 @@ body .stat .k{
       // Q NM/NN/NT/NV passés en approche+départ le 2026-08-02 (voir leur
       // commentaire dans SUBJECT_CATEGORIES). Sert quand le Q-code est absent
       // ou en QXXXX, fréquent côté US.
+      // REIL / RWY END ID LGT : les feux d'identification marquent l'EXTRÉMITÉ
+      // de piste, pas seulement le seuil d'approche — on s'aligne dessus au
+      // décollage de nuit comme on les cherche en finale. Revue du 2026-08-08
+      // (KVCV 02/017, « RWY 35 RWY END ID LGT U/S », QXXXX) : le LLM ne
+      // retenait qu'« approche », même angle mort que la manche à air le
+      // 2026-07-28. D'où les mots-clés dans les DEUX listes.
+      // « REIL » est encadré d'un espace à gauche à dessein : la comparaison se
+      // fait par sous-chaîne, et CREIL (LFPC) est un terrain français bien réel
+      // qui se serait classé tout seul.
       depart: ["SID", "DEPARTURE", "CLB GRADIENT", "CLIMB GRADIENT", "INITIAL CLIMB", "NADP", "BIRD", "BASH",
         "VOR", "TACAN", "VORTAC",
+        "END ID LGT", "END IDENT LGT", "END IDENTIFIER LIGHT", " REIL",
         "WINDCONE", "WIND CONE", "WDI", "WIND DIRECTION INDICATOR"],
       sol: ["TWY", "TAXIWAY", "APRON", "STAND", "PARKING", "RAMP", "STOPWAY", "SWY", "SHOULDER",
         // Points/positions d'attente : marquages et aires de la surface, on les
@@ -4351,6 +4364,19 @@ body .stat .k{
     const INFO_TEXT_RE = /\b(CRANE|CRANES|MAST|MASTS|MASTING|OBST|OBSTACLE|OBSTACLES)\b/;
     // Mots-clés hélicoptères -> sévérité plafonnée à Caution
     const HELI_TEXT_RE = /\b(HEL|HELI|HELIPAD|HELIPADS|HELIPORT|HELIDECK|HELICOPTER|HELICOPTERS|HLS|FATO|TLOF)\b/;
+    /* Feux d'identification d'extrémité de piste (REIL / RWY END ID LGT) hors
+       service : une aide VISUELLE manque, la piste elle-même reste utilisable.
+       Le seul « U/S » en faisait une fermeture -> pastille rouge « Critical »
+       sur un NOTAM qui ne ferme rien. Revue du 2026-08-08, cas réel KVCV
+       02/017 « RWY 35 RWY END ID LGT U/S » (QXXXX, donc aucun indice hors du
+       texte).
+       Le plafond ne s'applique QUE si le mot de fermeture porte sur les feux
+       eux-mêmes : on retire le segment reconnu et on rejoue le test de
+       fermeture sur ce qui reste. « RWY 35 CLSD. REIL U/S » garde donc son
+       rouge. Même précaution que le comptage de WITHDRAWN plus haut, et pour
+       la même raison : un raccourci par mot-clé ne doit jamais masquer une
+       vraie fermeture citée dans le même message. */
+    const REIL_OOS_RE = /\b(?:REILS?|(?:(?:RWY|RUNWAY)\s+)?END\s+ID(?:ENT|ENTIFIER)?\s+(?:LGTS?|LIGHTS?))\b[^.\n]{0,30}?\b(?:U\/S|UNSERVICEABLE|UNSERV|NOT AVBL|NOT AVAILABLE|OUT OF SERVICE)\b/g;
     function severity(q, e) {
       const [subj, cond] = qcodeParts(q), t = (e || "").toUpperCase();
       // Passage en Information UNIQUEMENT pour les NOTAM dont le sujet EST un poste
@@ -4399,6 +4425,16 @@ body .stat .k{
       else sev = CONDITION_SEVERITY[cond] || "caution";
       // Hélicoptères : au maximum « Caution » (jamais Critical).
       if (HELI_TEXT_RE.test(t) && sev === "critical") sev = "caution";
+      // REIL hors service : Caution, sauf si le texte ferme AUSSI autre chose
+      // (cf. commentaire de REIL_OOS_RE). On rejoue la formule d'isClosure sur
+      // le texte privé du segment REIL, pour lire le reste exactement comme on
+      // l'a lu plus haut.
+      if (sev === "critical") {
+        const reste = t.replace(REIL_OOS_RE, " ");
+        if (reste !== t &&
+            !hasClosureWord(reste) &&
+            !(reste.includes("PROHIBITED") && !hasRestrictCond(reste))) sev = "caution";
+      }
       return sev;
     }
     function classifyNotam(q, e) {

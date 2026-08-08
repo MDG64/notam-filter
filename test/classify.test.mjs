@@ -195,6 +195,28 @@ test("« WITHDRAWN » ne classe en Critical que s'il retire une surface", async 
   assert.equal(classifyNotam("QMRXX", "TWY M23 - NOTAM VOID").severity, "info");
 });
 
+test("un REIL hors service est ambre, en départ ET en approche", async () => {
+  const { classifyNotam } = await chargerClassificateur();
+  // Cas réel KVCV 02/017 (proposition LLM du 2026-08-07) : en QXXXX, aucun
+  // mot-clé ne l'attrapait -> « Unclassified », et le seul « U/S » l'aurait
+  // classé Critical. La revue le veut ambre, sur les deux phases.
+  const kvcv = classifyNotam("QXXXX", "RWY 35 RWY END ID LGT U/S");
+  assert.deepEqual(kvcv.categories.sort(), ["approche", "depart"]);
+  assert.equal(kvcv.severity, "caution");
+  // Les autres graphies de la même installation passent aussi.
+  for (const e of ["REIL RWY 35 U/S", "RWY 17 END IDENT LGT U/S",
+                   "RUNWAY END IDENTIFIER LIGHTS RWY 09 OUT OF SERVICE"])
+    assert.deepEqual(classifyNotam("QXXXX", e).categories.sort(), ["approche", "depart"], e);
+  // CREIL (LFPC) n'est pas un REIL : le mot-clé est encadré d'un espace à
+  // gauche pour que la comparaison par sous-chaîne ne l'attrape pas.
+  assert.deepEqual(classifyNotam("QXXXX", "CREIL TRAINING AREA ACTIVE").categories, ["non_classe"]);
+  // Le plafond ambre ne masque pas une fermeture citée dans le même message.
+  assert.equal(classifyNotam("QMRLC", "RWY 35 CLSD. RWY END ID LGT U/S").severity, "critical");
+  assert.equal(classifyNotam("QXXXX", "REIL RWY 35 U/S. LDG RWY 35 PROHIBITED").severity, "critical");
+  // Et il ne s'applique qu'aux feux hors service, pas à toute mention de REIL.
+  assert.equal(classifyNotam("QMRLC", "RWY 35 CLSD, REIL RELOCATED").severity, "critical");
+});
+
 test("une annulation qui recopie son en-tête n'est jamais soumise au LLM", () => {
   // Ces NOTAMC ONT un item E) — il recopie l'en-tête, mot pour mot. Le filtre
   // `n.e` de proposeUnclassified() les laissait donc passer : 5 appels LLM sur
