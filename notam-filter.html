@@ -15864,6 +15864,26 @@ window.addEventListener("scroll", hidePop, true);
       const INDEX = new Map();
       const idx = (k, s) => { if (!INDEX.has(k)) INDEX.set(k, []); if (!INDEX.get(k).includes(s)) INDEX.get(k).push(s); };
       const QFU = /^\d{2}[LRC]?$/;
+      /* Deux bruits d'OSM que le découpage par séparateur ne suffit pas à
+         enlever, mesurés sur les 6903 pistes du dump du 3 août 2026 :
+         — une ANNOTATION entre parenthèses, « 02/20 (CLOSED) » (FAGG),
+           « 07/25 (Not in Use) » (ZWWW), et jusqu'à « 12R (landing only)/
+           30L (takeoff only) » (KBFL) où CHAQUE moitié en porte une ;
+         — un PRÉFIXE de type, « Runway 01/19 » (CYGK, KROC), « RWY 01/19 »
+           (HSFA), « Runway 09 » (HLAM).
+         Le mal était silencieux et asymétrique : sur « Runway 01/19 », le
+         découpage rend « Runway 01 » et « 19 » — le second QFU entrait, le
+         premier non. Une piste à moitié atteignable ne se voit pas, elle se
+         colorie une fois sur deux selon le QFU que cite le NOTAM.
+         Il faut aussi recoller le suffixe détaché : « 08/26 L » (DAOL) rend
+         « 26 L », que QFU refuse pour son espace.
+         Gain vérifié sur tout le parc : 17 QFU entrent, AUCUN ne sort.
+         Ce filtre ne touche pas aux faux QFU écartés volontairement plus bas
+         (hydrobases « 16w/34w », planeurs « 11G/29G », caps vrais militaires
+         « 164/344 », « 08T/26T ») : ils échouent toujours au test QFU, et
+         c'est voulu — aucun NOTAM ne les cite. */
+      const RWY_NOTE = /\([^)]*\)/g;
+      const RWY_TYPE = /^(?:RUNWAY|RWY)\s+/i;
       /* Le générateur retombe sur le `name` OSM quand la voie n'a pas de `ref`
          (fetch-layout.mjs) : la ref stockée devient alors la phrase entière,
          « TAXIWAY B » — et « Taxiway B », en casse mixte, dans les layouts
@@ -15912,7 +15932,13 @@ window.addEventListener("scroll", hidePop, true);
         }
         if (s.t === "rwy")
           for (const end of s.r.split(/[/;-]/)) {
-            const e = end.trim().replace(/^(\d)(?=[LRC]?$)/, "0$1");
+            // On dépouille AVANT de normaliser : l'annotation peut contenir
+            // des espaces et des mots, le préfixe précède le chiffre, et le
+            // suffixe « 26 L » ne se recolle qu'une fois les deux partis.
+            const e = end.replace(RWY_NOTE, "").trim()
+              .replace(RWY_TYPE, "").trim()
+              .replace(/^(\d{1,2})\s+([LRC])$/, "$1$2")
+              .replace(/^(\d)(?=[LRC]?$)/, "0$1");
             if (QFU.test(e)) idx("rwy:" + e, s);
           }
       }
