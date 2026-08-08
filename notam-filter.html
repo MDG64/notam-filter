@@ -903,7 +903,15 @@
       color: #29b6f6
     }
 
+    /* Sélectionné, le fond passe au bleu clair (#6fa7c3) : le chiffre bleu s'y
+       noyait en mode nuit. Il prend l'encre sombre du libellé, qui est déjà en
+       var(--bg) juste au-dessus. En mode jour le fond de la carte ne change pas
+       à la sélection (crème), donc le chiffre y reste bleu. */
     .cat.on .cnt {
+      color: var(--bg)
+    }
+
+    body.light .cat.on .cnt {
       color: #29B6F6
     }
 
@@ -992,6 +1000,10 @@
       }
 
       .cat.on .cnt {
+        color: var(--bg);
+      }
+
+      body.light .cat.on .cnt {
         color: #29B6F6;
       }
 
